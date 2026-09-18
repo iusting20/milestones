@@ -131,4 +131,62 @@ class LinksTest extends TestCase
 
         $this->assertDatabaseMissing('links', ['id' => $link->id]);
     }
+
+    public function test_edit_mode_moves_projects_and_groups_with_arrows(): void
+    {
+        $first = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'position' => 1,
+        ]);
+        $second = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Beta',
+            'slug' => 'beta',
+            'position' => 2,
+        ]);
+        $docs = LinkGroup::query()->create([
+            'project_id' => $first->id,
+            'name' => 'Docs',
+            'position' => 1,
+        ]);
+        $apps = LinkGroup::query()->create([
+            'project_id' => $first->id,
+            'name' => 'Apps',
+            'position' => 2,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
+            ->call('moveProject', $second->id, 'up')
+            ->call('moveGroup', $apps->id, 'up');
+
+        $this->assertSame(1, $second->fresh()->position);
+        $this->assertSame(2, $first->fresh()->position);
+        $this->assertSame(1, $apps->fresh()->position);
+        $this->assertSame(2, $docs->fresh()->position);
+    }
+
+    public function test_archived_project_does_not_swap_with_active_neighbor(): void
+    {
+        $active = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Active',
+            'slug' => 'active',
+            'position' => 1,
+        ]);
+        $archived = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Archived',
+            'slug' => 'archived',
+            'position' => 2,
+            'is_archived' => true,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'active'])
+            ->call('moveProject', $archived->id, 'up');
+
+        $this->assertSame(1, $active->fresh()->position);
+        $this->assertSame(2, $archived->fresh()->position);
+    }
 }

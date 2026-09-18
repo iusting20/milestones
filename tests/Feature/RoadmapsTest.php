@@ -1,0 +1,148 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\Roadmaps;
+use App\Models\RoadmapItem;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class RoadmapsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_roadmaps_page_renders_current_month(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $this->get(route('roadmaps'))
+            ->assertOk()
+            ->assertSee('Roadmaps')
+            ->assertSee('SEPTEMBER 2026')
+            ->assertSeeLivewire(Roadmaps::class);
+    }
+
+    public function test_nav_shows_roadmaps_after_backlog(): void
+    {
+        $this->get(route('milestones'))
+            ->assertSeeInOrder(['Backlog', 'Roadmaps']);
+    }
+
+    public function test_can_add_pending_range_from_selected_day(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->call('selectDay', '2026-09-03')
+            ->set('newTitle', 'Auth rewrite')
+            ->call('addItem')
+            ->assertSee('Auth rewrite')
+            ->assertSee('pending')
+            ->assertSee('Add from 3 Sep');
+
+        $item = RoadmapItem::query()->where('title', 'Auth rewrite')->first();
+
+        $this->assertNotNull($item);
+        $this->assertSame('2026-09-03', $item->started_on->toDateString());
+        $this->assertNull($item->completed_on);
+    }
+
+    public function test_does_not_add_blank_title(): void
+    {
+        Livewire::test(Roadmaps::class)
+            ->set('newTitle', '   ')
+            ->call('addItem');
+
+        $this->assertDatabaseCount('roadmap_items', 0);
+    }
+
+    public function test_can_complete_and_reopen_a_range(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Billing',
+            'started_on' => '2026-09-10',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('toggleComplete', $item->id)
+            ->assertSee('18 Sep')
+            ->assertDontSee('>pending<', false);
+
+        $this->assertSame('2026-09-18', $item->fresh()->completed_on->toDateString());
+
+        Livewire::test(Roadmaps::class)
+            ->call('toggleComplete', $item->id);
+
+        $this->assertNull($item->fresh()->completed_on);
+    }
+
+    public function test_can_delete_a_range(): void
+    {
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Drop me',
+            'started_on' => now()->toDateString(),
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('deleteItem', $item->id);
+
+        $this->assertModelMissing($item);
+    }
+
+    public function test_month_query_renders_that_month(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::withQueryParams(['month' => '2026-03'])
+            ->test(Roadmaps::class)
+            ->assertSet('month', '2026-03')
+            ->assertSee('MARCH 2026');
+    }
+
+    public function test_hides_ranges_that_do_not_overlap_the_month(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'August only',
+            'started_on' => '2026-08-01',
+            'completed_on' => '2026-08-10',
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Crosses in',
+            'started_on' => '2026-08-28',
+            'completed_on' => '2026-09-04',
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Still open',
+            'started_on' => '2026-08-01',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->assertDontSee('August only')
+            ->assertSee('Crosses in')
+            ->assertSee('Still open')
+            ->assertSee('pending');
+    }
+
+    public function test_completion_cannot_precede_start_date(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Future start',
+            'started_on' => '2026-09-22',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('toggleComplete', $item->id);
+
+        $this->assertSame('2026-09-22', $item->fresh()->completed_on->toDateString());
+    }
+}

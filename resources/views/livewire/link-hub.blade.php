@@ -82,6 +82,18 @@
                         @else
                             <h3 class="text-lg font-bold text-body">{{ $group->name }}</h3>
                             @if ($editMode)
+                                <span class="flex flex-col">
+                                    <button type="button"
+                                            wire:click="moveGroup({{ $group->id }}, 'up')"
+                                            @disabled($loop->first)
+                                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
+                                            aria-label="Move {{ $group->name }} up">▲</button>
+                                    <button type="button"
+                                            wire:click="moveGroup({{ $group->id }}, 'down')"
+                                            @disabled($loop->last)
+                                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
+                                            aria-label="Move {{ $group->name }} down">▼</button>
+                                </span>
                                 <button type="button" wire:click="startRenameGroup({{ $group->id }})"
                                         class="text-xs text-muted hover:text-body">rename</button>
                                 <button type="button"

@@ -9,6 +9,8 @@ Route::view('/milestones', 'milestones')->name('milestones');
 
 Route::view('/backlog', 'backlog')->name('backlog');
 
+Route::view('/roadmaps', 'roadmaps')->name('roadmaps');
+
 Route::redirect('/links', '/links/partners');
 
 Route::get('/links/{hub}/{slug?}', LinkHub::class)

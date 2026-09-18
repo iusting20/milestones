@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Link;
 use App\Models\LinkGroup;
 use App\Models\Project;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 
 class LinkHub extends Component
@@ -225,6 +226,33 @@ class LinkHub extends Component
         $this->findGroup($id)->delete();
     }
 
+    public function moveProject(int $id, string $direction): void
+    {
+        $project = $this->findProject($id);
+
+        $siblings = Project::query()
+            ->where('hub', $this->hub)
+            ->where('is_archived', $project->is_archived)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+
+        $this->moveNeighbor($siblings, $id, $direction);
+    }
+
+    public function moveGroup(int $id, string $direction): void
+    {
+        $group = $this->findGroup($id);
+
+        $siblings = LinkGroup::query()
+            ->where('project_id', $group->project_id)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+
+        $this->moveNeighbor($siblings, $id, $direction);
+    }
+
     public function startAddLink(int $groupId): void
     {
         $this->findGroup($groupId);
@@ -378,6 +406,37 @@ class LinkHub extends Component
             ->whereKey($id)
             ->whereHas('linkGroup.project', fn ($q) => $q->where('hub', $this->hub))
             ->firstOrFail();
+    }
+
+    /**
+     * @param  Collection<int, Project|LinkGroup>  $siblings
+     */
+    private function moveNeighbor(Collection $siblings, int $id, string $direction): void
+    {
+        if (! in_array($direction, ['up', 'down'], true)) {
+            return;
+        }
+
+        $index = $siblings->search(fn (Project|LinkGroup $item): bool => $item->id === $id);
+
+        if ($index === false) {
+            return;
+        }
+
+        $neighborIndex = $direction === 'up' ? $index - 1 : $index + 1;
+
+        if (! $siblings->has($neighborIndex)) {
+            return;
+        }
+
+        $ordered = $siblings->values();
+        $current = $ordered[$index];
+        $ordered[$index] = $ordered[$neighborIndex];
+        $ordered[$neighborIndex] = $current;
+
+        $ordered->each(function (Project|LinkGroup $item, int $position): void {
+            $item->update(['position' => $position + 1]);
+        });
     }
 
     private function resetLinkForms(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\DayList;
 use App\Livewire\WeekBoard;
 use App\Models\TodoItem;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -111,5 +112,69 @@ class MilestonesTest extends TestCase
             ->test(WeekBoard::class)
             ->assertSet('week', '2026-W12')
             ->assertSee('Week 12');
+    }
+
+    public function test_can_copy_unfinished_from_previous_day(): void
+    {
+        $today = now()->toDateString();
+        $yesterday = Carbon::parse($today)->subDay()->toDateString();
+
+        TodoItem::query()->create([
+            'date' => $yesterday,
+            'title' => 'Carry me',
+            'url' => 'https://example.com',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $yesterday,
+            'title' => 'Already done',
+            'is_completed' => true,
+            'position' => 2,
+        ]);
+        TodoItem::query()->create([
+            'date' => $today,
+            'title' => 'Already here',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $yesterday,
+            'title' => 'Already here',
+            'is_completed' => false,
+            'position' => 3,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $today,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('copyUnfinishedFromPreviousDay');
+
+        $this->assertTrue(
+            TodoItem::query()
+                ->whereDate('date', $today)
+                ->where('title', 'Carry me')
+                ->where('url', 'https://example.com')
+                ->where('is_completed', false)
+                ->exists()
+        );
+        $this->assertSame(
+            1,
+            TodoItem::query()->whereDate('date', $today)->where('title', 'Already here')->count()
+        );
+        $this->assertFalse(
+            TodoItem::query()
+                ->whereDate('date', $today)
+                ->where('title', 'Already done')
+                ->exists()
+        );
+        $this->assertTrue(
+            TodoItem::query()
+                ->whereDate('date', $yesterday)
+                ->where('title', 'Carry me')
+                ->exists()
+        );
     }
 }

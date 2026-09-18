@@ -126,12 +126,23 @@
                 </form>
             @endif
 
-            <button type="button"
-                    wire:click="startAdding"
-                    class="mt-2 flex h-8 w-8 items-center justify-center rounded text-lg leading-none text-muted/40 transition hover:text-link"
-                    aria-label="Add task">
-                +
-            </button>
+            <div class="mt-2 flex flex-wrap items-center gap-2"
+                 onmouseenter="this.querySelector('[data-copy-prev]').style.opacity='1'"
+                 onmouseleave="this.querySelector('[data-copy-prev]').style.opacity='0'">
+                <button type="button"
+                        wire:click="startAdding"
+                        class="flex h-8 w-8 items-center justify-center rounded text-lg leading-none text-muted/40 transition hover:text-link"
+                        aria-label="Add task">
+                    +
+                </button>
+                <button type="button"
+                        data-copy-prev
+                        wire:click="copyUnfinishedFromPreviousDay"
+                        class="text-xs text-muted transition hover:text-link"
+                        style="opacity:0">
+                    copy unfinished milestones from previous day
+                </button>
+            </div>
         </div>
     @endif
 </section>

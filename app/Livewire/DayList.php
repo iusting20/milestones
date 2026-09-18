@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\TodoItem;
+use Carbon\Carbon;
 use Livewire\Component;
 
 class DayList extends Component
@@ -145,6 +146,46 @@ class DayList extends Component
             ->whereDate('date', $this->date)
             ->whereKey($id)
             ->delete();
+    }
+
+    public function copyUnfinishedFromPreviousDay(): void
+    {
+        $previousDate = Carbon::parse($this->date)->subDay()->toDateString();
+
+        $unfinished = TodoItem::query()
+            ->whereDate('date', $previousDate)
+            ->where('is_completed', false)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+
+        if ($unfinished->isEmpty()) {
+            return;
+        }
+
+        $max = (int) TodoItem::query()->whereDate('date', $this->date)->max('position');
+        $existingTitles = TodoItem::query()
+            ->whereDate('date', $this->date)
+            ->pluck('title')
+            ->all();
+
+        foreach ($unfinished as $item) {
+            if (in_array($item->title, $existingTitles, true)) {
+                continue;
+            }
+
+            $max++;
+
+            TodoItem::query()->create([
+                'date' => $this->date,
+                'title' => $item->title,
+                'url' => $item->url,
+                'is_completed' => false,
+                'position' => $max,
+            ]);
+
+            $existingTitles[] = $item->title;
+        }
     }
 
     /**

@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" type="image/png" href="{{ asset('favicon-32x32.png') }}" sizes="32x32">
+    <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/x-icon" sizes="any">
+    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}" type="image/x-icon">
     <title>@yield('title', config('app.name', 'Milestones'))</title>
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -25,6 +25,10 @@
             <a href="{{ route('backlog') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('backlog') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Backlog
+            </a>
+            <a href="{{ route('roadmaps') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Roadmaps
             </a>
         </nav>
         @if (request()->routeIs('links.*'))

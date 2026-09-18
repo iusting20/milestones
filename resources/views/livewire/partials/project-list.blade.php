@@ -21,11 +21,31 @@
 
 <ul class="space-y-0.5">
     @forelse ($projects as $project)
-        <li wire:key="project-{{ $project->id }}">
+        @php
+            $previous = $projects[$loop->index - 1] ?? null;
+            $next = $projects[$loop->index + 1] ?? null;
+            $canMoveProjectUp = $previous && $previous->is_archived === $project->is_archived;
+            $canMoveProjectDown = $next && $next->is_archived === $project->is_archived;
+        @endphp
+        <li class="flex items-center gap-0.5" wire:key="project-{{ $project->id }}">
+            @if ($editMode)
+                <span class="flex shrink-0 flex-col">
+                    <button type="button"
+                            wire:click="moveProject({{ $project->id }}, 'up')"
+                            @disabled(! $canMoveProjectUp)
+                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
+                            aria-label="Move {{ $project->name }} up">▲</button>
+                    <button type="button"
+                            wire:click="moveProject({{ $project->id }}, 'down')"
+                            @disabled(! $canMoveProjectDown)
+                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
+                            aria-label="Move {{ $project->name }} down">▼</button>
+                </span>
+            @endif
             <button type="button"
                     wire:click="selectProject('{{ $project->slug }}')"
                     @class([
-                        'flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-sm no-underline transition',
+                        'flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1.5 text-left text-sm no-underline transition',
                         'bg-panel text-body font-semibold' => $selected?->id === $project->id,
                         'text-muted hover:bg-white/5 hover:text-body' => $selected?->id !== $project->id,
                         'opacity-50' => $project->is_archived,

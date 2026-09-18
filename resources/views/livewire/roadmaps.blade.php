@@ -103,13 +103,37 @@
                     {{ $item->title }}
                 </span>
 
-                <span class="shrink-0 text-xs tabular-nums text-muted">
-                    {{ $item->started_on->format('j M') }}
-                    →
+                <span class="flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted">
+                    <label class="roadmap-date-hit" title="Edit start date">
+                        <span class="pointer-events-none">{{ $item->started_on->format('j M') }}</span>
+                        <input type="date"
+                               value="{{ $item->started_on->toDateString() }}"
+                               wire:change="updateStartedOn({{ $item->id }}, $event.target.value)"
+                               class="roadmap-date-input"
+                               aria-label="Start date for {{ $item->title }}"
+                               onpointerdown="if (this.showPicker) { event.preventDefault(); this.showPicker(); }">
+                    </label>
+                    <span aria-hidden="true">→</span>
                     @if ($item->isPending())
-                        <span class="text-mark">pending</span>
+                        <label class="roadmap-date-hit text-mark" title="Set completion date">
+                            <span class="pointer-events-none">pending</span>
+                            <input type="date"
+                                   value=""
+                                   wire:change="updateCompletedOn({{ $item->id }}, $event.target.value)"
+                                   class="roadmap-date-input"
+                                   aria-label="Set completion date for {{ $item->title }}"
+                                   onpointerdown="if (this.showPicker) { event.preventDefault(); this.showPicker(); }">
+                        </label>
                     @else
-                        {{ $item->completed_on->format('j M') }}
+                        <label class="roadmap-date-hit" title="Edit completion date">
+                            <span class="pointer-events-none">{{ $item->completed_on->format('j M') }}</span>
+                            <input type="date"
+                                   value="{{ $item->completed_on->toDateString() }}"
+                                   wire:change="updateCompletedOn({{ $item->id }}, $event.target.value)"
+                                   class="roadmap-date-input"
+                                   aria-label="Completion date for {{ $item->title }}"
+                                   onpointerdown="if (this.showPicker) { event.preventDefault(); this.showPicker(); }">
+                        </label>
                     @endif
                 </span>
 
@@ -145,5 +169,5 @@
             Add from {{ \Carbon\Carbon::parse($startedOn)->format('j M') }}
         </button>
     </form>
-    <p class="mt-2 text-xs text-muted">Click a day to set the start. Completion stays pending until you check it off.</p>
+    <p class="mt-2 text-xs text-muted">Click a day to set the start. Edit start/completion dates inline. Check off to complete today.</p>
 </div>

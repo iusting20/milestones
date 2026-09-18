@@ -145,4 +145,79 @@ class RoadmapsTest extends TestCase
 
         $this->assertSame('2026-09-22', $item->fresh()->completed_on->toDateString());
     }
+
+    public function test_can_update_started_on_inline(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Shift me',
+            'started_on' => '2026-09-10',
+            'completed_on' => '2026-09-15',
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('updateStartedOn', $item->id, '2026-09-05')
+            ->assertSee('5 Sep');
+
+        $this->assertSame('2026-09-05', $item->fresh()->started_on->toDateString());
+        $this->assertSame('2026-09-15', $item->fresh()->completed_on->toDateString());
+    }
+
+    public function test_moving_start_after_completion_clamps_completion(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Clamp me',
+            'started_on' => '2026-09-01',
+            'completed_on' => '2026-09-05',
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('updateStartedOn', $item->id, '2026-09-10');
+
+        $fresh = $item->fresh();
+        $this->assertSame('2026-09-10', $fresh->started_on->toDateString());
+        $this->assertSame('2026-09-10', $fresh->completed_on->toDateString());
+    }
+
+    public function test_can_set_and_clear_completion_date_inline(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Finish me',
+            'started_on' => '2026-09-10',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('updateCompletedOn', $item->id, '2026-09-12')
+            ->assertSee('12 Sep')
+            ->assertDontSee('>pending<', false);
+
+        $this->assertSame('2026-09-12', $item->fresh()->completed_on->toDateString());
+
+        Livewire::test(Roadmaps::class)
+            ->call('updateCompletedOn', $item->id, '');
+
+        $this->assertNull($item->fresh()->completed_on);
+    }
+
+    public function test_inline_completion_cannot_precede_start(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Order',
+            'started_on' => '2026-09-10',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('updateCompletedOn', $item->id, '2026-09-01');
+
+        $this->assertSame('2026-09-10', $item->fresh()->completed_on->toDateString());
+    }
 }

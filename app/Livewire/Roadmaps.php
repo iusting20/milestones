@@ -88,6 +88,49 @@ class Roadmaps extends Component
         $item->update(['completed_on' => $completedOn->toDateString()]);
     }
 
+    public function updateStartedOn(int $id, string $date): void
+    {
+        $startedOn = $this->parseDate($date);
+
+        if (! $startedOn) {
+            return;
+        }
+
+        $item = RoadmapItem::query()->findOrFail($id);
+        $payload = ['started_on' => $startedOn->toDateString()];
+
+        if ($item->completed_on !== null && $item->completed_on->lt($startedOn)) {
+            $payload['completed_on'] = $startedOn->toDateString();
+        }
+
+        $item->update($payload);
+    }
+
+    public function updateCompletedOn(int $id, ?string $date = null): void
+    {
+        $item = RoadmapItem::query()->findOrFail($id);
+
+        if ($date === null || trim($date) === '') {
+            $item->update(['completed_on' => null]);
+
+            return;
+        }
+
+        $completedOn = $this->parseDate($date);
+
+        if (! $completedOn) {
+            return;
+        }
+
+        $start = $item->rangeStart();
+
+        if ($completedOn->lt($start)) {
+            $completedOn = $start;
+        }
+
+        $item->update(['completed_on' => $completedOn->toDateString()]);
+    }
+
     public function deleteItem(int $id): void
     {
         RoadmapItem::query()->whereKey($id)->delete();

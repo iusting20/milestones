@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/livewire/src/Features/SupportPagination/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Baloo 2', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-nanum: 'Nanum Gothic', ui-sans-serif, system-ui, sans-serif;
+    --color-canvas: #1e1e1e;
+    --color-panel: #252525;
+    --color-sidebar: #161616;
+    --color-muted: #8b8b8b;
+    --color-faint: #4a4a4a;
+    --color-body: #e8e8e8;
+    --color-link: #58a6ff;
+    --color-mark: #ffe600;
+    --color-check: #1a73e8;
+    --color-today: #2a2a2a;
+}
+
+@layer base {
+    html {
+        @apply bg-canvas text-body antialiased;
+    }
+
+    body {
+        @apply min-h-screen bg-canvas text-body font-sans;
+    }
+
+    a {
+        @apply text-link underline underline-offset-2;
+    }
+
+    mark {
+        @apply bg-mark text-black px-1 rounded-sm;
+    }
+}
+
+@layer components {
+    .todo-check-done {
+        background-color: #1a73e8;
+        border-color: #1a73e8;
+        color: #fff;
+        box-shadow:
+            0 0 2px 0.5px rgb(26 115 232 / 70%),
+            0 0 6px 1px rgb(66 133 244 / 45%),
+            0 0 10px 3px rgb(66 133 244 / 22%);
+    }
+}

@@ -27,6 +27,10 @@
         @apply bg-canvas text-body antialiased;
     }
 
+    [x-cloak] {
+        display: none !important;
+    }
+
     body {
         @apply min-h-screen bg-canvas text-body font-sans;
     }

@@ -15,7 +15,7 @@
     <header class="sticky top-0 z-40 border-b border-white/10 bg-sidebar/95 backdrop-blur">
         <nav class="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-3 py-2 text-sm sm:px-4">
             <a href="{{ route('milestones') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('milestones') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('milestones*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Milestones
             </a>
             <a href="{{ route('links.hub', 'partners') }}"

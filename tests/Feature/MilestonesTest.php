@@ -124,6 +124,7 @@ class MilestonesTest extends TestCase
             'title' => 'Carry me',
             'url' => 'https://example.com',
             'is_completed' => false,
+            'drip_tag' => 'D',
             'position' => 1,
         ]);
         TodoItem::query()->create([
@@ -158,6 +159,7 @@ class MilestonesTest extends TestCase
                 ->where('title', 'Carry me')
                 ->where('url', 'https://example.com')
                 ->where('is_completed', false)
+                ->where('drip_tag', 'D')
                 ->exists()
         );
         $this->assertSame(
@@ -176,5 +178,134 @@ class MilestonesTest extends TestCase
                 ->where('title', 'Carry me')
                 ->exists()
         );
+    }
+
+    public function test_week_board_can_toggle_show_tags(): void
+    {
+        Livewire::test(WeekBoard::class)
+            ->assertSet('showTags', false)
+            ->assertSeeHtml('aria-label="Show task tags"')
+            ->set('showTags', true)
+            ->assertSet('showTags', true)
+            ->assertSeeHtml('aria-label="Hide task tags"');
+    }
+
+    public function test_can_set_and_clear_drip_tag(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Tagged task',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ])
+            ->call('setDripTag', $item->id, 'R')
+            ->assertSee('R');
+
+        $this->assertSame('R', $item->fresh()->drip_tag?->value);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ])
+            ->call('setDripTag', $item->id, 'R');
+
+        $this->assertNull($item->fresh()->drip_tag);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ])
+            ->call('setDripTag', $item->id, 'P')
+            ->call('setDripTag', $item->id, null);
+
+        $this->assertNull($item->fresh()->drip_tag);
+    }
+
+    public function test_set_drip_tag_rejects_invalid_letter(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Tagged task',
+            'drip_tag' => 'I',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ])
+            ->call('setDripTag', $item->id, 'X');
+
+        $this->assertSame('I', $item->fresh()->drip_tag?->value);
+    }
+
+    public function test_money_and_energy_axes_sync_with_drip_tag(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Matrix task',
+            'position' => 1,
+        ]);
+
+        $component = Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ]);
+
+        $component->call('setDripTag', $item->id, 'D');
+        $this->assertSame('D', $item->fresh()->drip_tag?->value);
+
+        $component->call('setDripMoney', $item->id, 'high');
+        $this->assertSame('R', $item->fresh()->drip_tag?->value);
+
+        $component->call('setDripEnergy', $item->id, 'lights');
+        $this->assertSame('P', $item->fresh()->drip_tag?->value);
+
+        $component->call('setDripMoney', $item->id, 'low');
+        $this->assertSame('I', $item->fresh()->drip_tag?->value);
+
+        $component->call('setDripEnergy', $item->id, 'lights');
+        $this->assertNull($item->fresh()->drip_tag);
+    }
+
+    public function test_setting_money_without_drip_defaults_energy_to_drains(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Matrix task',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+            'showTags' => true,
+        ])
+            ->call('setDripMoney', $item->id, 'high');
+
+        $this->assertSame('R', $item->fresh()->drip_tag?->value);
     }
 }

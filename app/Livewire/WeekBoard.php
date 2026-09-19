@@ -11,6 +11,8 @@ class WeekBoard extends Component
     #[Url(as: 'week', history: true)]
     public string $week = '';
 
+    public bool $showTags = false;
+
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {

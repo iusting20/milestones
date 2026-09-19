@@ -1,5 +1,29 @@
 <div class="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
-    <h1 class="mb-6 text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Backlog</h1>
+    <div class="mb-6 flex flex-wrap items-center gap-2">
+        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Backlog</h1>
+
+        <div class="ml-auto flex items-center gap-2">
+            <button type="button"
+                    wire:click="$toggle('showTags')"
+                    @class([
+                        'flex h-8 w-8 items-center justify-center rounded text-muted transition hover:bg-white/5 hover:text-body',
+                        'bg-white/10 text-link' => $showTags,
+                    ])
+                    aria-label="{{ $showTags ? 'Hide task tags' : 'Show task tags' }}"
+                    aria-pressed="{{ $showTags ? 'true' : 'false' }}">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z"/>
+                </svg>
+            </button>
+
+            <a href="{{ route('backlog.drip-matrix') }}"
+               class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel hover:text-body"
+               wire:navigate>
+                DRIP Matrix
+            </a>
+        </div>
+    </div>
 
     <ul
         class="space-y-1"
@@ -47,6 +71,10 @@
                             <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
                         </svg>
                     </button>
+
+                    @if ($showTags)
+                        @include('livewire.partials.drip-chips-row', ['item' => $item])
+                    @endif
 
                     <button type="button"
                             wire:click="toggle({{ $item->id }})"

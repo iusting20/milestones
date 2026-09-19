@@ -2,17 +2,17 @@
 
 namespace App\Livewire;
 
-use App\Enums\DripEnergy;
-use App\Enums\DripMoney;
-use App\Enums\DripTag;
+use App\Livewire\Concerns\SetsDripTags;
 use App\Models\TodoItem;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Reactive;
 use Livewire\Component;
-use ValueError;
 
 class DayList extends Component
 {
+    use SetsDripTags;
+
     public string $date;
 
     public string $dayLabel = '';
@@ -140,91 +140,9 @@ class DayList extends Component
 
     public function toggle(int $id): void
     {
-        $item = TodoItem::query()
-            ->whereDate('date', $this->date)
-            ->whereKey($id)
-            ->firstOrFail();
+        $item = $this->todoItem($id);
 
         $item->update(['is_completed' => ! $item->is_completed]);
-    }
-
-    public function setDripTag(int $id, ?string $tag): void
-    {
-        $item = $this->todoItem($id);
-
-        if ($tag === null || $tag === '') {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        try {
-            $dripTag = DripTag::from($tag);
-        } catch (ValueError) {
-            return;
-        }
-
-        if ($item->drip_tag === $dripTag) {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        $item->update(['drip_tag' => $dripTag]);
-    }
-
-    public function setDripMoney(int $id, ?string $money): void
-    {
-        $item = $this->todoItem($id);
-
-        if ($money === null || $money === '') {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        try {
-            $newMoney = DripMoney::from($money);
-        } catch (ValueError) {
-            return;
-        }
-
-        if ($item->drip_tag?->money() === $newMoney) {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        $energy = $item->drip_tag?->energy() ?? DripEnergy::Drains;
-
-        $item->update(['drip_tag' => DripTag::fromAxes($newMoney, $energy)]);
-    }
-
-    public function setDripEnergy(int $id, ?string $energy): void
-    {
-        $item = $this->todoItem($id);
-
-        if ($energy === null || $energy === '') {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        try {
-            $newEnergy = DripEnergy::from($energy);
-        } catch (ValueError) {
-            return;
-        }
-
-        if ($item->drip_tag?->energy() === $newEnergy) {
-            $item->update(['drip_tag' => null]);
-
-            return;
-        }
-
-        $money = $item->drip_tag?->money() ?? DripMoney::Low;
-
-        $item->update(['drip_tag' => DripTag::fromAxes($money, $newEnergy)]);
     }
 
     public function delete(int $id): void
@@ -297,6 +215,11 @@ class DayList extends Component
         return view('livewire.day-list', [
             'items' => $items,
         ]);
+    }
+
+    protected function findDripTaggable(int $id): Model
+    {
+        return $this->todoItem($id);
     }
 
     private function todoItem(int $id): TodoItem

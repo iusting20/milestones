@@ -2,14 +2,20 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\SetsDripTags;
 use App\Models\BacklogItem;
 use App\Models\TodoItem;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class Backlog extends Component
 {
+    use SetsDripTags;
+
     public string $newTitle = '';
+
+    public bool $showTags = false;
 
     public function addItem(): void
     {
@@ -105,5 +111,10 @@ class Backlog extends Component
                 ->orderBy('id')
                 ->get(),
         ]);
+    }
+
+    protected function findDripTaggable(int $id): Model
+    {
+        return BacklogItem::query()->findOrFail($id);
     }
 }

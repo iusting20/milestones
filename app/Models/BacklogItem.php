@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\DripTag;
 use Illuminate\Database\Eloquent\Model;
 
 class BacklogItem extends Model
@@ -10,6 +11,7 @@ class BacklogItem extends Model
         'title',
         'is_completed',
         'is_separator',
+        'drip_tag',
         'position',
     ];
 
@@ -18,6 +20,7 @@ class BacklogItem extends Model
         return [
             'is_completed' => 'boolean',
             'is_separator' => 'boolean',
+            'drip_tag' => DripTag::class,
             'position' => 'integer',
         ];
     }

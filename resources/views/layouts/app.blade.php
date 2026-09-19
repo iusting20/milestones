@@ -23,7 +23,7 @@
                 Links
             </a>
             <a href="{{ route('backlog') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('backlog') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('backlog*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Backlog
             </a>
             <a href="{{ route('roadmaps') }}"

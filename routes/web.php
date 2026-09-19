@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\LinkHub;
 use Illuminate\Support\Facades\Route;
@@ -11,6 +12,8 @@ Route::view('/milestones', 'milestones')->name('milestones');
 Route::get('/milestones/drip-matrix', DripMatrix::class)->name('milestones.drip-matrix');
 
 Route::view('/backlog', 'backlog')->name('backlog');
+
+Route::get('/backlog/drip-matrix', BacklogDripMatrix::class)->name('backlog.drip-matrix');
 
 Route::view('/roadmaps', 'roadmaps')->name('roadmaps');
 

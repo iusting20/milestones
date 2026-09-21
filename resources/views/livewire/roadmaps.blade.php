@@ -23,6 +23,7 @@
         <span>{{ $pendingCount }} pending</span>
     </div>
 
+    <div x-data="{ hoverId: null }">
     <div class="overflow-hidden rounded-lg border border-white/10 bg-sidebar/80">
         <div class="grid grid-cols-7 border-b border-white/10 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             @foreach (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $weekday)
@@ -58,8 +59,12 @@
                                     @foreach ($lane as $segment)
                                         <div wire:key="seg-{{ $segment['id'] }}-{{ $week['days'][0]->toDateString() }}"
                                              title="{{ $segment['title'] }}"
+                                             @mouseenter="hoverId = {{ $segment['id'] }}"
+                                             @mouseleave="hoverId = null"
+                                             :class="{ 'roadmap-bar-dimmed': hoverId !== null && hoverId !== {{ $segment['id'] }} }"
                                              @class([
                                                  'roadmap-bar',
+                                                 'roadmap-color-'.$segment['colorIndex'] => $segment['pending'],
                                                  'roadmap-bar-pending' => $segment['pending'],
                                                  'roadmap-bar-done' => ! $segment['pending'],
                                                  'rounded-l-sm' => ! $segment['continuesLeft'],
@@ -68,6 +73,10 @@
                                                  'rounded-r-none' => $segment['continuesRight'],
                                              ])
                                              style="grid-column: {{ $segment['col'] }} / span {{ $segment['span'] }}">
+                                            @if (! $segment['continuesLeft'])
+                                                <span class="roadmap-bar-start-dot shrink-0" aria-hidden="true"></span>
+                                                <span class="shrink-0 whitespace-pre" aria-hidden="true"> --- </span>
+                                            @endif
                                             <span class="truncate">{{ $segment['title'] }}</span>
                                             @if ($segment['pending'] && ! $segment['continuesRight'])
                                                 <span class="shrink-0 text-[9px] uppercase tracking-wider opacity-80">pending</span>
@@ -88,11 +97,15 @@
     <ul class="mt-6 space-y-1" wire:key="range-list">
         @forelse ($visibleItems as $item)
             <li wire:key="range-{{ $item->id }}"
-                class="group flex items-center gap-2 rounded px-1 py-1.5 hover:bg-white/5">
+                @mouseenter="hoverId = {{ $item->id }}"
+                @mouseleave="hoverId = null"
+                :class="{ 'roadmap-bar-dimmed': hoverId !== null && hoverId !== {{ $item->id }} }"
+                class="group flex items-center gap-2 rounded px-1 py-1.5 transition-opacity hover:bg-white/5">
                 <span @class([
-                    'h-2 w-2 shrink-0 rounded-full',
-                    'bg-mark' => $item->isPending(),
-                    'bg-check' => ! $item->isPending(),
+                    'mr-[3ch] h-2 w-2 shrink-0 rounded-full',
+                    'roadmap-color-'.$this->colorIndexFor($item->id) => $item->isPending(),
+                    'roadmap-swatch' => $item->isPending(),
+                    'roadmap-swatch-done' => ! $item->isPending(),
                 ])></span>
 
                 <span @class([
@@ -159,6 +172,7 @@
             <li class="px-1 py-2 text-sm text-muted/70">No ranges in this month</li>
         @endforelse
     </ul>
+    </div>
 
     <form wire:submit="addItem" class="mt-6 flex max-w-xl flex-col gap-2 sm:flex-row">
         <input type="text"
@@ -169,5 +183,4 @@
             Add from {{ \Carbon\Carbon::parse($startedOn)->format('j M') }}
         </button>
     </form>
-    <p class="mt-2 text-xs text-muted">Click a day to set the start. Edit start/completion dates inline. Check off to complete today.</p>
 </div>

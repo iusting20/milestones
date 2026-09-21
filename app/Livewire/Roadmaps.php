@@ -10,6 +10,8 @@ use Livewire\Component;
 
 class Roadmaps extends Component
 {
+    public const PENDING_COLOR_COUNT = 8;
+
     #[Url(as: 'month', history: true)]
     public string $month = '';
 
@@ -174,7 +176,7 @@ class Roadmaps extends Component
 
     /**
      * @param  Collection<int, RoadmapItem>  $items
-     * @return list<array{days: list<Carbon>, lanes: list<list<array{id: int, title: string, pending: bool, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>}>
+     * @return list<array{days: list<Carbon>, lanes: list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>}>
      */
     private function weeks(Carbon $gridStart, Carbon $gridEnd, Carbon $monthStart, Carbon $monthEnd, Collection $items, Carbon $today): array
     {
@@ -201,7 +203,7 @@ class Roadmaps extends Component
 
     /**
      * @param  Collection<int, RoadmapItem>  $items
-     * @return list<list<array{id: int, title: string, pending: bool, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>
+     * @return list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>
      */
     private function lanesForWeek(Carbon $weekStart, Carbon $weekEnd, Carbon $monthStart, Carbon $monthEnd, Collection $items, Carbon $today): array
     {
@@ -226,6 +228,7 @@ class Roadmaps extends Component
                 'id' => $item->id,
                 'title' => $item->title,
                 'pending' => $item->isPending(),
+                'colorIndex' => $this->colorIndexFor($item->id),
                 'col' => $col,
                 'span' => (int) $span,
                 'continuesLeft' => $originalStart->lt($segStart),
@@ -273,6 +276,11 @@ class Roadmaps extends Component
     private function overlaps(RoadmapItem $item, Carbon $from, Carbon $to, Carbon $today): bool
     {
         return ! $item->rangeEnd($today)->lt($from) && ! $item->rangeStart()->gt($to);
+    }
+
+    public function colorIndexFor(int $id): int
+    {
+        return (($id % self::PENDING_COLOR_COUNT) + self::PENDING_COLOR_COUNT) % self::PENDING_COLOR_COUNT;
     }
 
     private function parseMonth(string $month): ?Carbon

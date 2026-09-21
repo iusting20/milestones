@@ -55,20 +55,63 @@
             0 0 10px 3px rgb(66 133 244 / 22%);
     }
 
+    /* Material Design 500s - no greens (reserved for finished) */
+    .roadmap-color-0 { --roadmap-color: #ffc107; --roadmap-ink: #111; } /* Amber */
+    .roadmap-color-1 { --roadmap-color: #ff9800; --roadmap-ink: #111; } /* Orange */
+    .roadmap-color-2 { --roadmap-color: #ff5722; --roadmap-ink: #fff; } /* Deep Orange */
+    .roadmap-color-3 { --roadmap-color: #e91e63; --roadmap-ink: #fff; } /* Pink */
+    .roadmap-color-4 { --roadmap-color: #9c27b0; --roadmap-ink: #fff; } /* Purple */
+    .roadmap-color-5 { --roadmap-color: #3f51b5; --roadmap-ink: #fff; } /* Indigo */
+    .roadmap-color-6 { --roadmap-color: #2196f3; --roadmap-ink: #fff; } /* Blue */
+    .roadmap-color-7 { --roadmap-color: #00bcd4; --roadmap-ink: #111; } /* Cyan */
+
+    .roadmap-swatch {
+        background-color: var(--roadmap-color);
+    }
+
+    .roadmap-swatch-done {
+        background-color: #7cb518;
+    }
+
     .roadmap-bar {
-        @apply flex min-w-0 items-center gap-1 px-1.5 text-[10px] font-semibold leading-none tracking-wide;
+        @apply relative flex min-w-0 items-center gap-1 px-1.5 text-[10px] font-semibold leading-none tracking-wide;
         height: 18px;
+        transition: opacity 120ms ease;
+    }
+
+    .roadmap-bar-dimmed {
+        opacity: 0.3;
+    }
+
+    .roadmap-bar-start-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 9999px;
     }
 
     .roadmap-bar-done {
-        background-color: rgb(26 115 232 / 72%);
-        color: #fff;
+        background-color: #7cb518;
+        color: #0f1f14;
+    }
+
+    .roadmap-bar-done .roadmap-bar-start-dot {
+        background: #0f1f14;
+        box-shadow: 0 0 0 1.5px #5a8a12;
     }
 
     .roadmap-bar-pending {
-        background: linear-gradient(90deg, rgb(255 230 0 / 92%), rgb(255 230 0 / 35%));
-        color: #111;
-        box-shadow: inset -8px 0 8px -6px rgb(255 230 0 / 10%);
+        background: linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--roadmap-color) 94%, transparent),
+            color-mix(in srgb, var(--roadmap-color) 32%, transparent)
+        );
+        color: var(--roadmap-ink);
+        box-shadow: inset -8px 0 8px -6px color-mix(in srgb, var(--roadmap-color) 12%, transparent);
+    }
+
+    .roadmap-bar-pending .roadmap-bar-start-dot {
+        background: var(--roadmap-ink);
+        box-shadow: 0 0 0 1.5px var(--roadmap-color);
     }
 
     .roadmap-date-hit {

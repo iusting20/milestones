@@ -47,6 +47,6 @@
         'quadrants' => $quadrants,
         'untagged' => $untagged,
         'grid' => $grid,
-        'showTaskDate' => true,
+        'showTaskDate' => ! $todayOnly,
     ])
 </div>

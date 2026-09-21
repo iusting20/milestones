@@ -116,6 +116,8 @@ class DripMatrixTest extends TestCase
 
     public function test_today_only_filter_limits_to_todays_tasks(): void
     {
+        $this->travelTo(Carbon::parse('2026-09-23 12:00:00')); // Wednesday, W39
+
         $today = now()->toDateString();
         $yesterday = now()->subDay()->toDateString();
         $week = now()->format('o-\WW');
@@ -133,13 +135,55 @@ class DripMatrixTest extends TestCase
             'position' => 1,
         ]);
 
-        Livewire::withQueryParams(['week' => $week])
+        $component = Livewire::withQueryParams(['week' => $week])
             ->test(DripMatrix::class)
             ->assertSet('todayOnly', true)
             ->assertSee('Today drip')
-            ->assertDontSee('Yesterday drip')
-            ->set('todayOnly', false)
+            ->assertDontSee('Yesterday drip');
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/tracking-wide text-muted">\s*Wed\s*</',
+            $component->html(),
+        );
+
+        $component->set('todayOnly', false)
             ->assertSee('Today drip')
             ->assertSee('Yesterday drip');
+
+        $this->assertMatchesRegularExpression(
+            '/tracking-wide text-muted">\s*Wed\s*</',
+            $component->html(),
+        );
+        $this->assertMatchesRegularExpression(
+            '/tracking-wide text-muted">\s*Tue\s*</',
+            $component->html(),
+        );
+    }
+
+    public function test_completed_tasks_are_prefixed_with_checkmark(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Finished drip',
+            'drip_tag' => 'D',
+            'is_completed' => true,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Open drip',
+            'drip_tag' => 'D',
+            'is_completed' => false,
+            'position' => 2,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('todayOnly', false)
+            ->assertSee('✔')
+            ->assertSee('Finished drip')
+            ->assertSee('Open drip');
     }
 }

@@ -79,7 +79,7 @@
                                     wire:model.live.debounce.700ms="editTitle"
                                     wire:blur="finishEditing"
                                     wire:keydown.enter.prevent="finishEditing"
-                                    autofocus
+                                    x-init="$nextTick(() => $el.focus())"
                                     @class([
                                         'w-full border-0 bg-transparent px-0 py-0 text-[15px] leading-snug focus:outline-none focus:ring-0',
                                         'text-muted' => $item->is_completed,
@@ -121,10 +121,10 @@
                     <span class="ml-6 flex h-5 w-5 shrink-0 rounded-full border-2 border-muted/40" aria-hidden="true"></span>
                     <input
                         type="text"
-                        wire:model.live.debounce.700ms="newTitle"
+                        wire:model="newTitle"
                         wire:blur="finishAdding"
                         placeholder="New task…"
-                        autofocus
+                        x-init="$nextTick(() => $el.focus())"
                         class="w-full flex-1 border-0 bg-transparent px-0 py-0 text-[15px] text-body placeholder:text-muted/50 focus:outline-none focus:ring-0"
                     />
                 </form>

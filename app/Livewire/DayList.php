@@ -79,13 +79,6 @@ class DayList extends Component
         $this->newTitle = '';
     }
 
-    public function updatedNewTitle(string $value): void
-    {
-        if (trim($value) !== '') {
-            $this->addItem();
-        }
-    }
-
     public function finishAdding(): void
     {
         $this->addItem();

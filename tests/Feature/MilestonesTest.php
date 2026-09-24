@@ -52,6 +52,41 @@ class MilestonesTest extends TestCase
         $this->assertTrue($item->fresh()->is_completed);
     }
 
+    public function test_typing_new_title_does_not_create_item_until_submit_or_blur(): void
+    {
+        $date = now()->toDateString();
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startAdding')
+            ->set('newTitle', 'Still typing')
+            ->assertSet('adding', true)
+            ->assertSet('newTitle', 'Still typing');
+
+        $this->assertDatabaseMissing('todo_items', [
+            'title' => 'Still typing',
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startAdding')
+            ->set('newTitle', 'Commit on blur')
+            ->call('finishAdding')
+            ->assertSet('adding', false)
+            ->assertSet('newTitle', '');
+
+        $this->assertDatabaseHas('todo_items', [
+            'title' => 'Commit on blur',
+            'is_completed' => false,
+        ]);
+    }
+
     public function test_can_edit_todo_item_title(): void
     {
         $date = now()->toDateString();

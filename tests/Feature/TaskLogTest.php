@@ -267,6 +267,78 @@ class TaskLogTest extends TestCase
             ->assertSeeHtml('Time split for MON');
     }
 
+    public function test_week_stats_group_sessions_by_title(): void
+    {
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Prognoze',
+            'started_at' => Carbon::parse('2026-03-16 08:00:00'),
+            'finished_at' => Carbon::parse('2026-03-16 09:00:00'),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Prognoze',
+            'started_at' => Carbon::parse('2026-03-18 12:00:00'),
+            'finished_at' => Carbon::parse('2026-03-18 13:30:00'),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Cosmic',
+            'started_at' => Carbon::parse('2026-03-17 10:00:00'),
+            'finished_at' => Carbon::parse('2026-03-17 10:30:00'),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Week totals')
+            ->assertSee('2h 30m')
+            ->assertSee('3h')
+            ->assertSee('Prognoze')
+            ->assertSee('Cosmic')
+            ->assertSee('MON 16 Mar')
+            ->assertSee('WED 18 Mar')
+            ->assertSee('TUE 17 Mar');
+    }
+
+    public function test_each_task_title_gets_a_unique_stable_color(): void
+    {
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Alpha task',
+            'started_at' => Carbon::parse('2026-03-16 08:00:00'),
+            'finished_at' => Carbon::parse('2026-03-16 09:00:00'),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Beta task',
+            'started_at' => Carbon::parse('2026-03-16 10:00:00'),
+            'finished_at' => Carbon::parse('2026-03-16 11:00:00'),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Alpha task',
+            'started_at' => Carbon::parse('2026-03-18 12:00:00'),
+            'finished_at' => Carbon::parse('2026-03-18 13:00:00'),
+        ]);
+
+        $html = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->html();
+
+        preg_match_all('/(?:background-color:\s*|fill=")(#[0-9a-f]{6})/', $html, $matches);
+
+        $uniqueColors = array_values(array_unique($matches[1]));
+
+        $this->assertContains('#58a6ff', $uniqueColors);
+        $this->assertContains('#ff9800', $uniqueColors);
+        $this->assertSame(['#58a6ff', '#ff9800'], $uniqueColors);
+        $this->assertGreaterThanOrEqual(2, substr_count($html, '#58a6ff'));
+    }
+
     public function test_start_logging_is_idempotent_when_already_logging(): void
     {
         Carbon::setTestNow('2026-03-18 10:15:00');

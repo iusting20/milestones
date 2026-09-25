@@ -6,21 +6,18 @@
          ])>
     <header class="mb-3 border-b border-white/10 pb-2 text-center">
         <div @class([
-            'text-[10px] font-semibold uppercase tracking-[0.18em]',
+            'text-sm font-semibold uppercase tracking-[0.18em]',
             'text-link' => $day['isToday'],
             'text-muted' => ! $day['isToday'],
         ])>
             {{ $day['label'] }}
         </div>
         <div @class([
-            'mt-0.5 text-sm font-semibold tabular-nums',
+            'mt-1 text-2xl font-semibold tabular-nums',
             'text-body' => $day['isToday'],
             'text-muted' => ! $day['isToday'],
         ])>
             {{ $day['dayNumber'] }}
-        </div>
-        <div class="mt-1 text-[10px] tabular-nums text-muted">
-            {{ $day['totalDuration'] }}
         </div>
     </header>
 
@@ -37,10 +34,14 @@
                 </div>
                 <div class="flex h-6 items-center gap-1.5">
                     <div class="min-w-0 flex-1">
-                        <div class="h-5 rounded-sm transition-[width]"
+                        <div class="h-5 cursor-pointer rounded-sm transition-opacity duration-150"
                              style="width: {{ max(8, $log['width']) }}%; background-color: {{ $log['color'] }}"
                              role="img"
-                             aria-label="{{ $log['duration'] }}"></div>
+                             aria-label="{{ $log['duration'] }}"
+                             @mouseenter="hoverTitle = @js($log['title'])"
+                             @mouseleave="hoverTitle = null"
+                             @click="focusTitle(@js($log['title']))"
+                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($log['title']) }"></div>
                     </div>
                     <span class="shrink-0 text-[10px] tabular-nums text-muted">
                         {{ $log['duration'] }}
@@ -67,14 +68,23 @@
                         @if ($slice['full'])
                             <circle cx="50" cy="50" r="42"
                                     fill="{{ $slice['color'] }}"
-                                    title="{{ $slice['title'] }} · {{ $slice['duration'] }}">
+                                    class="cursor-pointer transition-opacity duration-150"
+                                    @mouseenter="hoverTitle = @js($slice['title'])"
+                                    @mouseleave="hoverTitle = null"
+                                    @click="focusTitle(@js($slice['title']))"
+                                    :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($slice['title']) }">
                                 <title>{{ $slice['title'] }} · {{ $slice['duration'] }}</title>
                             </circle>
                         @else
                             <path d="{{ $slice['path'] }}"
                                   fill="{{ $slice['color'] }}"
                                   stroke="#1e1e1e"
-                                  stroke-width="1">
+                                  stroke-width="1"
+                                  class="cursor-pointer transition-opacity duration-150"
+                                  @mouseenter="hoverTitle = @js($slice['title'])"
+                                  @mouseleave="hoverTitle = null"
+                                  @click="focusTitle(@js($slice['title']))"
+                                  :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($slice['title']) }">
                                 <title>{{ $slice['title'] }} · {{ $slice['duration'] }}</title>
                             </path>
                         @endif

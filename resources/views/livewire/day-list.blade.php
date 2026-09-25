@@ -43,11 +43,7 @@
                     <li
                         data-item-id="{{ $item->id }}"
                         wire:key="item-{{ $item->id }}"
-                        @class([
-                            'group flex items-start gap-2 rounded px-1 py-1.5 hover:bg-white/5',
-                            'border border-link' => $item->isLogging(),
-                            'border border-transparent' => ! $item->isLogging(),
-                        ])
+                        class="group flex items-start gap-2 rounded px-1 py-1.5 hover:bg-white/5"
                     >
                         <button type="button"
                                 data-drag-handle
@@ -92,20 +88,9 @@
                                 />
                             @else
                                 <div @class([
-                                    'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[15px] leading-snug',
+                                    'flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[15px] leading-snug',
                                     'opacity-60' => $item->is_completed && $item->links->isNotEmpty(),
                                 ])>
-                                    @if ($item->isLogging())
-                                        <span class="inline-flex shrink-0 items-center gap-1 tabular-nums text-link"
-                                              aria-label="Logging since {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}"
-                                              title="Started {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}">
-                                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
-                                                <circle cx="12" cy="14" r="7"/>
-                                            </svg>
-                                            <span class="text-xs">{{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
-                                        </span>
-                                    @endif
                                     <button type="button"
                                             wire:click.stop="startEditing({{ $item->id }})"
                                             @class([
@@ -160,6 +145,18 @@
                                 </div>
                             @endif
                         </div>
+
+                        @if ($item->isLogging())
+                            <span class="inline-flex shrink-0 items-center gap-1.5 self-center tabular-nums text-link"
+                                  aria-label="Logging since {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}"
+                                  title="Started {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                    <circle cx="12" cy="14" r="7"/>
+                                </svg>
+                                <span class="text-[15px] font-semibold leading-none">{{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
+                            </span>
+                        @endif
 
                         @if ($showLogControls)
                             <div class="mt-0.5 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">

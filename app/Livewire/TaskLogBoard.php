@@ -27,6 +27,21 @@ class TaskLogBoard extends Component
         '#ffc107',
         '#ff5722',
         '#2196f3',
+        '#f06292',
+        '#7e57c2',
+        '#5c6bc0',
+        '#29b6f6',
+        '#26c6da',
+        '#ffa726',
+        '#ef5350',
+        '#ab47bc',
+        '#42a5f5',
+        '#ec407a',
+        '#8d6e63',
+        '#78909c',
+        '#ff7043',
+        '#7986cb',
+        '#039be5',
     ];
 
     #[Url(as: 'week', history: true)]
@@ -77,6 +92,7 @@ class TaskLogBoard extends Component
             ->orderBy('id')
             ->get();
 
+        $colorByTitle = $this->colorByTitle($logs);
         $maxMinutes = max(1, (int) $logs->max(fn (TaskLog $log): int => $this->durationMinutes($log)));
 
         $days = [];
@@ -88,7 +104,7 @@ class TaskLogBoard extends Component
             $dayLogs = $logs
                 ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
                 ->values()
-                ->map(function (TaskLog $log, int $index) use ($maxMinutes): array {
+                ->map(function (TaskLog $log) use ($maxMinutes, $colorByTitle): array {
                     $minutes = $this->durationMinutes($log);
 
                     return [
@@ -99,7 +115,7 @@ class TaskLogBoard extends Component
                         'minutes' => $minutes,
                         'duration' => $this->formatDuration($minutes),
                         'width' => round(($minutes / $maxMinutes) * 100, 1),
-                        'color' => self::PIE_COLORS[$index % count(self::PIE_COLORS)],
+                        'color' => $colorByTitle[$log->title],
                     ];
                 });
 
@@ -121,7 +137,116 @@ class TaskLogBoard extends Component
             'days' => $days,
             'weekNumber' => $this->weekNumber(),
             'hasLogs' => $logs->isNotEmpty(),
+            'stats' => $this->stats($logs, $colorByTitle),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $logs
+     * @return array<string, string>
+     */
+    private function colorByTitle(Collection $logs): array
+    {
+        $titles = $logs
+            ->unique('title')
+            ->values()
+            ->pluck('title');
+
+        $colors = [];
+
+        foreach ($titles as $index => $title) {
+            $colors[$title] = $this->colorAt($index);
+        }
+
+        return $colors;
+    }
+
+    private function colorAt(int $index): string
+    {
+        if ($index < count(self::PIE_COLORS)) {
+            return self::PIE_COLORS[$index];
+        }
+
+        $base = self::PIE_COLORS[$index % count(self::PIE_COLORS)];
+        $cycle = intdiv($index, count(self::PIE_COLORS));
+
+        return $this->shiftColor($base, $cycle);
+    }
+
+    private function shiftColor(string $hex, int $cycle): string
+    {
+        $hex = ltrim($hex, '#');
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+
+        $factor = 1 - min(0.45, $cycle * 0.18);
+
+        return sprintf(
+            '#%02x%02x%02x',
+            max(0, min(255, (int) round($r * $factor))),
+            max(0, min(255, (int) round($g * $factor))),
+            max(0, min(255, (int) round($b * $factor))),
+        );
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $logs
+     * @param  array<string, string>  $colorByTitle
+     * @return array{totalMinutes: int, totalDuration: string, sessionCount: int, itemCount: int, items: list<array{title: string, minutes: int, duration: string, share: float, width: float, color: string, sessions: list<array{id: int, day: string, date: string, started: string, finished: string, minutes: int, duration: string}>}>}
+     */
+    private function stats(Collection $logs, array $colorByTitle): array
+    {
+        $grouped = $logs->groupBy(fn (TaskLog $log): string => $log->title);
+
+        $items = $grouped->map(function (Collection $sessions, string $title) use ($colorByTitle): array {
+            $minutes = (int) $sessions->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
+
+            $rows = $sessions
+                ->sortBy(fn (TaskLog $log) => $log->started_at->timestamp)
+                ->values()
+                ->map(function (TaskLog $log): array {
+                    $started = $log->started_at->timezone('Europe/Bucharest');
+                    $finished = $log->finished_at->timezone('Europe/Bucharest');
+                    $sessionMinutes = $this->durationMinutes($log);
+
+                    return [
+                        'id' => $log->id,
+                        'day' => strtoupper($finished->format('D')),
+                        'date' => $finished->format('j M'),
+                        'started' => $started->format('H:i'),
+                        'finished' => $finished->format('H:i'),
+                        'minutes' => $sessionMinutes,
+                        'duration' => $this->formatDuration($sessionMinutes),
+                    ];
+                });
+
+            return [
+                'title' => $title,
+                'minutes' => $minutes,
+                'duration' => $this->formatDuration($minutes),
+                'color' => $colorByTitle[$title],
+                'sessions' => $rows->all(),
+            ];
+        })->sortByDesc('minutes')->values();
+
+        $totalMinutes = (int) $items->sum('minutes');
+        $maxMinutes = max(1, (int) $items->max('minutes'));
+
+        $items = $items->map(function (array $item) use ($totalMinutes, $maxMinutes): array {
+            $item['share'] = $totalMinutes > 0 ? round(($item['minutes'] / $totalMinutes) * 100, 1) : 0;
+            $item['width'] = round(($item['minutes'] / $maxMinutes) * 100, 1);
+
+            return $item;
+        });
+
+        return [
+            'totalMinutes' => $totalMinutes,
+            'totalDuration' => $this->formatDuration($totalMinutes),
+            'sessionCount' => $logs->count(),
+            'itemCount' => $items->count(),
+            'items' => $items->all(),
+        ];
     }
 
     /**

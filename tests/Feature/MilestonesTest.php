@@ -109,7 +109,7 @@ class MilestonesTest extends TestCase
         $this->assertSame('New title', $item->fresh()->title);
     }
 
-    public function test_can_set_and_clear_todo_item_url(): void
+    public function test_can_set_and_clear_todo_item_links(): void
     {
         $date = now()->toDateString();
 
@@ -125,11 +125,44 @@ class MilestonesTest extends TestCase
             'isToday' => true,
         ])
             ->call('startLinking', $item->id)
-            ->set('editUrl', 'example.com/docs')
+            ->set('editLinks', [
+                ['title' => 'Docs', 'url' => 'example.com/docs'],
+            ])
             ->call('finishLinking')
             ->assertSet('linkingId', null);
 
-        $this->assertSame('https://example.com/docs', $item->fresh()->url);
+        $item->refresh()->load('links');
+        $this->assertCount(1, $item->links);
+        $this->assertSame('https://example.com/docs', $item->links->first()->url);
+        $this->assertSame('Docs', $item->links->first()->title);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->assertSee('Read docs')
+            ->assertSee('Docs')
+            ->assertSeeHtml('href="https://example.com/docs"')
+            ->assertDontSeeHtml('>Read docs</a>')
+            ->call('startLinking', $item->id)
+            ->set('editLinks', [
+                ['title' => '', 'url' => ''],
+            ])
+            ->call('finishLinking');
+
+        $this->assertCount(0, $item->fresh()->links);
+    }
+
+    public function test_can_add_multiple_links_to_todo_item(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Ship feature',
+            'position' => 1,
+        ]);
 
         Livewire::test(DayList::class, [
             'date' => $date,
@@ -137,12 +170,43 @@ class MilestonesTest extends TestCase
             'isToday' => true,
         ])
             ->call('startLinking', $item->id)
-            ->assertSeeHtml('href="https://example.com/docs"')
-            ->assertSee('Read docs')
-            ->set('editUrl', '')
-            ->call('finishLinking');
+            ->call('addLinkRow')
+            ->set('editLinks', [
+                ['title' => 'PR', 'url' => 'https://github.com/example/pr/1'],
+                ['title' => 'Spec', 'url' => 'https://docs.example.com/spec'],
+            ])
+            ->call('finishLinking')
+            ->assertSee('PR')
+            ->assertSee('Spec')
+            ->assertSeeHtml('href="https://github.com/example/pr/1"')
+            ->assertSeeHtml('href="https://docs.example.com/spec"');
 
-        $this->assertNull($item->fresh()->url);
+        $this->assertCount(2, $item->fresh()->links);
+    }
+
+    public function test_link_requires_both_title_and_url(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Partial link',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startLinking', $item->id)
+            ->set('editLinks', [
+                ['title' => 'Docs', 'url' => ''],
+            ])
+            ->call('finishLinking')
+            ->assertSet('linkingId', $item->id);
+
+        $this->assertCount(0, $item->fresh()->links);
     }
 
     public function test_invalid_todo_item_url_is_rejected(): void
@@ -152,6 +216,11 @@ class MilestonesTest extends TestCase
         $item = TodoItem::query()->create([
             'date' => $date,
             'title' => 'Broken link',
+            'position' => 1,
+        ]);
+
+        $item->links()->create([
+            'title' => 'Example',
             'url' => 'https://example.com',
             'position' => 1,
         ]);
@@ -162,11 +231,13 @@ class MilestonesTest extends TestCase
             'isToday' => true,
         ])
             ->call('startLinking', $item->id)
-            ->set('editUrl', 'not a url')
+            ->set('editLinks', [
+                ['title' => 'Docs', 'url' => 'not a url'],
+            ])
             ->call('finishLinking')
             ->assertSet('linkingId', $item->id);
 
-        $this->assertSame('https://example.com', $item->fresh()->url);
+        $this->assertSame('https://example.com', $item->fresh()->links->first()->url);
     }
 
     public function test_can_reorder_todo_items(): void
@@ -214,12 +285,16 @@ class MilestonesTest extends TestCase
         $today = now()->toDateString();
         $yesterday = Carbon::parse($today)->subDay()->toDateString();
 
-        TodoItem::query()->create([
+        $carry = TodoItem::query()->create([
             'date' => $yesterday,
             'title' => 'Carry me',
-            'url' => 'https://example.com',
             'is_completed' => false,
             'drip_tag' => 'D',
+            'position' => 1,
+        ]);
+        $carry->links()->create([
+            'title' => 'Example',
+            'url' => 'https://example.com',
             'position' => 1,
         ]);
         TodoItem::query()->create([
@@ -248,13 +323,18 @@ class MilestonesTest extends TestCase
         ])
             ->call('copyUnfinishedFromPreviousDay');
 
+        $copied = TodoItem::query()
+            ->whereDate('date', $today)
+            ->where('title', 'Carry me')
+            ->where('is_completed', false)
+            ->where('drip_tag', 'D')
+            ->first();
+
+        $this->assertNotNull($copied);
         $this->assertTrue(
-            TodoItem::query()
-                ->whereDate('date', $today)
-                ->where('title', 'Carry me')
+            $copied->links()
                 ->where('url', 'https://example.com')
-                ->where('is_completed', false)
-                ->where('drip_tag', 'D')
+                ->where('title', 'Example')
                 ->exists()
         );
         $this->assertSame(

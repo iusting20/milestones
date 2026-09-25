@@ -138,13 +138,20 @@ class ProductivityLogSeeder extends Seeder
 
             $positionByDate[$date] = ($positionByDate[$date] ?? 0) + 1;
 
-            TodoItem::query()->create([
+            $todo = TodoItem::query()->create([
                 'date' => $date,
                 'title' => $title,
-                'url' => $url,
                 'is_completed' => $done,
                 'position' => $positionByDate[$date],
             ]);
+
+            if (is_string($url) && $url !== '') {
+                $todo->links()->create([
+                    'title' => 'Link',
+                    'url' => $url,
+                    'position' => 1,
+                ]);
+            }
         }
 
         $leftovers = [

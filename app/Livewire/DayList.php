@@ -6,6 +6,7 @@ use App\Livewire\Concerns\SetsDripTags;
 use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
@@ -34,7 +35,10 @@ class DayList extends Component
 
     public ?int $linkingId = null;
 
-    public string $editUrl = '';
+    /**
+     * @var list<array{title: string, url: string}>
+     */
+    public array $editLinks = [];
 
     public function mount(): void
     {
@@ -75,7 +79,6 @@ class DayList extends Component
         TodoItem::query()->create([
             'date' => $this->date,
             'title' => $title,
-            'url' => null,
             'is_completed' => false,
             'position' => $max + 1,
         ]);
@@ -142,15 +145,35 @@ class DayList extends Component
         }
 
         $item = $this->todoItem($id);
+        $item->loadMissing('links');
 
         $this->linkingId = $item->id;
-        $this->editUrl = $item->url ?? '';
+        $this->editLinks = $item->links
+            ->map(fn ($link): array => [
+                'title' => $link->title,
+                'url' => $link->url,
+            ])
+            ->values()
+            ->all();
+
+        if ($this->editLinks === []) {
+            $this->editLinks = [$this->emptyLinkRow()];
+        }
+    }
+
+    public function addLinkRow(): void
+    {
+        if (! $this->linkingId) {
+            return;
+        }
+
+        $this->editLinks[] = $this->emptyLinkRow();
     }
 
     public function cancelLinking(): void
     {
         $this->linkingId = null;
-        $this->editUrl = '';
+        $this->editLinks = [];
     }
 
     public function finishLinking(): void
@@ -159,23 +182,58 @@ class DayList extends Component
             return;
         }
 
-        $url = trim($this->editUrl);
+        $prepared = [];
 
-        if ($url === '') {
-            $this->todoItem($this->linkingId)->update(['url' => null]);
-            $this->cancelLinking();
+        foreach ($this->editLinks as $row) {
+            $title = trim($row['title'] ?? '');
+            $url = trim($row['url'] ?? '');
 
-            return;
+            if ($title === '' && $url === '') {
+                continue;
+            }
+
+            if ($title === '' || $url === '') {
+                return;
+            }
+
+            $url = $this->normalizeUrl($url);
+
+            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+                return;
+            }
+
+            $prepared[] = [
+                'title' => $title,
+                'url' => $url,
+            ];
         }
 
-        $url = $this->normalizeUrl($url);
+        $item = $this->todoItem($this->linkingId);
 
-        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
-            return;
-        }
+        DB::transaction(function () use ($item, $prepared): void {
+            $item->links()->delete();
 
-        $this->todoItem($this->linkingId)->update(['url' => $url]);
+            foreach ($prepared as $index => $link) {
+                $item->links()->create([
+                    'title' => $link['title'],
+                    'url' => $link['url'],
+                    'position' => $index + 1,
+                ]);
+            }
+        });
+
         $this->cancelLinking();
+    }
+
+    /**
+     * @return array{title: string, url: string}
+     */
+    private function emptyLinkRow(): array
+    {
+        return [
+            'title' => '',
+            'url' => '',
+        ];
     }
 
     private function normalizeUrl(string $url): string
@@ -204,6 +262,7 @@ class DayList extends Component
         $previousDate = Carbon::parse($this->date)->subDay()->toDateString();
 
         $unfinished = TodoItem::query()
+            ->with('links')
             ->whereDate('date', $previousDate)
             ->where('is_completed', false)
             ->orderBy('position')
@@ -227,14 +286,21 @@ class DayList extends Component
 
             $max++;
 
-            TodoItem::query()->create([
+            $copy = TodoItem::query()->create([
                 'date' => $this->date,
                 'title' => $item->title,
-                'url' => $item->url,
                 'is_completed' => false,
                 'drip_tag' => $item->drip_tag,
                 'position' => $max,
             ]);
+
+            foreach ($item->links as $index => $link) {
+                $copy->links()->create([
+                    'title' => $link->title,
+                    'url' => $link->url,
+                    'position' => $index + 1,
+                ]);
+            }
 
             $existingTitles[] = $item->title;
         }
@@ -256,6 +322,7 @@ class DayList extends Component
     public function render()
     {
         $items = TodoItem::query()
+            ->with('links')
             ->whereDate('date', $this->date)
             ->orderBy('position')
             ->orderBy('id')

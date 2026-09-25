@@ -77,7 +77,6 @@ class Backlog extends Component
             TodoItem::query()->create([
                 'date' => $today,
                 'title' => $item->title,
-                'url' => null,
                 'is_completed' => false,
                 'position' => $max + 1,
             ]);

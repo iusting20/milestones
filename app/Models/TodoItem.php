@@ -4,13 +4,13 @@ namespace App\Models;
 
 use App\Enums\DripTag;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TodoItem extends Model
 {
     protected $fillable = [
         'date',
         'title',
-        'url',
         'is_completed',
         'drip_tag',
         'position',
@@ -24,5 +24,10 @@ class TodoItem extends Model
             'drip_tag' => DripTag::class,
             'position' => 'integer',
         ];
+    }
+
+    public function links(): HasMany
+    {
+        return $this->hasMany(TodoItemLink::class)->orderBy('position')->orderBy('id');
     }
 }

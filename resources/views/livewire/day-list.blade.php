@@ -86,57 +86,73 @@
                                         'text-body' => ! $item->is_completed,
                                     ])
                                 />
-                            @elseif ($item->url)
-                                <a href="{{ $item->url }}"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   @class([
-                                       'block text-[15px] leading-snug text-link hover:underline',
-                                       'opacity-60' => $item->is_completed,
-                                   ])>
-                                    {{ $item->title }}
-                                </a>
                             @else
-                                <button type="button"
-                                        wire:click.stop="startEditing({{ $item->id }})"
-                                        @class([
-                                            'w-full cursor-text text-left text-[15px] leading-snug',
-                                            'text-muted' => $item->is_completed,
-                                            'text-body' => ! $item->is_completed,
-                                        ])>
-                                    {{ $item->title }}
-                                </button>
+                                <div @class([
+                                    'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[15px] leading-snug',
+                                    'opacity-60' => $item->is_completed && $item->links->isNotEmpty(),
+                                ])>
+                                    <button type="button"
+                                            wire:click.stop="startEditing({{ $item->id }})"
+                                            @class([
+                                                'cursor-text text-left',
+                                                'text-muted' => $item->is_completed,
+                                                'text-body' => ! $item->is_completed,
+                                            ])>
+                                        {{ $item->title }}
+                                    </button>
+                                    @foreach ($item->links as $link)
+                                        <a href="{{ $link->url }}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="shrink-0 text-link hover:underline">
+                                            {{ $link->title }}
+                                        </a>
+                                    @endforeach
+                                </div>
                             @endif
 
                             @if ($linkingId === $item->id)
-                                <input
-                                    type="url"
-                                    wire:model="editUrl"
-                                    wire:keydown.enter.prevent="finishLinking"
-                                    wire:keydown.escape="cancelLinking"
-                                    wire:blur="finishLinking"
-                                    placeholder="https://…"
-                                    x-init="$nextTick(() => $el.focus())"
-                                    class="mt-1 w-full border-0 border-b border-white/10 bg-transparent px-0 py-0.5 text-xs text-link placeholder:text-muted/50 focus:outline-none focus:ring-0"
-                                />
+                                <div class="mt-1 space-y-1"
+                                     x-data
+                                     @focusout="if (!$el.contains($event.relatedTarget)) $wire.finishLinking()">
+                                    @foreach ($editLinks as $index => $editLink)
+                                        <div class="flex flex-wrap items-center gap-2" wire:key="edit-link-{{ $linkingId }}-{{ $index }}">
+                                            <input
+                                                type="text"
+                                                wire:model="editLinks.{{ $index }}.title"
+                                                wire:keydown.enter.prevent="finishLinking"
+                                                wire:keydown.escape="cancelLinking"
+                                                placeholder="Title"
+                                                @if ($index === 0) x-init="$nextTick(() => $el.focus())" @endif
+                                                class="w-28 shrink-0 border-0 border-b border-white/10 bg-transparent px-0 py-0.5 text-xs text-body placeholder:text-muted/50 focus:outline-none focus:ring-0 sm:w-36"
+                                            />
+                                            <input
+                                                type="url"
+                                                wire:model="editLinks.{{ $index }}.url"
+                                                wire:keydown.enter.prevent="finishLinking"
+                                                wire:keydown.escape="cancelLinking"
+                                                placeholder="https://…"
+                                                class="min-w-0 flex-1 border-0 border-b border-white/10 bg-transparent px-0 py-0.5 text-xs text-link placeholder:text-muted/50 focus:outline-none focus:ring-0"
+                                            />
+                                        </div>
+                                    @endforeach
+                                    <button type="button"
+                                            wire:click="addLinkRow"
+                                            class="block px-0.5 text-sm leading-none text-muted/40 transition hover:text-link"
+                                            aria-label="Add another link">
+                                        +
+                                    </button>
+                                </div>
                             @endif
                         </div>
-
-                        @if ($item->url && $editingId !== $item->id)
-                            <button type="button"
-                                    wire:click.stop="startEditing({{ $item->id }})"
-                                    class="mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100"
-                                    aria-label="Edit title">
-                                edit
-                            </button>
-                        @endif
 
                         <button type="button"
                                 wire:click.stop="startLinking({{ $item->id }})"
                                 class="mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
-                                aria-label="{{ $item->url ? 'Edit link' : 'Add link' }}">
-                            <svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                                <path d="M6.5 9.5l3-3M4.2 11.8a2.5 2.5 0 010-3.5l1.5-1.5M11.8 4.2a2.5 2.5 0 010 3.5L10.3 9.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                aria-label="{{ $item->links->isNotEmpty() ? 'Edit links' : 'Add link' }}">
+                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                             </svg>
                         </button>
 

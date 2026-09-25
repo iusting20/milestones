@@ -13,6 +13,8 @@ class WeekBoard extends Component
 
     public bool $showTags = false;
 
+    public bool $showLogControls = false;
+
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {

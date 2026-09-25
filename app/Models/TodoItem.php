@@ -12,6 +12,7 @@ class TodoItem extends Model
         'date',
         'title',
         'is_completed',
+        'logging_started_at',
         'drip_tag',
         'position',
     ];
@@ -21,6 +22,7 @@ class TodoItem extends Model
         return [
             'date' => 'date',
             'is_completed' => 'boolean',
+            'logging_started_at' => 'datetime',
             'drip_tag' => DripTag::class,
             'position' => 'integer',
         ];
@@ -29,5 +31,15 @@ class TodoItem extends Model
     public function links(): HasMany
     {
         return $this->hasMany(TodoItemLink::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function taskLogs(): HasMany
+    {
+        return $this->hasMany(TaskLog::class);
+    }
+
+    public function isLogging(): bool
+    {
+        return $this->logging_started_at !== null;
     }
 }

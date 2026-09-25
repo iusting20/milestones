@@ -37,6 +37,25 @@
                wire:navigate>
                 DRIP Matrix
             </a>
+
+            <button type="button"
+                    wire:click="$toggle('showLogControls')"
+                    @class([
+                        'flex h-8 w-8 items-center justify-center rounded text-muted transition hover:bg-white/5 hover:text-body',
+                        'bg-white/10 text-link' => $showLogControls,
+                    ])
+                    aria-label="{{ $showLogControls ? 'Hide log controls' : 'Show log controls' }}"
+                    aria-pressed="{{ $showLogControls ? 'true' : 'false' }}">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </button>
+
+            <a href="{{ route('milestones.log', ['week' => $week]) }}"
+               class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel hover:text-body"
+               wire:navigate>
+                Log
+            </a>
         </div>
     </div>
 
@@ -47,6 +66,7 @@
                 :day-label="strtoupper($day->format('l'))"
                 :is-today="$day->toDateString() === $today"
                 :show-tags="$showTags"
+                :show-log-controls="$showLogControls"
                 :key="'day-'.$day->toDateString()"
             />
         @endforeach

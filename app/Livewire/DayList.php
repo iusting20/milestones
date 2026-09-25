@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Livewire\Concerns\SetsDripTags;
+use App\Models\TaskLog;
 use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +23,9 @@ class DayList extends Component
 
     #[Reactive]
     public bool $showTags = false;
+
+    #[Reactive]
+    public bool $showLogControls = false;
 
     public bool $expanded = false;
 
@@ -248,8 +252,42 @@ class DayList extends Component
     public function toggle(int $id): void
     {
         $item = $this->todoItem($id);
+        $completing = ! $item->is_completed;
 
-        $item->update(['is_completed' => ! $item->is_completed]);
+        $item->update(['is_completed' => $completing]);
+
+        if ($completing) {
+            $this->finishLogging($id);
+        }
+    }
+
+    public function startLogging(int $id): void
+    {
+        $item = $this->todoItem($id);
+
+        if ($item->isLogging()) {
+            return;
+        }
+
+        $item->update(['logging_started_at' => now()]);
+    }
+
+    public function finishLogging(int $id): void
+    {
+        $item = $this->todoItem($id);
+
+        if (! $item->isLogging()) {
+            return;
+        }
+
+        TaskLog::query()->create([
+            'todo_item_id' => $item->id,
+            'title' => $item->title,
+            'started_at' => $item->logging_started_at,
+            'finished_at' => now(),
+        ]);
+
+        $item->update(['logging_started_at' => null]);
     }
 
     public function delete(int $id): void

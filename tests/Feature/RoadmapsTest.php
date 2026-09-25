@@ -220,4 +220,21 @@ class RoadmapsTest extends TestCase
 
         $this->assertSame('2026-09-10', $item->fresh()->completed_on->toDateString());
     }
+
+    public function test_calendar_shows_title_only_on_first_and_last_week_segments(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'Span many weeks',
+            'started_on' => '2026-09-01',
+            'completed_on' => '2026-09-20',
+        ]);
+
+        $html = Livewire::test(Roadmaps::class)->html();
+
+        preg_match_all('/<span class="truncate">Span many weeks<\/span>/', $html, $matches);
+
+        $this->assertCount(2, $matches[0]);
+    }
 }

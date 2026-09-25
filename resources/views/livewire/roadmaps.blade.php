@@ -71,15 +71,17 @@
                                                  'rounded-r-sm' => ! $segment['continuesRight'],
                                                  'rounded-l-none' => $segment['continuesLeft'],
                                                  'rounded-r-none' => $segment['continuesRight'],
+                                                 'justify-end' => $segment['continuesLeft'] && ! $segment['continuesRight'],
                                              ])
                                              style="grid-column: {{ $segment['col'] }} / span {{ $segment['span'] }}">
                                             @if (! $segment['continuesLeft'])
-                                                <span class="roadmap-bar-start-dot shrink-0" aria-hidden="true"></span>
+                                                <svg class="roadmap-bar-start-flag shrink-0" viewBox="0 0 10 12" aria-hidden="true">
+                                                    <path fill="currentColor" d="M1 0.75h1.25v10.5H1zM2.25 1.1h6.1L6.7 3.65 8.35 6.2H2.25z"/>
+                                                </svg>
                                                 <span class="shrink-0 whitespace-pre" aria-hidden="true"> --- </span>
                                             @endif
-                                            <span class="truncate">{{ $segment['title'] }}</span>
-                                            @if ($segment['pending'] && ! $segment['continuesRight'])
-                                                <span class="shrink-0 text-[9px] uppercase tracking-wider opacity-80">pending</span>
+                                            @if (! $segment['continuesLeft'] || ! $segment['continuesRight'])
+                                                <span class="truncate">{{ $segment['title'] }}</span>
                                             @endif
                                         </div>
                                     @endforeach

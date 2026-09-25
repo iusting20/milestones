@@ -83,20 +83,15 @@
         opacity: 0.3;
     }
 
-    .roadmap-bar-start-dot {
+    .roadmap-bar-start-flag {
         width: 10px;
-        height: 10px;
-        border-radius: 9999px;
+        height: 12px;
+        display: block;
     }
 
     .roadmap-bar-done {
         background-color: #7cb518;
         color: #0f1f14;
-    }
-
-    .roadmap-bar-done .roadmap-bar-start-dot {
-        background: #0f1f14;
-        box-shadow: 0 0 0 1.5px #5a8a12;
     }
 
     .roadmap-bar-pending {
@@ -107,11 +102,6 @@
         );
         color: var(--roadmap-ink);
         box-shadow: inset -8px 0 8px -6px color-mix(in srgb, var(--roadmap-color) 12%, transparent);
-    }
-
-    .roadmap-bar-pending .roadmap-bar-start-dot {
-        background: var(--roadmap-ink);
-        box-shadow: 0 0 0 1.5px var(--roadmap-color);
     }
 
     .roadmap-date-hit {

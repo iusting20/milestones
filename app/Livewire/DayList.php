@@ -32,6 +32,10 @@ class DayList extends Component
 
     public string $editTitle = '';
 
+    public ?int $linkingId = null;
+
+    public string $editUrl = '';
+
     public function mount(): void
     {
         $this->expanded = $this->isToday;
@@ -91,11 +95,9 @@ class DayList extends Component
     public function startEditing(int $id): void
     {
         $this->saveEdit();
+        $this->cancelLinking();
 
-        $item = TodoItem::query()
-            ->whereDate('date', $this->date)
-            ->whereKey($id)
-            ->firstOrFail();
+        $item = $this->todoItem($id);
 
         $this->editingId = $item->id;
         $this->editTitle = $item->title;
@@ -129,6 +131,60 @@ class DayList extends Component
         $this->saveEdit();
         $this->editingId = null;
         $this->editTitle = '';
+    }
+
+    public function startLinking(int $id): void
+    {
+        $this->finishEditing();
+
+        if ($this->linkingId && $this->linkingId !== $id) {
+            $this->finishLinking();
+        }
+
+        $item = $this->todoItem($id);
+
+        $this->linkingId = $item->id;
+        $this->editUrl = $item->url ?? '';
+    }
+
+    public function cancelLinking(): void
+    {
+        $this->linkingId = null;
+        $this->editUrl = '';
+    }
+
+    public function finishLinking(): void
+    {
+        if (! $this->linkingId) {
+            return;
+        }
+
+        $url = trim($this->editUrl);
+
+        if ($url === '') {
+            $this->todoItem($this->linkingId)->update(['url' => null]);
+            $this->cancelLinking();
+
+            return;
+        }
+
+        $url = $this->normalizeUrl($url);
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return;
+        }
+
+        $this->todoItem($this->linkingId)->update(['url' => $url]);
+        $this->cancelLinking();
+    }
+
+    private function normalizeUrl(string $url): string
+    {
+        if (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://')) {
+            return 'https://'.$url;
+        }
+
+        return $url;
     }
 
     public function toggle(int $id): void

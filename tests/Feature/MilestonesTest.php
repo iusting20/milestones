@@ -109,6 +109,66 @@ class MilestonesTest extends TestCase
         $this->assertSame('New title', $item->fresh()->title);
     }
 
+    public function test_can_set_and_clear_todo_item_url(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Read docs',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startLinking', $item->id)
+            ->set('editUrl', 'example.com/docs')
+            ->call('finishLinking')
+            ->assertSet('linkingId', null);
+
+        $this->assertSame('https://example.com/docs', $item->fresh()->url);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startLinking', $item->id)
+            ->assertSeeHtml('href="https://example.com/docs"')
+            ->assertSee('Read docs')
+            ->set('editUrl', '')
+            ->call('finishLinking');
+
+        $this->assertNull($item->fresh()->url);
+    }
+
+    public function test_invalid_todo_item_url_is_rejected(): void
+    {
+        $date = now()->toDateString();
+
+        $item = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Broken link',
+            'url' => 'https://example.com',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startLinking', $item->id)
+            ->set('editUrl', 'not a url')
+            ->call('finishLinking')
+            ->assertSet('linkingId', $item->id);
+
+        $this->assertSame('https://example.com', $item->fresh()->url);
+    }
+
     public function test_can_reorder_todo_items(): void
     {
         $date = now()->toDateString();

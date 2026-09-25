@@ -22,6 +22,8 @@
             ])>
                 @if ($task->is_completed)
                     <span class="mr-1 text-muted" aria-hidden="true">✔</span>
+                @else
+                    <span class="mr-1 text-muted" aria-hidden="true">○</span>
                 @endif
                 @if ($showTaskDate && isset($task->date))
                     <span class="mr-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">

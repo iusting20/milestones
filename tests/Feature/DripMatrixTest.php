@@ -183,6 +183,7 @@ class DripMatrixTest extends TestCase
             ->test(DripMatrix::class)
             ->set('todayOnly', false)
             ->assertSee('✔')
+            ->assertSee('○')
             ->assertSee('Finished drip')
             ->assertSee('Open drip');
     }

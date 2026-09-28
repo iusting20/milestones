@@ -33,6 +33,10 @@ class DayList extends Component
 
     public bool $adding = false;
 
+    public ?int $addingChildFor = null;
+
+    public string $newChildTitle = '';
+
     public ?int $editingId = null;
 
     public string $editTitle = '';
@@ -84,10 +88,24 @@ class DayList extends Component
             'date' => $this->date,
             'title' => $title,
             'is_completed' => false,
+            'is_separator' => false,
             'position' => $max + 1,
         ]);
 
         $this->newTitle = '';
+    }
+
+    public function addDivider(): void
+    {
+        $max = (int) TodoItem::query()->whereDate('date', $this->date)->max('position');
+
+        TodoItem::query()->create([
+            'date' => $this->date,
+            'title' => null,
+            'is_completed' => false,
+            'is_separator' => true,
+            'position' => $max + 1,
+        ]);
     }
 
     public function finishAdding(): void
@@ -99,6 +117,65 @@ class DayList extends Component
         }
     }
 
+    public function startAddingChild(int $id): void
+    {
+        $item = $this->todoItem($id);
+
+        if ($item->is_separator || $item->parent_id !== null) {
+            return;
+        }
+
+        $this->cancelAdding();
+        $this->cancelLinking();
+
+        if ($this->addingChildFor === $item->id) {
+            $this->cancelAddingChild();
+
+            return;
+        }
+
+        $this->addingChildFor = $item->id;
+        $this->newChildTitle = '';
+    }
+
+    public function cancelAddingChild(): void
+    {
+        $this->addingChildFor = null;
+        $this->newChildTitle = '';
+    }
+
+    public function addChild(): void
+    {
+        if (! $this->addingChildFor) {
+            return;
+        }
+
+        $title = trim($this->newChildTitle);
+
+        if ($title === '') {
+            return;
+        }
+
+        $parent = $this->todoItem($this->addingChildFor);
+
+        if ($parent->is_separator || $parent->parent_id !== null) {
+            return;
+        }
+
+        $max = (int) TodoItem::query()->where('parent_id', $parent->id)->max('position');
+
+        TodoItem::query()->create([
+            'date' => $this->date,
+            'parent_id' => $parent->id,
+            'title' => $title,
+            'is_completed' => false,
+            'is_separator' => false,
+            'position' => $max + 1,
+        ]);
+
+        $this->newChildTitle = '';
+    }
+
     public function startEditing(int $id): void
     {
         $this->saveEdit();
@@ -106,8 +183,12 @@ class DayList extends Component
 
         $item = $this->todoItem($id);
 
+        if ($item->is_separator) {
+            return;
+        }
+
         $this->editingId = $item->id;
-        $this->editTitle = $item->title;
+        $this->editTitle = $item->title ?? '';
     }
 
     public function saveEdit(): void
@@ -149,6 +230,11 @@ class DayList extends Component
         }
 
         $item = $this->todoItem($id);
+
+        if ($item->is_separator) {
+            return;
+        }
+
         $item->loadMissing('links');
 
         $this->linkingId = $item->id;
@@ -252,6 +338,11 @@ class DayList extends Component
     public function toggle(int $id): void
     {
         $item = $this->todoItem($id);
+
+        if ($item->is_separator) {
+            return;
+        }
+
         $completing = ! $item->is_completed;
 
         $item->update(['is_completed' => $completing]);
@@ -265,7 +356,7 @@ class DayList extends Component
     {
         $item = $this->todoItem($id);
 
-        if ($item->isLogging()) {
+        if ($item->is_separator || $item->isLogging()) {
             return;
         }
 
@@ -276,7 +367,7 @@ class DayList extends Component
     {
         $item = $this->todoItem($id);
 
-        if (! $item->isLogging()) {
+        if ($item->is_separator || ! $item->isLogging()) {
             return;
         }
 
@@ -303,6 +394,7 @@ class DayList extends Component
             ->with('links')
             ->whereDate('date', $previousDate)
             ->where('is_completed', false)
+            ->where('is_separator', false)
             ->orderBy('position')
             ->orderBy('id')
             ->get();
@@ -317,57 +409,138 @@ class DayList extends Component
             ->pluck('title')
             ->all();
 
-        foreach ($unfinished as $item) {
-            if (in_array($item->title, $existingTitles, true)) {
+        $roots = $unfinished->whereNull('parent_id');
+        $copiedIds = [];
+        $childPositions = [];
+
+        foreach ($roots as $item) {
+            $copy = $this->copyUnfinishedItem($item, null, $max, $existingTitles);
+
+            if (! $copy) {
                 continue;
             }
 
-            $max++;
-
-            $copy = TodoItem::query()->create([
-                'date' => $this->date,
-                'title' => $item->title,
-                'is_completed' => false,
-                'drip_tag' => $item->drip_tag,
-                'position' => $max,
-            ]);
-
-            foreach ($item->links as $index => $link) {
-                $copy->links()->create([
-                    'title' => $link->title,
-                    'url' => $link->url,
-                    'position' => $index + 1,
-                ]);
-            }
-
-            $existingTitles[] = $item->title;
+            $copiedIds[$item->id] = $copy->id;
+            $childPositions[$copy->id] = 0;
         }
+
+        foreach ($unfinished->whereNotNull('parent_id') as $item) {
+            $parentCopyId = $copiedIds[$item->parent_id] ?? null;
+
+            if ($parentCopyId) {
+                $this->copyUnfinishedItem($item, $parentCopyId, $childPositions[$parentCopyId], $existingTitles);
+            } else {
+                $this->copyUnfinishedItem($item, null, $max, $existingTitles);
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $existingTitles
+     */
+    private function copyUnfinishedItem(TodoItem $item, ?int $parentId, int &$position, array &$existingTitles): ?TodoItem
+    {
+        if (in_array($item->title, $existingTitles, true)) {
+            return null;
+        }
+
+        $position++;
+
+        $copy = TodoItem::query()->create([
+            'date' => $this->date,
+            'parent_id' => $parentId,
+            'title' => $item->title,
+            'is_completed' => false,
+            'is_separator' => false,
+            'drip_tag' => $item->drip_tag,
+            'position' => $position,
+        ]);
+
+        foreach ($item->links as $index => $link) {
+            $copy->links()->create([
+                'title' => $link->title,
+                'url' => $link->url,
+                'position' => $index + 1,
+            ]);
+        }
+
+        $existingTitles[] = $item->title;
+
+        return $copy;
+    }
+
+    public function nest(int $id, int $parentId): void
+    {
+        if ($id === $parentId) {
+            return;
+        }
+
+        $item = $this->todoItem($id);
+        $parent = $this->todoItem($parentId);
+
+        if ($item->is_separator || $parent->is_separator || $parent->parent_id !== null || $item->children()->exists()) {
+            return;
+        }
+
+        $max = (int) TodoItem::query()->where('parent_id', $parent->id)->max('position');
+
+        $item->update([
+            'parent_id' => $parent->id,
+            'position' => $max + 1,
+        ]);
     }
 
     /**
      * @param  array<int, int>  $orderedIds
      */
-    public function reorder(array $orderedIds): void
+    public function reorder(array $orderedIds, ?int $parentId = null): void
     {
+        if ($parentId !== null) {
+            $parent = $this->todoItem($parentId);
+
+            if ($parent->parent_id !== null) {
+                return;
+            }
+        }
+
         foreach ($orderedIds as $index => $id) {
-            TodoItem::query()
+            if ($parentId !== null && (int) $id === $parentId) {
+                continue;
+            }
+
+            $item = TodoItem::query()
                 ->whereDate('date', $this->date)
                 ->whereKey($id)
-                ->update(['position' => $index + 1]);
+                ->first();
+
+            if (! $item) {
+                continue;
+            }
+
+            if ($parentId !== null && ($item->is_separator || $item->children()->exists())) {
+                continue;
+            }
+
+            $item->update([
+                'position' => $index + 1,
+                'parent_id' => $parentId,
+            ]);
         }
     }
 
     public function render()
     {
         $items = TodoItem::query()
-            ->with('links')
+            ->with(['links', 'children.links'])
             ->whereDate('date', $this->date)
+            ->whereNull('parent_id')
             ->orderBy('position')
             ->orderBy('id')
             ->get();
 
         return view('livewire.day-list', [
             'items' => $items,
+            'itemCount' => $items->count() + $items->sum(fn (TodoItem $item) => $item->children->count()),
         ]);
     }
 

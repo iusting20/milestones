@@ -74,6 +74,43 @@ class DripMatrixTest extends TestCase
             ->assertDontSee('Other week');
     }
 
+    public function test_parent_tasks_are_hidden_from_the_matrix(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        $parent = TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Hidden parent',
+            'drip_tag' => 'D',
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Visible child',
+            'parent_id' => $parent->id,
+            'drip_tag' => 'P',
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Standalone task',
+            'drip_tag' => 'R',
+            'position' => 2,
+        ]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('todayOnly', false)
+            ->assertSee('Visible child')
+            ->assertSee('Standalone task')
+            ->assertSeeHtml('data-tooltip="from: Hidden parent"');
+
+        $html = $component->html();
+
+        $this->assertSame(2, substr_count($html, 'data-tooltip="from: Hidden parent"'));
+        $this->assertSame(2, substr_count($html, 'Hidden parent'));
+    }
+
     public function test_week_board_links_to_drip_matrix_for_current_week(): void
     {
         $this->get(route('milestones', ['week' => '2026-W12']))
@@ -186,5 +223,29 @@ class DripMatrixTest extends TestCase
             ->assertSee('○')
             ->assertSee('Finished drip')
             ->assertSee('Open drip');
+    }
+
+    public function test_dividers_are_hidden_from_the_matrix(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Visible task',
+            'drip_tag' => null,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => null,
+            'is_separator' => true,
+            'position' => 2,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('todayOnly', false)
+            ->assertSee('Visible task')
+            ->assertSee('Untagged (1)');
     }
 }

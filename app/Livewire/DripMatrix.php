@@ -99,6 +99,9 @@ class DripMatrix extends Component
     private function weekTasksQuery(): Builder
     {
         $query = TodoItem::query()
+            ->with('parent')
+            ->where('is_separator', false)
+            ->whereDoesntHave('children')
             ->orderBy('date')
             ->orderBy('position')
             ->orderBy('id');

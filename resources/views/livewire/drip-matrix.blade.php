@@ -1,11 +1,6 @@
 <div class="mx-auto max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
     <div class="mb-5 space-y-3">
         <div class="flex flex-wrap items-center gap-2">
-            <a href="{{ route('milestones', ['week' => $week]) }}"
-               class="rounded border border-white/10 px-2.5 py-1.5 text-sm text-muted no-underline hover:text-body sm:px-3">
-                ‹ <span class="hidden sm:inline">Milestones</span>
-            </a>
-
             <button type="button" wire:click="previousWeek"
                     class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
                     aria-label="Previous week">‹</button>
@@ -18,6 +13,11 @@
             <button type="button" wire:click="nextWeek"
                     class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
                     aria-label="Next week">›</button>
+
+            <a href="{{ route('milestones', ['week' => $week]) }}"
+               class="ml-auto rounded border border-white/10 px-2.5 py-1.5 text-sm text-muted no-underline hover:text-body sm:px-3">
+                ‹ <span class="hidden sm:inline">Milestones</span>
+            </a>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">

@@ -78,6 +78,7 @@ class Backlog extends Component
                 'date' => $today,
                 'title' => $item->title,
                 'is_completed' => false,
+                'is_separator' => false,
                 'position' => $max + 1,
             ]);
 

@@ -272,6 +272,196 @@ class MilestonesTest extends TestCase
         $this->assertSame(3, $b->fresh()->position);
     }
 
+    public function test_can_add_divider(): void
+    {
+        $date = now()->toDateString();
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->assertSeeHtml('wire:click="addDivider"')
+            ->assertSee('---')
+            ->call('addDivider');
+
+        $this->assertDatabaseHas('todo_items', [
+            'is_separator' => true,
+            'title' => null,
+            'is_completed' => false,
+        ]);
+
+        $this->assertTrue(
+            TodoItem::query()
+                ->whereDate('date', $date)
+                ->where('is_separator', true)
+                ->exists()
+        );
+    }
+
+    public function test_cannot_toggle_divider(): void
+    {
+        $date = now()->toDateString();
+
+        $divider = TodoItem::query()->create([
+            'date' => $date,
+            'title' => null,
+            'is_separator' => true,
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('toggle', $divider->id);
+
+        $this->assertFalse($divider->fresh()->is_completed);
+    }
+
+    public function test_can_reorder_including_divider(): void
+    {
+        $date = now()->toDateString();
+
+        $a = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'First',
+            'position' => 1,
+        ]);
+        $divider = TodoItem::query()->create([
+            'date' => $date,
+            'title' => null,
+            'is_separator' => true,
+            'position' => 2,
+        ]);
+        $b = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Second',
+            'position' => 3,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('reorder', [$divider->id, $a->id, $b->id]);
+
+        $this->assertSame(1, $divider->fresh()->position);
+        $this->assertSame(2, $a->fresh()->position);
+        $this->assertSame(3, $b->fresh()->position);
+    }
+
+    public function test_cannot_nest_a_divider(): void
+    {
+        $date = now()->toDateString();
+
+        $parent = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Parent',
+            'position' => 1,
+        ]);
+        $divider = TodoItem::query()->create([
+            'date' => $date,
+            'title' => null,
+            'is_separator' => true,
+            'position' => 2,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])->call('nest', $divider->id, $parent->id);
+
+        $this->assertNull($divider->fresh()->parent_id);
+    }
+
+    public function test_can_add_a_child_item_from_the_slot(): void
+    {
+        $date = now()->toDateString();
+
+        $parent = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Parent',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('startAddingChild', $parent->id)
+            ->set('newChildTitle', 'Nested task')
+            ->call('addChild')
+            ->assertSee('Nested task');
+
+        $child = TodoItem::query()->where('title', 'Nested task')->first();
+
+        $this->assertNotNull($child);
+        $this->assertSame($parent->id, $child->parent_id);
+    }
+
+    public function test_can_nest_a_todo_under_another(): void
+    {
+        $date = now()->toDateString();
+
+        $parent = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Parent',
+            'position' => 1,
+        ]);
+        $child = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Child',
+            'position' => 2,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('nest', $child->id, $parent->id)
+            ->assertSee('Child')
+            ->assertSeeHtml('data-parent-id="'.$parent->id.'"');
+
+        $this->assertSame($parent->id, $child->fresh()->parent_id);
+    }
+
+    public function test_cannot_nest_under_an_already_nested_item(): void
+    {
+        $date = now()->toDateString();
+
+        $parent = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Parent',
+            'position' => 1,
+        ]);
+        $child = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Child',
+            'parent_id' => $parent->id,
+            'position' => 1,
+        ]);
+        $other = TodoItem::query()->create([
+            'date' => $date,
+            'title' => 'Other',
+            'position' => 2,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])->call('nest', $other->id, $child->id);
+
+        $this->assertNull($other->fresh()->parent_id);
+    }
+
     public function test_week_board_accepts_iso_week_query(): void
     {
         Livewire::withQueryParams(['week' => '2026-W12'])
@@ -315,6 +505,13 @@ class MilestonesTest extends TestCase
             'is_completed' => false,
             'position' => 3,
         ]);
+        TodoItem::query()->create([
+            'date' => $yesterday,
+            'title' => null,
+            'is_separator' => true,
+            'is_completed' => false,
+            'position' => 4,
+        ]);
 
         Livewire::test(DayList::class, [
             'date' => $today,
@@ -340,6 +537,12 @@ class MilestonesTest extends TestCase
         $this->assertSame(
             1,
             TodoItem::query()->whereDate('date', $today)->where('title', 'Already here')->count()
+        );
+        $this->assertFalse(
+            TodoItem::query()
+                ->whereDate('date', $today)
+                ->where('is_separator', true)
+                ->exists()
         );
         $this->assertFalse(
             TodoItem::query()

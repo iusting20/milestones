@@ -17,9 +17,14 @@
         @foreach ($tasks as $task)
             <li @class([
                 'break-words text-sm leading-snug',
+                'has-parent-tip' => $task->parent,
                 'text-muted' => $task->is_completed,
                 'text-body' => ! $task->is_completed,
-            ])>
+            ])
+                @if ($task->parent)
+                    data-tooltip="from: {{ $task->parent->title }}"
+                @endif
+            >
                 @if ($task->is_completed)
                     <span class="mr-1 text-muted" aria-hidden="true">✔</span>
                 @else

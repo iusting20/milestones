@@ -37,6 +37,12 @@
                 aria-label="Next week">›</button>
 
         <div class="ml-auto flex items-center gap-2">
+            <button type="button" wire:click="openAddModal"
+                    class="flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted transition hover:bg-panel hover:text-link"
+                    aria-label="Add log entry">
+                +
+            </button>
+
             <button type="button" wire:click="goToToday"
                     class="rounded border border-white/10 px-3 py-1.5 text-sm text-link no-underline hover:bg-panel">
                 Today
@@ -49,6 +55,108 @@
             </a>
         </div>
     </div>
+
+    @if ($showAddModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             wire:keydown.escape.window="closeAddModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="add-log-title">
+            <div class="absolute inset-0 bg-black/60" wire:click="closeAddModal" aria-hidden="true"></div>
+
+            <form wire:submit="addLog"
+                  class="relative z-10 w-full max-w-md rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 id="add-log-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        Add log entry
+                    </h2>
+                    <button type="button"
+                            wire:click="closeAddModal"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Close">×</button>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <span class="mb-1 block text-xs uppercase tracking-[0.14em] text-muted">Day</span>
+                        <div class="flex flex-wrap gap-1" role="group" aria-label="Day of week">
+                            @forelse ($selectableDays as $day)
+                                <button type="button"
+                                        wire:click="selectLogDate('{{ $day['date'] }}')"
+                                        @class([
+                                            'rounded border px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide transition',
+                                            'border-link bg-link/15 text-link' => $logDate === $day['date'],
+                                            'border-white/10 text-muted hover:text-body' => $logDate !== $day['date'],
+                                        ])>
+                                    {{ $day['label'] }}
+                                </button>
+                            @empty
+                                <p class="text-xs text-muted">No elapsed days in this week.</p>
+                            @endforelse
+                        </div>
+                        @error('logDate')
+                            <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label for="add-log-task" class="mb-1 block text-xs uppercase tracking-[0.14em] text-muted">Task</label>
+                        <select id="add-log-task"
+                                wire:model="todoItemId"
+                                class="w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none">
+                            <option value="">Select a task…</option>
+                            @foreach ($tasks as $task)
+                                <option value="{{ $task->id }}">
+                                    @if ($task->parent)
+                                        {{ $task->parent->title }} ›
+                                    @endif
+                                    {{ $task->title }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('todoItemId')
+                            <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="add-log-start" class="mb-1 block text-xs uppercase tracking-[0.14em] text-muted">Start</label>
+                            <input id="add-log-start"
+                                   type="time"
+                                   wire:model="startedAt"
+                                   class="w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                            @error('startedAt')
+                                <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label for="add-log-finish" class="mb-1 block text-xs uppercase tracking-[0.14em] text-muted">Finish</label>
+                            <input id="add-log-finish"
+                                   type="time"
+                                   wire:model="finishedAt"
+                                   class="w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                            @error('finishedAt')
+                                <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button"
+                            wire:click="closeAddModal"
+                            class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
+                        Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endif
 
     @unless ($hasLogs)
         <p class="text-sm text-muted">No finished log entries this week.</p>

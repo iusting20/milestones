@@ -120,7 +120,7 @@ class BacklogTest extends TestCase
         $this->assertSame(3, $b->fresh()->position);
     }
 
-    public function test_can_move_item_to_today(): void
+    public function test_can_move_item_to_this_week(): void
     {
         $item = BacklogItem::query()->create([
             'title' => 'Ship cashflow queues',
@@ -128,19 +128,20 @@ class BacklogTest extends TestCase
         ]);
 
         Livewire::test(Backlog::class)
-            ->call('moveToToday', $item->id);
+            ->call('moveToThisWeek', $item->id);
 
         $this->assertDatabaseMissing('backlog_items', ['id' => $item->id]);
         $this->assertTrue(
             TodoItem::query()
-                ->whereDate('date', now()->toDateString())
+                ->whereNull('date')
+                ->where('week', now()->format('o-\WW'))
                 ->where('title', 'Ship cashflow queues')
                 ->where('is_completed', false)
                 ->exists()
         );
     }
 
-    public function test_cannot_move_separator_to_today(): void
+    public function test_cannot_move_separator_to_this_week(): void
     {
         $item = BacklogItem::query()->create([
             'title' => null,
@@ -149,7 +150,7 @@ class BacklogTest extends TestCase
         ]);
 
         Livewire::test(Backlog::class)
-            ->call('moveToToday', $item->id);
+            ->call('moveToThisWeek', $item->id);
 
         $this->assertDatabaseHas('backlog_items', ['id' => $item->id]);
         $this->assertDatabaseCount('todo_items', 0);

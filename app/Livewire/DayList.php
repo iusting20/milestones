@@ -8,6 +8,7 @@ use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
@@ -51,6 +52,12 @@ class DayList extends Component
     public function mount(): void
     {
         $this->expanded = $this->isToday;
+    }
+
+    #[On('todo-assigned-to-day')]
+    public function refreshAfterAssignment(): void
+    {
+        //
     }
 
     public function toggleExpanded(): void

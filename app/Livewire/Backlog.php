@@ -62,7 +62,7 @@ class Backlog extends Component
         ]);
     }
 
-    public function moveToToday(int $id): void
+    public function moveToThisWeek(int $id): void
     {
         $item = BacklogItem::query()->findOrFail($id);
 
@@ -70,12 +70,16 @@ class Backlog extends Component
             return;
         }
 
-        $today = now()->toDateString();
-        $max = (int) TodoItem::query()->whereDate('date', $today)->max('position');
+        $week = now()->format('o-\WW');
+        $max = (int) TodoItem::query()
+            ->whereNull('date')
+            ->where('week', $week)
+            ->max('position');
 
-        DB::transaction(function () use ($item, $today, $max): void {
+        DB::transaction(function () use ($item, $week, $max): void {
             TodoItem::query()->create([
-                'date' => $today,
+                'date' => null,
+                'week' => $week,
                 'title' => $item->title,
                 'is_completed' => false,
                 'is_separator' => false,

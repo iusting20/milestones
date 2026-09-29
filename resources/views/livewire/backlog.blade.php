@@ -97,11 +97,11 @@
                     </span>
 
                     <button type="button"
-                            wire:click="moveToToday({{ $item->id }})"
-                            wire:confirm="Move this to today's milestones? It will be removed from the backlog."
+                            wire:click="moveToThisWeek({{ $item->id }})"
+                            wire:confirm="Move this to For this week? It will be removed from the backlog."
                             class="mt-0.5 shrink-0 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
-                            title="Move to today"
-                            aria-label="Move to today">
+                            title="Move to For this week"
+                            aria-label="Move to For this week">
                         <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
                             <path d="M4 10L10 4M6 4h4v4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>

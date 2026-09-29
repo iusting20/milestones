@@ -11,6 +11,7 @@ class TodoItem extends Model
 {
     protected $fillable = [
         'date',
+        'week',
         'parent_id',
         'title',
         'is_completed',

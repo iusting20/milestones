@@ -70,5 +70,12 @@
                 :key="'day-'.$day->toDateString()"
             />
         @endforeach
+
+        <livewire:week-list
+            :week="$week"
+            :show-tags="$showTags"
+            :show-log-controls="$showLogControls"
+            :key="'week-list-'.$week"
+        />
     </div>
 </div>

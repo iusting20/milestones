@@ -363,4 +363,156 @@ class TaskLogTest extends TestCase
 
         $this->assertTrue($item->fresh()->logging_started_at->equalTo($startedAt));
     }
+
+    public function test_log_page_can_open_add_modal(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSet('showAddModal', false)
+            ->assertSeeHtml('aria-label="Add log entry"')
+            ->call('openAddModal')
+            ->assertSet('showAddModal', true)
+            ->assertSet('logDate', '2026-03-18')
+            ->assertSee('Add log entry')
+            ->assertSee('Select a task')
+            ->assertSee('WED')
+            ->assertDontSeeHtml("wire:click=\"selectLogDate('2026-03-19')\"");
+    }
+
+    public function test_add_modal_filters_tasks_by_selected_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        TodoItem::query()->create([
+            'date' => '2026-03-17',
+            'title' => 'Tuesday task',
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Wednesday task',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->assertSet('logDate', '2026-03-18')
+            ->assertSee('Wednesday task')
+            ->assertDontSee('Tuesday task')
+            ->call('selectLogDate', '2026-03-17')
+            ->assertSet('logDate', '2026-03-17')
+            ->assertSet('todoItemId', '')
+            ->assertSee('Tuesday task')
+            ->assertDontSee('Wednesday task');
+    }
+
+    public function test_can_add_log_entry_from_modal(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Manual log task',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->assertSet('logDate', '2026-03-18')
+            ->set('todoItemId', (string) $item->id)
+            ->set('startedAt', '13:50')
+            ->set('finishedAt', '15:00')
+            ->call('addLog')
+            ->assertSet('showAddModal', false)
+            ->assertSee('Manual log task')
+            ->assertSee('13:50')
+            ->assertSee('15:00');
+
+        $log = TaskLog::query()->first();
+
+        $this->assertNotNull($log);
+        $this->assertSame($item->id, $log->todo_item_id);
+        $this->assertSame('Manual log task', $log->title);
+        $this->assertSame(
+            '2026-03-18 13:50',
+            $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+        $this->assertSame(
+            '2026-03-18 15:00',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_add_log_requires_finish_after_start(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Bad times',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->set('todoItemId', (string) $item->id)
+            ->set('startedAt', '15:00')
+            ->set('finishedAt', '13:50')
+            ->call('addLog')
+            ->assertHasErrors(['finishedAt'])
+            ->assertSet('showAddModal', true);
+
+        $this->assertDatabaseCount('task_logs', 0);
+    }
+
+    public function test_add_log_rejects_divider_tasks(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $divider = TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => null,
+            'is_separator' => true,
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->set('todoItemId', (string) $divider->id)
+            ->set('startedAt', '13:50')
+            ->set('finishedAt', '15:00')
+            ->call('addLog')
+            ->assertHasErrors(['todoItemId']);
+
+        $this->assertDatabaseCount('task_logs', 0);
+    }
+
+    public function test_add_log_rejects_tasks_from_other_days(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-17',
+            'title' => 'Tuesday only',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->assertSet('logDate', '2026-03-18')
+            ->set('todoItemId', (string) $item->id)
+            ->set('startedAt', '13:50')
+            ->set('finishedAt', '15:00')
+            ->call('addLog')
+            ->assertHasErrors(['todoItemId']);
+
+        $this->assertDatabaseCount('task_logs', 0);
+    }
 }

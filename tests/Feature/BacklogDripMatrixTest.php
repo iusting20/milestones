@@ -85,7 +85,7 @@ class BacklogDripMatrixTest extends TestCase
         $this->assertNull($item->fresh()->drip_tag);
     }
 
-    public function test_move_to_today_does_not_copy_backlog_drip_tag(): void
+    public function test_move_to_this_week_does_not_copy_backlog_drip_tag(): void
     {
         $item = BacklogItem::query()->create([
             'title' => 'Ship queues',
@@ -94,11 +94,13 @@ class BacklogDripMatrixTest extends TestCase
         ]);
 
         Livewire::test(Backlog::class)
-            ->call('moveToToday', $item->id);
+            ->call('moveToThisWeek', $item->id);
 
         $todo = TodoItem::query()->where('title', 'Ship queues')->first();
 
         $this->assertNotNull($todo);
         $this->assertNull($todo->drip_tag);
+        $this->assertNull($todo->date);
+        $this->assertSame(now()->format('o-\WW'), $todo->week);
     }
 }

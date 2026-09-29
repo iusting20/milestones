@@ -23,17 +23,35 @@
                             @include('livewire.partials.drip-chips-row', ['item' => $item])
                         @endif
 
-                        <button type="button"
-                                wire:click="toggle({{ $item->id }})"
-                                class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition
-                                    {{ $item->is_completed ? 'todo-check-done' : 'border-muted/60 bg-transparent' }}"
-                                aria-label="{{ $item->is_completed ? 'Mark incomplete' : 'Mark complete' }}">
-                            @if ($item->is_completed)
-                                <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                        @if ($weekScoped ?? false)
+                            <button type="button"
+                                    wire:click="openMoveModal({{ $item->id }}, true)"
+                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-muted/60 bg-transparent transition hover:border-link"
+                                    aria-label="Move to day as completed">
+                            </button>
+
+                            <button type="button"
+                                    wire:click="openMoveModal({{ $item->id }}, false)"
+                                    class="mt-0.5 shrink-0 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
+                                    title="Move to day"
+                                    aria-label="Move to day">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                    <path d="M4 10L10 4M6 4h4v4" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
-                            @endif
-                        </button>
+                            </button>
+                        @else
+                            <button type="button"
+                                    wire:click="toggle({{ $item->id }})"
+                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition
+                                        {{ $item->is_completed ? 'todo-check-done' : 'border-muted/60 bg-transparent' }}"
+                                    aria-label="{{ $item->is_completed ? 'Mark incomplete' : 'Mark complete' }}">
+                                @if ($item->is_completed)
+                                    <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                @endif
+                            </button>
+                        @endif
 
                         <div class="min-w-0 flex-1">
                             @if ($editingId === $item->id)
@@ -121,7 +139,7 @@
                             </span>
                         @endif
 
-                        @if ($showLogControls)
+                        @if ($showLogControls && ! ($weekScoped ?? false))
                             <div class="mt-0.5 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
                                 <button type="button"
                                         wire:click.stop="startLogging({{ $item->id }})"

@@ -3,8 +3,10 @@
 namespace App\Livewire;
 
 use App\Models\TaskLog;
+use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -47,6 +49,16 @@ class TaskLogBoard extends Component
     #[Url(as: 'week', history: true)]
     public string $week = '';
 
+    public bool $showAddModal = false;
+
+    public string $logDate = '';
+
+    public string $todoItemId = '';
+
+    public string $startedAt = '';
+
+    public string $finishedAt = '';
+
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
@@ -67,6 +79,79 @@ class TaskLogBoard extends Component
     public function goToToday(): void
     {
         $this->week = now()->format('o-\WW');
+    }
+
+    public function openAddModal(): void
+    {
+        $this->resetValidation();
+        $this->logDate = $this->defaultLogDate();
+        $this->todoItemId = '';
+        $this->startedAt = '';
+        $this->finishedAt = '';
+        $this->showAddModal = true;
+    }
+
+    public function closeAddModal(): void
+    {
+        $this->showAddModal = false;
+        $this->logDate = '';
+        $this->todoItemId = '';
+        $this->startedAt = '';
+        $this->finishedAt = '';
+        $this->resetValidation();
+    }
+
+    public function selectLogDate(string $date): void
+    {
+        if (! $this->selectableLogDates()->contains($date)) {
+            return;
+        }
+
+        $this->logDate = $date;
+        $this->todoItemId = '';
+        $this->resetValidation();
+    }
+
+    public function addLog(): void
+    {
+        $this->startedAt = $this->normalizeTime($this->startedAt);
+        $this->finishedAt = $this->normalizeTime($this->finishedAt);
+
+        $selectableDates = $this->selectableLogDates()->all();
+
+        $this->validate([
+            'logDate' => ['required', 'date', Rule::in($selectableDates)],
+            'todoItemId' => [
+                'required',
+                'integer',
+                Rule::exists('todo_items', 'id')->where(function ($query): void {
+                    $query->where('is_separator', false)
+                        ->whereDate('date', $this->logDate);
+                }),
+            ],
+            'startedAt' => ['required', 'date_format:H:i'],
+            'finishedAt' => ['required', 'date_format:H:i'],
+        ]);
+
+        $item = TodoItem::query()->findOrFail((int) $this->todoItemId);
+
+        $started = Carbon::createFromFormat('Y-m-d H:i', $this->logDate.' '.$this->startedAt, 'Europe/Bucharest');
+        $finished = Carbon::createFromFormat('Y-m-d H:i', $this->logDate.' '.$this->finishedAt, 'Europe/Bucharest');
+
+        if ($finished->lte($started)) {
+            $this->addError('finishedAt', 'Finish time must be after start time.');
+
+            return;
+        }
+
+        TaskLog::query()->create([
+            'todo_item_id' => $item->id,
+            'title' => $item->title,
+            'started_at' => $started->clone()->utc(),
+            'finished_at' => $finished->clone()->utc(),
+        ]);
+
+        $this->closeAddModal();
     }
 
     public function weekStart(): Carbon
@@ -138,7 +223,67 @@ class TaskLogBoard extends Component
             'weekNumber' => $this->weekNumber(),
             'hasLogs' => $logs->isNotEmpty(),
             'stats' => $this->stats($logs, $colorByTitle),
+            'selectableDays' => $this->selectableDays(),
+            'tasks' => $this->tasksForLogDate(),
         ]);
+    }
+
+    /**
+     * @return list<array{date: string, label: string}>
+     */
+    private function selectableDays(): array
+    {
+        return $this->selectableLogDates()
+            ->map(fn (string $date): array => [
+                'date' => $date,
+                'label' => strtoupper(Carbon::parse($date)->format('D')),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function selectableLogDates(): Collection
+    {
+        $today = now()->timezone('Europe/Bucharest')->toDateString();
+        $start = $this->weekStart()->copy()->startOfDay();
+
+        return collect(range(0, 6))
+            ->map(fn (int $offset): string => $start->copy()->addDays($offset)->toDateString())
+            ->filter(fn (string $date): bool => $date <= $today)
+            ->values();
+    }
+
+    private function defaultLogDate(): string
+    {
+        $today = now()->timezone('Europe/Bucharest')->toDateString();
+        $dates = $this->selectableLogDates();
+
+        if ($dates->contains($today)) {
+            return $today;
+        }
+
+        return $dates->last() ?? $today;
+    }
+
+    /**
+     * @return Collection<int, TodoItem>
+     */
+    private function tasksForLogDate(): Collection
+    {
+        if ($this->logDate === '' || ! $this->selectableLogDates()->contains($this->logDate)) {
+            return collect();
+        }
+
+        return TodoItem::query()
+            ->with('parent')
+            ->where('is_separator', false)
+            ->whereDate('date', $this->logDate)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
     }
 
     /**
@@ -339,6 +484,15 @@ class TaskLogBoard extends Component
         }
 
         return $hours.'h '.$remaining.'m';
+    }
+
+    private function normalizeTime(string $time): string
+    {
+        if (preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($time), $matches) !== 1) {
+            return $time;
+        }
+
+        return sprintf('%02d:%02d', (int) $matches[1], (int) $matches[2]);
     }
 
     private function parseWeek(string $week): ?Carbon

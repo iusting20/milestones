@@ -378,11 +378,13 @@ class DayList extends Component
             return;
         }
 
+        [$startedAt, $finishedAt] = $item->loggingWindow();
+
         TaskLog::query()->create([
             'todo_item_id' => $item->id,
             'title' => $item->title,
-            'started_at' => $item->logging_started_at,
-            'finished_at' => now(),
+            'started_at' => $startedAt,
+            'finished_at' => $finishedAt,
         ]);
 
         $item->update(['logging_started_at' => null]);

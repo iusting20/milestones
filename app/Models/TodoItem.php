@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DripTag;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -56,5 +57,32 @@ class TodoItem extends Model
     public function isLogging(): bool
     {
         return $this->logging_started_at !== null;
+    }
+
+    /**
+     * Clock times from the live timer, placed on this task's day.
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    public function loggingWindow(): array
+    {
+        $timezone = 'Europe/Bucharest';
+        $started = $this->logging_started_at->timezone($timezone);
+        $finished = now()->timezone($timezone);
+
+        if ($this->date === null) {
+            return [$started->utc(), $finished->utc()];
+        }
+
+        $taskDay = $this->date->timezone($timezone);
+
+        $startedOnDay = $started->copy()->setDateFrom($taskDay);
+        $finishedOnDay = $finished->copy()->setDateFrom($taskDay);
+
+        if ($finishedOnDay->lte($startedOnDay)) {
+            $startedOnDay->subDay();
+        }
+
+        return [$startedOnDay->utc(), $finishedOnDay->utc()];
     }
 }

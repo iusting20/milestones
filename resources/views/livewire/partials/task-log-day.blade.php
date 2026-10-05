@@ -23,7 +23,7 @@
 
     <div class="min-h-0 flex-1 space-y-2">
         @forelse ($day['logs'] as $log)
-            <div wire:key="log-{{ $log['id'] }}"
+            <div wire:key="{{ $log['key'] }}"
                  class="space-y-1"
                  title="{{ $log['title'] }} · {{ $log['started'] }} → {{ $log['finished'] }}">
                 <div class="flex items-center gap-1.5">
@@ -34,25 +34,33 @@
                 </div>
                 <div class="flex h-6 items-center gap-1.5">
                     <div class="min-w-0 flex-1">
-                        <div class="h-5 cursor-pointer rounded-sm transition-opacity duration-150"
-                             style="width: {{ max(8, $log['width']) }}%; background-color: {{ $log['color'] }}"
+                        <div @class([
+                                 'h-5 rounded-sm transition-opacity duration-150',
+                                 'cursor-pointer' => true,
+                             ])
+                             style="width: {{ max(8, $log['width']) }}%; @if ($log['timed']) background-color: {{ $log['color'] }}; @else background-color: transparent; background-image: repeating-linear-gradient(-45deg, {{ $log['color'] }} 0 3px, transparent 3px 7px); @endif"
                              role="img"
                              aria-label="{{ $log['duration'] }}"
                              @mouseenter="hoverTitle = @js($log['title'])"
                              @mouseleave="hoverTitle = null"
                              @click="focusTitle(@js($log['title']))"
-                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($log['title']) }"></div>
+                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($log['title']) }"
+                             @if (! $log['timed']) data-untimed-bar @endif></div>
                     </div>
                     <span class="shrink-0 text-[10px] tabular-nums text-muted">
                         {{ $log['duration'] }}
                     </span>
                 </div>
-                <div class="text-[10px] tabular-nums text-muted/70">
-                    {{ $log['started'] }} → {{ $log['finished'] }}
-                </div>
+                @include('livewire.partials.task-log-times', [
+                    'logId' => $log['id'],
+                    'started' => $log['started'],
+                    'finished' => $log['finished'],
+                    'timed' => $log['timed'],
+                    'context' => 'day',
+                ])
             </div>
         @empty
-            <p class="py-4 text-center text-[11px] text-faint">—</p>
+            <p class="py-4 text-center text-[11px] text-faint">-</p>
         @endforelse
     </div>
 

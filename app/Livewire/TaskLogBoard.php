@@ -59,6 +59,20 @@ class TaskLogBoard extends Component
 
     public string $finishedAt = '';
 
+    public ?int $editingLogId = null;
+
+    public ?int $editingTodoItemId = null;
+
+    public string $editingField = '';
+
+    public string $editingContext = '';
+
+    public string $editTime = '';
+
+    public string $editStartedAt = '';
+
+    public string $editFinishedAt = '';
+
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
@@ -154,6 +168,154 @@ class TaskLogBoard extends Component
         $this->closeAddModal();
     }
 
+    public function startEditingTime(int $id, string $field, string $context = 'day'): void
+    {
+        if (! in_array($field, ['started', 'finished'], true)) {
+            return;
+        }
+
+        if (! in_array($context, ['day', 'stats'], true)) {
+            return;
+        }
+
+        $log = TaskLog::query()->findOrFail($id);
+
+        $this->resetValidation();
+        $this->editingLogId = $log->id;
+        $this->editingTodoItemId = null;
+        $this->editingField = $field;
+        $this->editingContext = $context;
+        $this->editTime = $field === 'started'
+            ? $log->started_at->timezone('Europe/Bucharest')->format('H:i')
+            : $log->finished_at->timezone('Europe/Bucharest')->format('H:i');
+        $this->editStartedAt = '';
+        $this->editFinishedAt = '';
+    }
+
+    public function startEditingUntimedTime(int $todoItemId, string $field, string $context = 'stats'): void
+    {
+        if (! in_array($field, ['started', 'finished'], true)) {
+            return;
+        }
+
+        if (! in_array($context, ['day', 'stats'], true)) {
+            return;
+        }
+
+        TodoItem::query()
+            ->whereKey($todoItemId)
+            ->where('is_separator', false)
+            ->whereNotNull('date')
+            ->firstOrFail();
+
+        $this->resetValidation();
+        $this->editingLogId = null;
+        $this->editingTodoItemId = $todoItemId;
+        $this->editingField = $field;
+        $this->editingContext = $context;
+        $this->editTime = '';
+        $this->editStartedAt = '';
+        $this->editFinishedAt = '';
+    }
+
+    public function finishEditingTime(): void
+    {
+        if ($this->editingTodoItemId) {
+            $this->finishEditingUntimedTime();
+
+            return;
+        }
+
+        if (! $this->editingLogId || ! in_array($this->editingField, ['started', 'finished'], true)) {
+            return;
+        }
+
+        $this->editTime = $this->normalizeTime($this->editTime);
+
+        $this->validate([
+            'editTime' => ['required', 'date_format:H:i'],
+        ]);
+
+        $log = TaskLog::query()->findOrFail($this->editingLogId);
+        $timezone = 'Europe/Bucharest';
+
+        $started = $log->started_at->timezone($timezone);
+        $finished = $log->finished_at->timezone($timezone);
+
+        if ($this->editingField === 'started') {
+            $started = Carbon::createFromFormat('Y-m-d H:i', $started->toDateString().' '.$this->editTime, $timezone);
+        } else {
+            $finished = Carbon::createFromFormat('Y-m-d H:i', $finished->toDateString().' '.$this->editTime, $timezone);
+        }
+
+        if ($finished->lte($started)) {
+            $this->addError('editTime', 'Finish time must be after start time.');
+
+            return;
+        }
+
+        $log->update([
+            'started_at' => $started->clone()->utc(),
+            'finished_at' => $finished->clone()->utc(),
+        ]);
+
+        $this->cancelEditingTime();
+    }
+
+    public function cancelEditingTime(): void
+    {
+        $this->editingLogId = null;
+        $this->editingTodoItemId = null;
+        $this->editingField = '';
+        $this->editingContext = '';
+        $this->editTime = '';
+        $this->editStartedAt = '';
+        $this->editFinishedAt = '';
+        $this->resetValidation();
+    }
+
+    private function finishEditingUntimedTime(): void
+    {
+        if (! $this->editingTodoItemId) {
+            return;
+        }
+
+        $this->editStartedAt = $this->normalizeTime($this->editStartedAt);
+        $this->editFinishedAt = $this->normalizeTime($this->editFinishedAt);
+
+        $this->validate([
+            'editStartedAt' => ['required', 'date_format:H:i'],
+            'editFinishedAt' => ['required', 'date_format:H:i'],
+        ]);
+
+        $item = TodoItem::query()
+            ->whereKey($this->editingTodoItemId)
+            ->where('is_separator', false)
+            ->whereNotNull('date')
+            ->firstOrFail();
+
+        $timezone = 'Europe/Bucharest';
+        $day = $item->date->timezone($timezone)->toDateString();
+
+        $started = Carbon::createFromFormat('Y-m-d H:i', $day.' '.$this->editStartedAt, $timezone);
+        $finished = Carbon::createFromFormat('Y-m-d H:i', $day.' '.$this->editFinishedAt, $timezone);
+
+        if ($finished->lte($started)) {
+            $this->addError('editFinishedAt', 'Finish time must be after start time.');
+
+            return;
+        }
+
+        TaskLog::query()->create([
+            'todo_item_id' => $item->id,
+            'title' => $item->title,
+            'started_at' => $started->clone()->utc(),
+            'finished_at' => $finished->clone()->utc(),
+        ]);
+
+        $this->cancelEditingTime();
+    }
+
     public function weekStart(): Carbon
     {
         return $this->parseWeek($this->week) ?? now()->startOfWeek(Carbon::MONDAY);
@@ -177,7 +339,22 @@ class TaskLogBoard extends Component
             ->orderBy('id')
             ->get();
 
-        $colorByTitle = $this->colorByTitle($logs);
+        /** @var Collection<string, Collection<int, TodoItem>> $tasksByDate */
+        $tasksByDate = TodoItem::query()
+            ->where('is_separator', false)
+            ->whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (TodoItem $item): string => $item->date->toDateString());
+
+        $titles = $logs->pluck('title')
+            ->merge($tasksByDate->flatten(1)->pluck('title'))
+            ->unique()
+            ->values();
+
+        $colorByTitle = $this->colorByTitle($titles);
         $maxMinutes = max(1, (int) $logs->max(fn (TaskLog $log): int => $this->durationMinutes($log)));
 
         $days = [];
@@ -186,23 +363,15 @@ class TaskLogBoard extends Component
             $day = $start->copy()->addDays($i);
             $dateKey = $day->toDateString();
 
-            $dayLogs = $logs
+            $dayTimedLogs = $logs
                 ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
-                ->values()
-                ->map(function (TaskLog $log) use ($maxMinutes, $colorByTitle): array {
-                    $minutes = $this->durationMinutes($log);
+                ->values();
 
-                    return [
-                        'id' => $log->id,
-                        'title' => $log->title,
-                        'started' => $log->started_at->timezone('Europe/Bucharest')->format('H:i'),
-                        'finished' => $log->finished_at->timezone('Europe/Bucharest')->format('H:i'),
-                        'minutes' => $minutes,
-                        'duration' => $this->formatDuration($minutes),
-                        'width' => round(($minutes / $maxMinutes) * 100, 1),
-                        'color' => $colorByTitle[$log->title],
-                    ];
-                });
+            $dayLogs = $this->dayEntries(
+                $dayTimedLogs,
+                $maxMinutes,
+                $colorByTitle,
+            );
 
             $totalMinutes = (int) $dayLogs->sum('minutes');
 
@@ -218,14 +387,53 @@ class TaskLogBoard extends Component
             ];
         }
 
+        $hasEntries = $logs->isNotEmpty() || $tasksByDate->flatten(1)->isNotEmpty();
+
         return view('livewire.task-log-board', [
             'days' => $days,
             'weekNumber' => $this->weekNumber(),
-            'hasLogs' => $logs->isNotEmpty(),
-            'stats' => $this->stats($logs, $colorByTitle),
+            'hasLogs' => $hasEntries,
+            'stats' => $this->stats($logs, $tasksByDate, $colorByTitle),
             'selectableDays' => $this->selectableDays(),
             'tasks' => $this->tasksForLogDate(),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $dayTimedLogs
+     * @param  array<string, string>  $colorByTitle
+     * @return Collection<int, array{id: int|null, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}>
+     */
+    private function dayEntries(
+        Collection $dayTimedLogs,
+        int $maxMinutes,
+        array $colorByTitle,
+    ): Collection {
+        return $dayTimedLogs
+            ->map(fn (TaskLog $log): array => $this->timedEntry($log, $maxMinutes, $colorByTitle))
+            ->values();
+    }
+
+    /**
+     * @param  array<string, string>  $colorByTitle
+     * @return array{id: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}
+     */
+    private function timedEntry(TaskLog $log, int $maxMinutes, array $colorByTitle): array
+    {
+        $minutes = $this->durationMinutes($log);
+
+        return [
+            'id' => $log->id,
+            'key' => 'log-'.$log->id,
+            'title' => $log->title,
+            'started' => $log->started_at->timezone('Europe/Bucharest')->format('H:i'),
+            'finished' => $log->finished_at->timezone('Europe/Bucharest')->format('H:i'),
+            'timed' => true,
+            'minutes' => $minutes,
+            'duration' => $this->formatDuration($minutes),
+            'width' => round(($minutes / $maxMinutes) * 100, 1),
+            'color' => $colorByTitle[$log->title],
+        ];
     }
 
     /**
@@ -287,19 +495,14 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * @param  Collection<int, TaskLog>  $logs
+     * @param  Collection<int, string>  $titles
      * @return array<string, string>
      */
-    private function colorByTitle(Collection $logs): array
+    private function colorByTitle(Collection $titles): array
     {
-        $titles = $logs
-            ->unique('title')
-            ->values()
-            ->pluck('title');
-
         $colors = [];
 
-        foreach ($titles as $index => $title) {
+        foreach ($titles->values() as $index => $title) {
             $colors[$title] = $this->colorAt($index);
         }
 
@@ -337,66 +540,150 @@ class TaskLogBoard extends Component
 
     /**
      * @param  Collection<int, TaskLog>  $logs
+     * @param  Collection<string, Collection<int, TodoItem>>  $tasksByDate
      * @param  array<string, string>  $colorByTitle
-     * @return array{totalMinutes: int, totalDuration: string, sessionCount: int, itemCount: int, items: list<array{title: string, minutes: int, duration: string, share: float, width: float, color: string, sessions: list<array{id: int, day: string, date: string, started: string, finished: string, minutes: int, duration: string}>}>}
+     * @return array{totalMinutes: int, totalDuration: string, sessionCount: int, itemCount: int, days: list<array{date: string, label: string, heading: string, totalMinutes: int, totalDuration: string, items: list<array{title: string, minutes: int, duration: string, share: float, width: float, color: string, timed: bool, sessions: list<array{id: int|null, day: string, date: string, started: string, finished: string, timed: bool, minutes: int, duration: string}>}>}>}
      */
-    private function stats(Collection $logs, array $colorByTitle): array
+    private function stats(Collection $logs, Collection $tasksByDate, array $colorByTitle): array
     {
-        $grouped = $logs->groupBy(fn (TaskLog $log): string => $log->title);
+        $loggedTodoIdsByDate = $logs
+            ->filter(fn (TaskLog $log): bool => $log->todo_item_id !== null)
+            ->groupBy(fn (TaskLog $log): string => $log->finished_at->timezone('Europe/Bucharest')->toDateString())
+            ->map(fn (Collection $dayLogs): array => $dayLogs->pluck('todo_item_id')->unique()->all());
 
-        $items = $grouped->map(function (Collection $sessions, string $title) use ($colorByTitle): array {
-            $minutes = (int) $sessions->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
+        $logsByDate = $logs->groupBy(
+            fn (TaskLog $log): string => $log->finished_at->timezone('Europe/Bucharest')->toDateString()
+        );
 
-            $rows = $sessions
-                ->sortBy(fn (TaskLog $log) => $log->started_at->timestamp)
-                ->values()
-                ->map(function (TaskLog $log): array {
-                    $started = $log->started_at->timezone('Europe/Bucharest');
-                    $finished = $log->finished_at->timezone('Europe/Bucharest');
-                    $sessionMinutes = $this->durationMinutes($log);
+        $weekStart = $this->weekStart()->copy()->startOfDay();
+        $days = [];
+        $uniqueTitles = collect();
+
+        for ($i = 0; $i < 7; $i++) {
+            $day = $weekStart->copy()->addDays($i);
+            $dateKey = $day->toDateString();
+            $dayLogs = $logsByDate->get($dateKey, collect());
+            $dayTasks = $tasksByDate->get($dateKey, collect());
+            $loggedTodoIds = $loggedTodoIdsByDate->get($dateKey, []);
+
+            $items = $dayLogs
+                ->groupBy(fn (TaskLog $log): string => $log->title)
+                ->map(function (Collection $sessions, string $title) use ($colorByTitle): array {
+                    $minutes = (int) $sessions->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
+
+                    $rows = $sessions
+                        ->sortBy(fn (TaskLog $log) => $log->started_at->timestamp)
+                        ->values()
+                        ->map(function (TaskLog $log): array {
+                            $started = $log->started_at->timezone('Europe/Bucharest');
+                            $finished = $log->finished_at->timezone('Europe/Bucharest');
+                            $sessionMinutes = $this->durationMinutes($log);
+
+                            return [
+                                'id' => $log->id,
+                                'day' => strtoupper($finished->format('D')),
+                                'date' => $finished->format('j M'),
+                                'started' => $started->format('H:i'),
+                                'finished' => $finished->format('H:i'),
+                                'timed' => true,
+                                'minutes' => $sessionMinutes,
+                                'duration' => $this->formatDuration($sessionMinutes),
+                            ];
+                        });
 
                     return [
-                        'id' => $log->id,
-                        'day' => strtoupper($finished->format('D')),
-                        'date' => $finished->format('j M'),
-                        'started' => $started->format('H:i'),
-                        'finished' => $finished->format('H:i'),
-                        'minutes' => $sessionMinutes,
-                        'duration' => $this->formatDuration($sessionMinutes),
+                        'title' => $title,
+                        'minutes' => $minutes,
+                        'duration' => $this->formatDuration($minutes),
+                        'color' => $colorByTitle[$title],
+                        'timed' => true,
+                        'sessions' => $rows->all(),
                     ];
                 });
 
-            return [
-                'title' => $title,
-                'minutes' => $minutes,
-                'duration' => $this->formatDuration($minutes),
-                'color' => $colorByTitle[$title],
-                'sessions' => $rows->all(),
+            foreach ($dayTasks as $task) {
+                if (in_array($task->id, $loggedTodoIds, true)) {
+                    continue;
+                }
+
+                $title = $task->title ?? '';
+
+                if ($items->has($title)) {
+                    continue;
+                }
+
+                $items[$title] = [
+                    'title' => $title,
+                    'minutes' => 0,
+                    'duration' => 'N/A',
+                    'color' => $colorByTitle[$title],
+                    'timed' => false,
+                    'sessions' => [[
+                        'id' => null,
+                        'todoItemId' => $task->id,
+                        'day' => strtoupper($day->format('D')),
+                        'date' => $day->format('j M'),
+                        'started' => 'N/A',
+                        'finished' => 'N/A',
+                        'timed' => false,
+                        'minutes' => 0,
+                        'duration' => 'N/A',
+                    ]],
+                ];
+            }
+
+            if ($items->isEmpty()) {
+                continue;
+            }
+
+            $items = $items
+                ->sort(function (array $left, array $right): int {
+                    if ($left['timed'] !== $right['timed']) {
+                        return $left['timed'] ? -1 : 1;
+                    }
+
+                    return $right['minutes'] <=> $left['minutes'];
+                })
+                ->values();
+
+            $dayTotalMinutes = (int) $items->sum('minutes');
+            $dayMaxMinutes = max(1, (int) $items->max('minutes'));
+
+            $items = $items->map(function (array $item) use ($dayTotalMinutes, $dayMaxMinutes): array {
+                $item['share'] = $dayTotalMinutes > 0 ? round(($item['minutes'] / $dayTotalMinutes) * 100, 1) : 0;
+                $item['width'] = $item['timed']
+                    ? round(($item['minutes'] / $dayMaxMinutes) * 100, 1)
+                    : 40.0;
+
+                return $item;
+            });
+
+            $uniqueTitles = $uniqueTitles->merge($items->pluck('title'));
+
+            $days[] = [
+                'date' => $dateKey,
+                'label' => strtoupper($day->format('D')),
+                'heading' => strtoupper($day->format('D')).' '.$day->format('j M'),
+                'totalMinutes' => $dayTotalMinutes,
+                'totalDuration' => $this->formatDuration($dayTotalMinutes),
+                'items' => $items->all(),
             ];
-        })->sortByDesc('minutes')->values();
+        }
 
-        $totalMinutes = (int) $items->sum('minutes');
-        $maxMinutes = max(1, (int) $items->max('minutes'));
-
-        $items = $items->map(function (array $item) use ($totalMinutes, $maxMinutes): array {
-            $item['share'] = $totalMinutes > 0 ? round(($item['minutes'] / $totalMinutes) * 100, 1) : 0;
-            $item['width'] = round(($item['minutes'] / $maxMinutes) * 100, 1);
-
-            return $item;
-        });
+        $totalMinutes = (int) $logs->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
 
         return [
             'totalMinutes' => $totalMinutes,
             'totalDuration' => $this->formatDuration($totalMinutes),
             'sessionCount' => $logs->count(),
-            'itemCount' => $items->count(),
-            'items' => $items->all(),
+            'itemCount' => $uniqueTitles->unique()->count(),
+            'days' => $days,
         ];
     }
 
     /**
-     * @param  Collection<int, array{id: int, title: string, minutes: int, duration: string, color: string}>  $dayLogs
-     * @return list<array{id: int, title: string, duration: string, color: string, path: string|null, full: bool}>
+     * @param  Collection<int, array{id: int|null, title: string, minutes: int, duration: string, color: string}>  $dayLogs
+     * @return list<array{id: int|null, title: string, duration: string, color: string, path: string|null, full: bool}>
      */
     private function pieSlices(Collection $dayLogs, int $totalMinutes): array
     {

@@ -159,7 +159,7 @@
     @endif
 
     @unless ($hasLogs)
-        <p class="text-sm text-muted">No finished log entries this week.</p>
+        <p class="text-sm text-muted">No tasks or log entries this week.</p>
     @endunless
 
     @php
@@ -186,7 +186,7 @@
         </div>
     </div>
 
-    @if ($stats['itemCount'] > 0)
+    @if (count($stats['days']) > 0)
         <section class="mt-8 rounded-lg border border-white/10 bg-sidebar/60">
             <header class="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
                 <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Week totals</h2>
@@ -206,43 +206,71 @@
                 </dl>
             </header>
 
-            <ul class="divide-y divide-white/5">
-                @foreach ($stats['items'] as $item)
-                    <li wire:key="stat-{{ md5($item['title']) }}"
-                        data-log-stat="{{ $item['title'] }}"
-                        class="scroll-mt-24 rounded-md px-4 py-3"
-                        :class="{ 'log-item-glow': glowTitle === @js($item['title']) }">
-                        <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                            <div class="flex min-w-0 items-center gap-2">
-                                <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {{ $item['color'] }}"></span>
-                                <span class="truncate text-[15px] text-body">{{ $item['title'] }}</span>
-                            </div>
-                            <div class="flex shrink-0 items-baseline gap-3 tabular-nums">
-                                <span class="text-sm font-semibold text-body">{{ $item['duration'] }}</span>
-                                <span class="text-xs text-muted">{{ $item['share'] }}%</span>
-                            </div>
-                        </div>
-                        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
-                            <div class="h-full cursor-pointer rounded-full transition-opacity duration-150"
-                                 style="width: {{ max(4, $item['width']) }}%; background-color: {{ $item['color'] }}"
-                                 @mouseenter="hoverTitle = @js($item['title'])"
-                                 @mouseleave="hoverTitle = null"
-                                 @click="focusTitle(@js($item['title']))"
-                                 :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($item['title']) }"></div>
-                        </div>
-                        <ul class="mt-2 space-y-1">
-                            @foreach ($item['sessions'] as $session)
-                                <li wire:key="stat-session-{{ $session['id'] }}"
-                                    class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted">
-                                    <span class="w-20 shrink-0 tabular-nums text-body/80">{{ $session['day'] }} {{ $session['date'] }}</span>
-                                    <span class="tabular-nums">{{ $session['started'] }} → {{ $session['finished'] }}</span>
-                                    <span class="ml-auto tabular-nums text-body/90">{{ $session['duration'] }}</span>
+            <div class="divide-y divide-white/10">
+                @foreach ($stats['days'] as $dayStats)
+                    <section wire:key="stat-day-{{ $dayStats['date'] }}" class="px-4 py-3">
+                        <header class="mb-3 flex items-baseline justify-center gap-3">
+                            <h3 class="text-base font-semibold uppercase tracking-[0.14em] text-muted sm:text-lg">
+                                {{ $dayStats['heading'] }}
+                            </h3>
+                            <span class="text-sm tabular-nums text-body/90 sm:text-base">{{ $dayStats['totalDuration'] }}</span>
+                        </header>
+
+                        <ul class="space-y-3">
+                            @foreach ($dayStats['items'] as $item)
+                                @php
+                                    $previousWasTimed = $loop->index > 0 && $dayStats['items'][$loop->index - 1]['timed'];
+                                    $separateUntimed = ! $item['timed'] && ($loop->first || $previousWasTimed);
+                                @endphp
+                                <li wire:key="stat-{{ $dayStats['date'] }}-{{ md5($item['title']) }}"
+                                    data-log-stat="{{ $item['title'] }}"
+                                    @class([
+                                        'scroll-mt-24 rounded-md',
+                                        'mt-8 border-t border-white/10 pt-6' => $separateUntimed,
+                                    ])
+                                    :class="{ 'log-item-glow': glowTitle === @js($item['title']) }">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <div class="flex min-w-0 items-center gap-2">
+                                            <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {{ $item['color'] }}"></span>
+                                            <span class="truncate text-[15px] text-body">{{ $item['title'] }}</span>
+                                        </div>
+                                        <div class="flex shrink-0 items-baseline gap-3 tabular-nums">
+                                            <span class="text-sm font-semibold text-body">{{ $item['duration'] }}</span>
+                                            <span class="text-xs text-muted">{{ $item['share'] }}%</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+                                        <div class="h-full cursor-pointer rounded-full transition-opacity duration-150"
+                                             style="width: {{ max(4, $item['width']) }}%; @if ($item['timed']) background-color: {{ $item['color'] }}; @else background-color: transparent; background-image: repeating-linear-gradient(-45deg, {{ $item['color'] }} 0 3px, transparent 3px 7px); @endif"
+                                             @mouseenter="hoverTitle = @js($item['title'])"
+                                             @mouseleave="hoverTitle = null"
+                                             @click="focusTitle(@js($item['title']))"
+                                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($item['title']) }"
+                                             @if (! $item['timed']) data-untimed-bar @endif></div>
+                                    </div>
+                                    <ul class="mt-2 space-y-1">
+                                        @foreach ($item['sessions'] as $session)
+                                            <li wire:key="stat-session-{{ $session['id'] ?? ('untimed-'.md5($dayStats['date'].$item['title'])) }}"
+                                                class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted">
+                                                @include('livewire.partials.task-log-times', [
+                                                    'logId' => $session['id'],
+                                                    'todoItemId' => $session['todoItemId'] ?? null,
+                                                    'started' => $session['started'],
+                                                    'finished' => $session['finished'],
+                                                    'timed' => $session['timed'],
+                                                    'textClass' => 'text-xs text-muted',
+                                                    'context' => 'stats',
+                                                ])
+                                                <span class="ml-auto tabular-nums text-body/90">{{ $session['duration'] }}</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
                                 </li>
                             @endforeach
                         </ul>
-                    </li>
+                    </section>
                 @endforeach
-            </ul>
+            </div>
         </section>
     @endif
 </div>

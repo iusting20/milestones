@@ -9,6 +9,7 @@ use App\Models\TaskLog;
 use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -100,6 +101,50 @@ class TaskLogTest extends TestCase
         $this->assertSame('Ship feature', $log->title);
         $this->assertTrue($log->started_at->equalTo(Carbon::parse('2026-03-18 10:15:00')));
         $this->assertTrue($log->finished_at->equalTo(Carbon::parse('2026-03-18 10:40:00')));
+    }
+
+    public function test_finish_logging_on_another_day_is_stored_on_that_day(): void
+    {
+        Carbon::setTestNow('2026-03-18 10:15:00');
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Monday task',
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => '2026-03-16',
+            'dayLabel' => 'MONDAY',
+            'isToday' => false,
+            'showLogControls' => true,
+        ])->call('startLogging', $item->id);
+
+        Carbon::setTestNow('2026-03-18 10:40:00');
+
+        Livewire::test(DayList::class, [
+            'date' => '2026-03-16',
+            'dayLabel' => 'MONDAY',
+            'isToday' => false,
+            'showLogControls' => true,
+        ])->call('finishLogging', $item->id);
+
+        $log = TaskLog::query()->first();
+
+        $this->assertNotNull($log);
+        $this->assertSame(
+            '2026-03-16 12:15',
+            $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+        $this->assertSame(
+            '2026-03-16 12:40',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Monday task')
+            ->assertSee('MON');
     }
 
     public function test_finish_logging_without_start_is_a_noop(): void
@@ -267,7 +312,7 @@ class TaskLogTest extends TestCase
             ->assertSeeHtml('Time split for MON');
     }
 
-    public function test_week_stats_group_sessions_by_title(): void
+    public function test_week_stats_are_separated_by_day(): void
     {
         TaskLog::query()->create([
             'todo_item_id' => null,
@@ -293,13 +338,53 @@ class TaskLogTest extends TestCase
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(TaskLogBoard::class)
             ->assertSee('Week totals')
-            ->assertSee('2h 30m')
             ->assertSee('3h')
             ->assertSee('Prognoze')
             ->assertSee('Cosmic')
             ->assertSee('MON 16 Mar')
             ->assertSee('WED 18 Mar')
-            ->assertSee('TUE 17 Mar');
+            ->assertSee('TUE 17 Mar')
+            ->assertSeeHtml('stat-day-2026-03-16')
+            ->assertSeeHtml('stat-day-2026-03-17')
+            ->assertSeeHtml('stat-day-2026-03-18');
+    }
+
+    public function test_week_totals_list_untimed_after_timed_with_separation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Untimed Monday task',
+            'position' => 1,
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Timed session',
+            'started_at' => Carbon::parse('2026-03-16 08:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 09:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        $html = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Timed session')
+            ->assertSee('Untimed Monday task')
+            ->assertSeeHtml('data-untimed-bar')
+            ->assertSeeHtml('mt-8 border-t border-white/10 pt-6')
+            ->html();
+
+        $mondayColumn = Str::between($html, 'wire:key="day-2026-03-16"', 'wire:key="day-2026-03-17"');
+        $this->assertStringContainsString('Timed session', $mondayColumn);
+        $this->assertStringNotContainsString('Untimed Monday task', $mondayColumn);
+
+        $weekTotals = Str::after($html, 'Week totals');
+        $timedPos = strpos($weekTotals, 'Timed session');
+        $untimedPos = strpos($weekTotals, 'Untimed Monday task');
+
+        $this->assertNotFalse($timedPos);
+        $this->assertNotFalse($untimedPos);
+        $this->assertLessThan($untimedPos, $timedPos);
     }
 
     public function test_each_task_title_gets_a_unique_stable_color(): void
@@ -396,17 +481,25 @@ class TaskLogTest extends TestCase
             'position' => 1,
         ]);
 
-        Livewire::withQueryParams(['week' => '2026-W12'])
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(TaskLogBoard::class)
             ->call('openAddModal')
-            ->assertSet('logDate', '2026-03-18')
-            ->assertSee('Wednesday task')
-            ->assertDontSee('Tuesday task')
+            ->assertSet('logDate', '2026-03-18');
+
+        preg_match('/id="add-log-task".*?<\/select>/s', $component->html(), $wednesdaySelect);
+        $this->assertNotEmpty($wednesdaySelect);
+        $this->assertStringContainsString('Wednesday task', $wednesdaySelect[0]);
+        $this->assertStringNotContainsString('Tuesday task', $wednesdaySelect[0]);
+
+        $component
             ->call('selectLogDate', '2026-03-17')
             ->assertSet('logDate', '2026-03-17')
-            ->assertSet('todoItemId', '')
-            ->assertSee('Tuesday task')
-            ->assertDontSee('Wednesday task');
+            ->assertSet('todoItemId', '');
+
+        preg_match('/id="add-log-task".*?<\/select>/s', $component->html(), $tuesdaySelect);
+        $this->assertNotEmpty($tuesdaySelect);
+        $this->assertStringContainsString('Tuesday task', $tuesdaySelect[0]);
+        $this->assertStringNotContainsString('Wednesday task', $tuesdaySelect[0]);
     }
 
     public function test_can_add_log_entry_from_modal(): void
@@ -514,5 +607,230 @@ class TaskLogTest extends TestCase
             ->assertHasErrors(['todoItemId']);
 
         $this->assertDatabaseCount('task_logs', 0);
+    }
+
+    public function test_log_page_shows_untimed_tasks_with_na_times(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Untimed Monday task',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Untimed Monday task')
+            ->assertSee('N/A')
+            ->assertSeeHtml('data-untimed-bar')
+            ->assertSee('Week totals')
+            ->assertDontSeeHtml('wire:key="task-');
+    }
+
+    public function test_log_page_does_not_duplicate_timed_task_as_untimed(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Already logged',
+            'position' => 1,
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => $item->id,
+            'title' => 'Already logged',
+            'started_at' => Carbon::parse('2026-03-16 08:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 09:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Already logged')
+            ->assertSee('08:00')
+            ->assertSee('09:00')
+            ->assertDontSeeHtml('data-untimed-bar');
+    }
+
+    public function test_can_create_log_by_editing_untimed_na_times(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Fill in later',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingUntimedTime', $item->id, 'started', 'stats')
+            ->assertSet('editingTodoItemId', $item->id)
+            ->assertSeeHtml('aria-label="Edit start time"')
+            ->set('editStartedAt', '09:15')
+            ->set('editFinishedAt', '10:45')
+            ->call('finishEditingTime')
+            ->assertSet('editingTodoItemId', null)
+            ->assertSee('09:15')
+            ->assertSee('10:45')
+            ->assertDontSeeHtml('data-untimed-bar');
+
+        $log = TaskLog::query()->first();
+
+        $this->assertNotNull($log);
+        $this->assertSame($item->id, $log->todo_item_id);
+        $this->assertSame('Fill in later', $log->title);
+        $this->assertSame(
+            '2026-03-16 09:15',
+            $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+        $this->assertSame(
+            '2026-03-16 10:45',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_editing_untimed_requires_finish_after_start(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Bad untimed edit',
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingUntimedTime', $item->id, 'finished', 'stats')
+            ->set('editStartedAt', '11:00')
+            ->set('editFinishedAt', '10:00')
+            ->call('finishEditingTime')
+            ->assertHasErrors(['editFinishedAt'])
+            ->assertSet('editingTodoItemId', $item->id);
+
+        $this->assertDatabaseCount('task_logs', 0);
+    }
+
+    public function test_can_edit_log_start_time_inline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $log = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Editable session',
+            'started_at' => Carbon::parse('2026-03-18 09:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-18 10:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingTime', $log->id, 'started')
+            ->assertSet('editingLogId', $log->id)
+            ->assertSet('editingField', 'started')
+            ->assertSet('editTime', '09:00')
+            ->set('editTime', '09:30')
+            ->call('finishEditingTime')
+            ->assertSet('editingLogId', null)
+            ->assertSee('09:30')
+            ->assertSee('10:00')
+            ->assertSee('30m');
+
+        $log->refresh();
+
+        $this->assertSame(
+            '2026-03-18 09:30',
+            $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+        $this->assertSame(
+            '2026-03-18 10:00',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_can_edit_log_finish_time_inline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $log = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Editable session',
+            'started_at' => Carbon::parse('2026-03-18 09:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-18 10:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingTime', $log->id, 'finished')
+            ->assertSet('editingField', 'finished')
+            ->assertSet('editTime', '10:00')
+            ->set('editTime', '11:15')
+            ->call('finishEditingTime')
+            ->assertSet('editingLogId', null)
+            ->assertSee('09:00')
+            ->assertSee('11:15')
+            ->assertSee('2h 15m');
+
+        $log->refresh();
+
+        $this->assertSame(
+            '2026-03-18 11:15',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_edit_log_time_requires_finish_after_start(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $log = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Bad edit',
+            'started_at' => Carbon::parse('2026-03-18 09:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-18 10:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingTime', $log->id, 'finished')
+            ->set('editTime', '08:00')
+            ->call('finishEditingTime')
+            ->assertHasErrors(['editTime'])
+            ->assertSet('editingLogId', $log->id);
+
+        $log->refresh();
+
+        $this->assertSame(
+            '2026-03-18 10:00',
+            $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_cancel_edit_log_time_discards_changes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $log = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Cancel edit',
+            'started_at' => Carbon::parse('2026-03-18 09:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-18 10:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('startEditingTime', $log->id, 'started')
+            ->set('editTime', '08:00')
+            ->call('cancelEditingTime')
+            ->assertSet('editingLogId', null)
+            ->assertSee('09:00');
+
+        $log->refresh();
+
+        $this->assertSame(
+            '2026-03-18 09:00',
+            $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
     }
 }

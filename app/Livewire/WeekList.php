@@ -2,17 +2,21 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\EditsLoggingStart;
 use App\Livewire\Concerns\SetsDripTags;
+use App\Models\BacklogItem;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class WeekList extends Component
 {
+    use EditsLoggingStart;
     use SetsDripTags;
 
     public string $week = '';
@@ -48,6 +52,12 @@ class WeekList extends Component
 
     public bool $moveCompleted = false;
 
+    #[On('todo-moved-to-week')]
+    public function refreshAfterMoveToWeek(): void
+    {
+        //
+    }
+
     public function startAdding(): void
     {
         $this->adding = true;
@@ -80,6 +90,92 @@ class WeekList extends Component
         ]);
 
         $this->newTitle = '';
+    }
+
+    public function copyUnfinishedFromPreviousWeek(): void
+    {
+        $previousWeek = $this->previousWeek();
+
+        if ($previousWeek === null) {
+            return;
+        }
+
+        $unfinished = TodoItem::query()
+            ->with('links')
+            ->whereNull('date')
+            ->where('week', $previousWeek)
+            ->where('is_completed', false)
+            ->where('is_separator', false)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+
+        if ($unfinished->isEmpty()) {
+            return;
+        }
+
+        $max = (int) $this->weekItemsQuery()->max('position');
+        $existingTitles = $this->weekItemsQuery()->pluck('title')->all();
+
+        $roots = $unfinished->whereNull('parent_id');
+        $copiedIds = [];
+        $childPositions = [];
+
+        foreach ($roots as $item) {
+            $copy = $this->copyUnfinishedItem($item, null, $max, $existingTitles);
+
+            if (! $copy) {
+                continue;
+            }
+
+            $copiedIds[$item->id] = $copy->id;
+            $childPositions[$copy->id] = 0;
+        }
+
+        foreach ($unfinished->whereNotNull('parent_id') as $item) {
+            $parentCopyId = $copiedIds[$item->parent_id] ?? null;
+
+            if ($parentCopyId) {
+                $this->copyUnfinishedItem($item, $parentCopyId, $childPositions[$parentCopyId], $existingTitles);
+            } else {
+                $this->copyUnfinishedItem($item, null, $max, $existingTitles);
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $existingTitles
+     */
+    private function copyUnfinishedItem(TodoItem $item, ?int $parentId, int &$position, array &$existingTitles): ?TodoItem
+    {
+        if (in_array($item->title, $existingTitles, true)) {
+            return null;
+        }
+
+        $position++;
+
+        $copy = TodoItem::query()->create([
+            'date' => null,
+            'week' => $this->week,
+            'parent_id' => $parentId,
+            'title' => $item->title,
+            'is_completed' => false,
+            'is_separator' => false,
+            'drip_tag' => $item->drip_tag,
+            'position' => $position,
+        ]);
+
+        foreach ($item->links as $index => $link) {
+            $copy->links()->create([
+                'title' => $link->title,
+                'url' => $link->url,
+                'position' => $index + 1,
+            ]);
+        }
+
+        $existingTitles[] = $item->title;
+
+        return $copy;
     }
 
     public function addDivider(): void
@@ -301,6 +397,39 @@ class WeekList extends Component
         });
 
         $this->cancelLinking();
+    }
+
+    public function moveToBacklog(int $id): void
+    {
+        $item = $this->todoItem($id);
+
+        if ($item->is_separator || blank($item->title)) {
+            return;
+        }
+
+        $moving = collect([$item])->merge($item->children)->filter(
+            fn (TodoItem $candidate): bool => ! $candidate->is_separator && filled($candidate->title)
+        );
+
+        DB::transaction(function () use ($item, $moving): void {
+            BacklogItem::query()->increment('position', $moving->count());
+
+            $position = 0;
+
+            foreach ($moving as $candidate) {
+                $position++;
+
+                BacklogItem::query()->create([
+                    'title' => $candidate->title,
+                    'is_completed' => false,
+                    'is_separator' => false,
+                    'position' => $position,
+                ]);
+            }
+
+            $item->children()->delete();
+            $item->delete();
+        });
     }
 
     public function openMoveModal(int $id, bool $completed): void
@@ -526,6 +655,17 @@ class WeekList extends Component
         }
 
         return $url;
+    }
+
+    private function previousWeek(): ?string
+    {
+        $start = $this->weekStart();
+
+        if (! $start) {
+            return null;
+        }
+
+        return $start->copy()->subWeek()->format('o-\WW');
     }
 
     private function weekItemsQuery()

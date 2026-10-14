@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Backlog;
 use App\Models\BacklogItem;
 use App\Models\TodoItem;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -50,20 +51,61 @@ class BacklogTest extends TestCase
             'position' => 1,
         ]);
 
-        Livewire::test(Backlog::class)
-            ->call('toggle', $item->id);
-
-        $this->assertTrue($item->fresh()->is_completed);
+        Carbon::setTestNow(Carbon::parse('2026-10-14 09:30:00', 'Europe/Bucharest'));
 
         Livewire::test(Backlog::class)
-            ->call('toggle', $item->id);
+            ->call('toggle', $item->id)
+            ->assertDontSee('Do the thing')
+            ->set('display', 'finished')
+            ->assertSee('Wed 14 Oct')
+            ->assertSee('Do the thing');
 
-        $this->assertFalse($item->fresh()->is_completed);
+        $item->refresh();
+
+        $this->assertTrue($item->is_completed);
+        $this->assertTrue($item->completed_at->equalTo(now()));
+
+        Livewire::test(Backlog::class)
+            ->call('toggle', $item->id)
+            ->assertDontSee('Wed 14 Oct');
+
+        $item->refresh();
+
+        $this->assertFalse($item->is_completed);
+        $this->assertNull($item->completed_at);
+    }
+
+    public function test_display_filter_hides_finished_tasks_until_selected(): void
+    {
+        BacklogItem::query()->create([
+            'title' => 'Still open',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        BacklogItem::query()->create([
+            'title' => 'Already done',
+            'is_completed' => true,
+            'position' => 2,
+        ]);
+
+        Livewire::test(Backlog::class)
+            ->assertSet('display', 'pending')
+            ->assertSee('Still open')
+            ->assertDontSee('Already done')
+            ->set('display', 'finished')
+            ->assertDontSee('Still open')
+            ->assertSee('Already done')
+            ->set('display', 'all')
+            ->assertSee('Still open')
+            ->assertSee('Already done');
     }
 
     public function test_can_add_and_delete_backlog_item(): void
     {
         Livewire::test(Backlog::class)
+            ->assertSeeHtml('aria-label="Add backlog item"')
+            ->assertSeeHtml('aria-label="Add divider"')
+            ->call('startAdding')
             ->set('newTitle', 'New backlog task')
             ->call('addItem');
 

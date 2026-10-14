@@ -12,6 +12,22 @@ class Roadmaps extends Component
 {
     public const PENDING_COLOR_COUNT = 8;
 
+    /**
+     * @var list<string>
+     */
+    private const PENDING_COLORS = [
+        '#ffc107',
+        '#ff9800',
+        '#ff5722',
+        '#e91e63',
+        '#9c27b0',
+        '#3f51b5',
+        '#2196f3',
+        '#00bcd4',
+    ];
+
+    private const DONE_COLOR = '#7cb518';
+
     #[Url(as: 'month', history: true)]
     public string $month = '';
 
@@ -44,6 +60,15 @@ class Roadmaps extends Component
     {
         $this->month = now()->format('Y-m');
         $this->startedOn = now()->toDateString();
+    }
+
+    public function showMonth(string $month): void
+    {
+        if (! $this->parseMonth($month)) {
+            return;
+        }
+
+        $this->month = $month;
     }
 
     public function selectDay(string $date): void
@@ -167,11 +192,86 @@ class Roadmaps extends Component
 
         return view('livewire.roadmaps', [
             'monthLabel' => strtoupper($monthStart->format('F Y')),
+            'yearMinimap' => $this->yearMinimap($monthStart, $today),
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
             'visibleItems' => $visibleItems,
             'pendingCount' => $visibleItems->filter(fn (RoadmapItem $item) => $item->isPending())->count(),
         ]);
+    }
+
+    /**
+     * @return list<array{key: string, label: string, active: bool, weeks: list<list<array{inMonth: bool, colors: list<string>}>>}>
+     */
+    private function yearMinimap(Carbon $monthStart, Carbon $today): array
+    {
+        $year = (int) $monthStart->year;
+        $yearStart = Carbon::create($year, 1, 1)->startOfDay();
+        $yearEnd = Carbon::create($year, 12, 31)->startOfDay();
+
+        $items = RoadmapItem::query()
+            ->whereDate('started_on', '<=', $yearEnd->toDateString())
+            ->where(function ($query) use ($yearStart): void {
+                $query->whereNull('completed_on')
+                    ->orWhereDate('completed_on', '>=', $yearStart->toDateString());
+            })
+            ->orderBy('started_on')
+            ->orderBy('id')
+            ->get();
+
+        $months = [];
+
+        for ($month = 1; $month <= 12; $month++) {
+            $start = Carbon::create($year, $month, 1)->startOfDay();
+            $cursor = $start->copy()->startOfWeek(Carbon::MONDAY);
+            $gridEnd = $start->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
+            $weeks = [];
+
+            while ($cursor->lte($gridEnd)) {
+                $days = [];
+
+                for ($i = 0; $i < 7; $i++) {
+                    $day = $cursor->copy()->addDays($i);
+                    $days[] = [
+                        'inMonth' => $day->month === $month,
+                        'colors' => $day->month === $month ? $this->minimapColors($items, $day, $today) : [],
+                    ];
+                }
+
+                $weeks[] = $days;
+                $cursor->addWeek();
+            }
+
+            $months[] = [
+                'key' => $start->format('Y-m'),
+                'label' => strtoupper($start->format('M')),
+                'active' => $start->format('Y-m') === $monthStart->format('Y-m'),
+                'weeks' => $weeks,
+            ];
+        }
+
+        return $months;
+    }
+
+    /**
+     * @param  Collection<int, RoadmapItem>  $items
+     * @return list<string>
+     */
+    private function minimapColors(Collection $items, Carbon $day, Carbon $today): array
+    {
+        $colors = [];
+
+        foreach ($items as $item) {
+            if ($item->rangeStart()->gt($day) || $item->rangeEnd($today)->lt($day)) {
+                continue;
+            }
+
+            $colors[] = $item->isPending()
+                ? self::PENDING_COLORS[$this->colorIndexFor($item->id)]
+                : self::DONE_COLOR;
+        }
+
+        return array_values(array_unique($colors));
     }
 
     /**

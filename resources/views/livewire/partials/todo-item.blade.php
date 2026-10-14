@@ -1,3 +1,7 @@
+@php
+    $weekScoped = $weekScoped ?? false;
+    $glyphHover = $weekScoped ? 'hover:text-[#ffe600] focus-visible:text-[#ffe600]' : 'hover:text-link';
+@endphp
 <li
     data-item-id="{{ $item->id }}"
     @unless ($nested) data-nestable="1" @endunless
@@ -10,7 +14,7 @@
     <div class="group flex items-start gap-2 rounded px-1 py-1.5 hover:bg-white/5">
                         <button type="button"
                                 data-drag-handle
-                                class="mt-0.5 shrink-0 cursor-grab touch-none px-0.5 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-muted focus:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-70"
+                                class="mt-0.5 shrink-0 cursor-grab touch-none px-0.5 text-muted/50 opacity-0 transition group-hover:opacity-100 {{ $weekScoped ? 'hover:text-[#ffe600] focus-visible:text-[#ffe600]' : 'hover:text-muted' }} focus:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-70"
                                 aria-label="Drag to reorder">
                             <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
@@ -25,14 +29,8 @@
 
                         @if ($weekScoped ?? false)
                             <button type="button"
-                                    wire:click="openMoveModal({{ $item->id }}, true)"
-                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-muted/60 bg-transparent transition hover:border-link"
-                                    aria-label="Move to day as completed">
-                            </button>
-
-                            <button type="button"
                                     wire:click="openMoveModal({{ $item->id }}, false)"
-                                    class="mt-0.5 shrink-0 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
+                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted/60 opacity-0 transition group-hover:opacity-100 hover:text-[#ffe600] focus:opacity-100 focus-visible:text-[#ffe600] [@media(hover:none)]:opacity-70"
                                     title="Move to day"
                                     aria-label="Move to day">
                                 <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -119,7 +117,7 @@
                                     @endforeach
                                     <button type="button"
                                             wire:click="addLinkRow"
-                                            class="block px-0.5 text-sm leading-none text-muted/40 transition hover:text-link"
+                                            class="{{ $glyphHover }} block px-0.5 text-sm leading-none text-muted/40 transition"
                                             aria-label="Add another link">
                                         +
                                     </button>
@@ -128,15 +126,38 @@
                         </div>
 
                         @if ($item->isLogging())
-                            <span class="inline-flex shrink-0 items-center gap-1.5 self-center tabular-nums text-link"
-                                  aria-label="Logging since {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}"
-                                  title="Started {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}">
-                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
-                                    <circle cx="12" cy="14" r="7"/>
-                                </svg>
-                                <span class="text-[15px] font-semibold leading-none">{{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
-                            </span>
+                            @if ($editingLoggingId === $item->id)
+                                <span class="inline-flex shrink-0 items-center gap-1.5 self-center tabular-nums text-link">
+                                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                        <circle cx="12" cy="14" r="7"/>
+                                    </svg>
+                                    <input type="time"
+                                           wire:model="editLoggingStartedAt"
+                                           x-data="{ armed: false }"
+                                           x-init="$nextTick(() => { $el.focus(); setTimeout(() => armed = true, 150) })"
+                                           x-on:blur="if (armed) $wire.finishEditingLoggingStart()"
+                                           x-on:keydown.enter.prevent="$wire.finishEditingLoggingStart()"
+                                           x-on:keydown.escape.prevent="armed = false; $wire.cancelEditingLoggingStart()"
+                                           class="w-[6.5rem] rounded border border-link/40 bg-transparent px-1 py-0 text-[15px] font-semibold leading-none text-link focus:border-link focus:outline-none"
+                                           aria-label="Edit logging start time" />
+                                </span>
+                                @error('editLoggingStartedAt')
+                                    <p class="basis-full text-[10px] text-red-400">{{ $message }}</p>
+                                @enderror
+                            @else
+                                <button type="button"
+                                        wire:click.stop="startEditingLoggingStart({{ $item->id }})"
+                                        class="inline-flex shrink-0 cursor-text items-center gap-1.5 self-center rounded tabular-nums text-link hover:bg-white/5"
+                                        aria-label="Edit logging start {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}"
+                                        title="Started {{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}. Click to change.">
+                                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                        <circle cx="12" cy="14" r="7"/>
+                                    </svg>
+                                    <span class="text-[15px] font-semibold leading-none">{{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
+                                </button>
+                            @endif
                         @endif
 
                         @if ($showLogControls && ! ($weekScoped ?? false))
@@ -169,7 +190,7 @@
                         @unless ($nested)
                             <button type="button"
                                     wire:click.stop="startAddingChild({{ $item->id }})"
-                                    class="mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
+                                    class="{{ $glyphHover }} mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-70"
                                     aria-label="Add sub-item">
                                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M8 6h12M8 12h12M8 18h12"/>
@@ -179,9 +200,37 @@
                             </button>
                         @endunless
 
+                        @if (($isToday ?? false) && ! $weekScoped)
+                            <button type="button"
+                                    wire:click.stop="moveToThisWeek({{ $item->id }})"
+                                    class="mt-0.5 shrink-0 px-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-[#ffe600] focus:opacity-100 focus-visible:text-[#ffe600] [@media(hover:none)]:opacity-70"
+                                    title="Move to For this week"
+                                    aria-label="Move to For this week">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 16V4"/>
+                                    <path d="M7 9l5-5 5 5"/>
+                                    <path d="M4 20h16"/>
+                                </svg>
+                            </button>
+                        @endif
+
+                        @if ($weekScoped)
+                            <button type="button"
+                                    wire:click.stop="moveToBacklog({{ $item->id }})"
+                                    class="mt-0.5 shrink-0 px-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-[#c10e34] focus:opacity-100 focus-visible:text-[#c10e34] [@media(hover:none)]:opacity-70"
+                                    title="Move to backlog"
+                                    aria-label="Move to backlog">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 16V4"/>
+                                    <path d="M7 9l5-5 5 5"/>
+                                    <path d="M4 20h16"/>
+                                </svg>
+                            </button>
+                        @endif
+
                         <button type="button"
                                 wire:click.stop="startLinking({{ $item->id }})"
-                                class="mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
+                                class="{{ $glyphHover }} mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-70"
                                 aria-label="{{ $item->links->isNotEmpty() ? 'Edit links' : 'Add link' }}">
                             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
@@ -211,12 +260,20 @@
             wire:key="children-{{ $item->id }}"
         >
             @foreach ($item->children as $child)
-                @include('livewire.partials.todo-item', ['item' => $child, 'nested' => true])
+                @include('livewire.partials.todo-item', ['item' => $child, 'nested' => true, 'weekScoped' => $weekScoped])
             @endforeach
             @if ($addingChildFor === $item->id)
                 <li data-drop-slot class="ml-7" wire:key="adding-child-{{ $item->id }}">
-                    <form wire:submit.prevent="addChild" class="flex min-h-12 items-center gap-2 rounded border border-dashed border-link/70 bg-link/5 px-2 py-2">
-                        <span class="flex h-5 w-5 shrink-0 rounded-full border-2 border-dashed border-link/70" aria-hidden="true"></span>
+                    <form wire:submit.prevent="addChild" @class([
+                        'flex min-h-12 items-center gap-2 rounded border border-dashed px-2 py-2',
+                        'border-[#ffe600]/70 bg-[#ffe600]/5' => $weekScoped,
+                        'border-link/70 bg-link/5' => ! $weekScoped,
+                    ])>
+                        <span @class([
+                            'flex h-5 w-5 shrink-0 rounded-full border-2 border-dashed',
+                            'border-[#ffe600]/70' => $weekScoped,
+                            'border-link/70' => ! $weekScoped,
+                        ]) aria-hidden="true"></span>
                         <input
                             type="text"
                             wire:model="newChildTitle"

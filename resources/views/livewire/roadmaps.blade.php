@@ -23,7 +23,8 @@
         <span>{{ $pendingCount }} pending</span>
     </div>
 
-    <div x-data="{ hoverId: null }">
+    <div x-data="{ hoverId: null }" class="flex items-start gap-3">
+    <div class="min-w-0 flex-1">
     <div class="overflow-hidden rounded-lg border border-white/10 bg-sidebar/80">
         <div class="grid grid-cols-7 border-b border-white/10 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             @foreach (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $weekday)
@@ -174,6 +175,39 @@
             <li class="px-1 py-2 text-sm text-muted/70">No ranges in this month</li>
         @endforelse
     </ul>
+    </div>
+
+    <nav class="sticky top-16 hidden w-16 shrink-0 flex-col gap-1 self-start md:flex"
+         aria-label="Months in {{ $yearMinimap[0]['key'] ?? '' }}">
+        @foreach ($yearMinimap as $mini)
+            <button type="button"
+                    wire:click="showMonth('{{ $mini['key'] }}')"
+                    title="{{ $mini['label'] }}"
+                    aria-label="{{ $mini['label'] }}"
+                    aria-current="{{ $mini['active'] ? 'true' : 'false' }}"
+                    @class([
+                        'rounded px-1 py-1 text-left transition',
+                        'bg-white/10 ring-1 ring-white/40' => $mini['active'],
+                        'hover:bg-white/5' => ! $mini['active'],
+                    ])>
+                <span class="block text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">{{ $mini['label'] }}</span>
+                <span class="mt-0.5 block space-y-px" aria-hidden="true">
+                    @foreach ($mini['weeks'] as $miniWeek)
+                        <span class="grid grid-cols-7 gap-px">
+                            @foreach ($miniWeek as $miniDay)
+                                <span @class([
+                                    'h-1 w-full rounded-[1px]',
+                                    'bg-white/25' => $miniDay['inMonth'] && $miniDay['colors'] === [] && ! $mini['active'],
+                                    'bg-white/45' => $miniDay['inMonth'] && $miniDay['colors'] === [] && $mini['active'],
+                                    'bg-transparent' => ! $miniDay['inMonth'],
+                                ]) @if ($miniDay['colors'] !== []) style="{{ count($miniDay['colors']) === 1 ? 'background-color: '.$miniDay['colors'][0] : 'background-image: linear-gradient(to bottom, '.implode(', ', $miniDay['colors']).')' }}" @endif></span>
+                            @endforeach
+                        </span>
+                    @endforeach
+                </span>
+            </button>
+        @endforeach
+    </nav>
     </div>
 
     <form wire:submit="addItem" class="mt-6 flex max-w-xl flex-col gap-2 sm:flex-row">

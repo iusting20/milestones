@@ -14,6 +14,7 @@ class Project extends Model
         'slug',
         'position',
         'is_archived',
+        'is_delimiter',
     ];
 
     protected function casts(): array
@@ -21,6 +22,7 @@ class Project extends Model
         return [
             'position' => 'integer',
             'is_archived' => 'boolean',
+            'is_delimiter' => 'boolean',
         ];
     }
 

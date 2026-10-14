@@ -50,7 +50,25 @@
     }
 }
 
+.project-delimiter {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 0;
+    margin: 0.4rem 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
 @layer components {
+    .backlog-check-done {
+        background-color: #c10e34;
+        border-color: #c10e34;
+        color: #fff;
+        box-shadow:
+            0 0 2px 0.5px rgb(193 14 52 / 70%),
+            0 0 6px 1px rgb(193 14 52 / 45%),
+            0 0 10px 3px rgb(193 14 52 / 22%);
+    }
+
     .todo-check-done {
         background-color: #1a73e8;
         border-color: #1a73e8;

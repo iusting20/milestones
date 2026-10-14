@@ -359,9 +359,8 @@ class TaskLogBoard extends Component
             ->values();
 
         $colorByTitle = $this->colorByTitle($titles);
-        $maxMinutes = max(1, (int) $logs->max(fn (TaskLog $log): int => $this->durationMinutes($log)));
 
-        $days = [];
+        $dayGroups = [];
 
         for ($i = 0; $i < 7; $i++) {
             $day = $start->copy()->addDays($i);
@@ -371,10 +370,23 @@ class TaskLogBoard extends Component
                 ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
                 ->values();
 
+            $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
+        }
+
+        $maxMinutes = max(1, (int) collect($dayGroups)
+            ->flatten(1)
+            ->max(fn (Collection $group): int => $this->groupMinutes($group)));
+
+        $days = [];
+
+        for ($i = 0; $i < 7; $i++) {
+            $day = $start->copy()->addDays($i);
+            $dateKey = $day->toDateString();
+
             $dayUntimed = $completedUntimedByDate->get($dateKey, collect());
 
             $dayLogs = $this->dayEntries(
-                $dayTimedLogs,
+                $dayGroups[$dateKey],
                 $dayUntimed,
                 $maxMinutes,
                 $colorByTitle,
@@ -408,19 +420,19 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * @param  Collection<int, TaskLog>  $dayTimedLogs
+     * @param  Collection<int, Collection<int, TaskLog>>  $dayGroups
      * @param  Collection<int, TodoItem>  $dayUntimed
      * @param  array<string, string>  $colorByTitle
-     * @return Collection<int, array{id: int|null, todoItemId?: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}>
+     * @return Collection<int, array{id: int|null, startLogId?: int, finishLogId?: int, todoItemId?: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}>
      */
     private function dayEntries(
-        Collection $dayTimedLogs,
+        Collection $dayGroups,
         Collection $dayUntimed,
         int $maxMinutes,
         array $colorByTitle,
     ): Collection {
-        $timed = $dayTimedLogs
-            ->map(fn (TaskLog $log): array => $this->timedEntry($log, $maxMinutes, $colorByTitle));
+        $timed = $dayGroups
+            ->map(fn (Collection $group): array => $this->timedEntry($group, $maxMinutes, $colorByTitle));
 
         $untimed = $dayUntimed
             ->map(fn (TodoItem $task): array => $this->untimedDayEntry($task, $colorByTitle));
@@ -429,24 +441,80 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * @param  array<string, string>  $colorByTitle
-     * @return array{id: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}
+     * Same title, next session starting on the displayed minute the previous one finished.
+     *
+     * @param  Collection<int, TaskLog>  $logs
+     * @return Collection<int, Collection<int, TaskLog>>
      */
-    private function timedEntry(TaskLog $log, int $maxMinutes, array $colorByTitle): array
+    private function mergeTouchingLogs(Collection $logs): Collection
     {
-        $minutes = $this->durationMinutes($log);
+        $groups = collect();
+        $current = null;
+
+        foreach ($logs->sortBy(fn (TaskLog $log): array => [$log->started_at->timestamp, $log->id]) as $log) {
+            if (! $current instanceof Collection) {
+                $current = collect([$log]);
+
+                continue;
+            }
+
+            /** @var TaskLog $previous */
+            $previous = $current->last();
+            $sameTitle = $previous->title === $log->title;
+            $touches = $previous->finished_at->timezone('Europe/Bucharest')->format('H:i')
+                === $log->started_at->timezone('Europe/Bucharest')->format('H:i');
+
+            if ($sameTitle && $touches) {
+                $current->push($log);
+
+                continue;
+            }
+
+            $groups->push($current);
+            $current = collect([$log]);
+        }
+
+        if ($current instanceof Collection) {
+            $groups->push($current);
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $group
+     */
+    private function groupMinutes(Collection $group): int
+    {
+        return (int) $group->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $group
+     * @param  array<string, string>  $colorByTitle
+     * @return array{id: int, startLogId: int, finishLogId: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}
+     */
+    private function timedEntry(Collection $group, int $maxMinutes, array $colorByTitle): array
+    {
+        /** @var TaskLog $first */
+        $first = $group->first();
+        /** @var TaskLog $last */
+        $last = $group->last();
+        $minutes = $this->groupMinutes($group);
 
         return [
-            'id' => $log->id,
-            'key' => 'log-'.$log->id,
-            'title' => $log->title,
-            'started' => $log->started_at->timezone('Europe/Bucharest')->format('H:i'),
-            'finished' => $log->finished_at->timezone('Europe/Bucharest')->format('H:i'),
+            'id' => $first->id,
+            'startLogId' => $first->id,
+            'finishLogId' => $last->id,
+            'key' => 'log-'.$group->pluck('id')->implode('-'),
+            'title' => $first->title,
+            'started' => $first->started_at->timezone('Europe/Bucharest')->format('H:i'),
+            'finished' => $last->finished_at->timezone('Europe/Bucharest')->format('H:i'),
             'timed' => true,
             'minutes' => $minutes,
             'duration' => $this->formatDuration($minutes),
             'width' => round(($minutes / $maxMinutes) * 100, 1),
-            'color' => $colorByTitle[$log->title],
+            'color' => $colorByTitle[$first->title],
         ];
     }
 
@@ -604,16 +672,20 @@ class TaskLogBoard extends Component
                 ->map(function (Collection $sessions, string $title) use ($colorByTitle): array {
                     $minutes = (int) $sessions->sum(fn (TaskLog $log): int => $this->durationMinutes($log));
 
-                    $rows = $sessions
-                        ->sortBy(fn (TaskLog $log) => $log->started_at->timestamp)
-                        ->values()
-                        ->map(function (TaskLog $log): array {
-                            $started = $log->started_at->timezone('Europe/Bucharest');
-                            $finished = $log->finished_at->timezone('Europe/Bucharest');
-                            $sessionMinutes = $this->durationMinutes($log);
+                    $rows = $this->mergeTouchingLogs($sessions)
+                        ->map(function (Collection $group): array {
+                            /** @var TaskLog $first */
+                            $first = $group->first();
+                            /** @var TaskLog $last */
+                            $last = $group->last();
+                            $started = $first->started_at->timezone('Europe/Bucharest');
+                            $finished = $last->finished_at->timezone('Europe/Bucharest');
+                            $sessionMinutes = $this->groupMinutes($group);
 
                             return [
-                                'id' => $log->id,
+                                'id' => $first->id,
+                                'startLogId' => $first->id,
+                                'finishLogId' => $last->id,
                                 'day' => strtoupper($finished->format('D')),
                                 'date' => $finished->format('j M'),
                                 'started' => $started->format('H:i'),

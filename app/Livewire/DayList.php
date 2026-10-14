@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\EditsLoggingStart;
 use App\Livewire\Concerns\SetsDripTags;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
@@ -14,6 +15,7 @@ use Livewire\Component;
 
 class DayList extends Component
 {
+    use EditsLoggingStart;
     use SetsDripTags;
 
     public string $date;
@@ -393,6 +395,40 @@ class DayList extends Component
     public function delete(int $id): void
     {
         $this->todoItem($id)->delete();
+    }
+
+    public function moveToThisWeek(int $id): void
+    {
+        if (! $this->isToday) {
+            return;
+        }
+
+        $item = $this->todoItem($id);
+
+        if ($item->is_separator) {
+            return;
+        }
+
+        $week = Carbon::parse($this->date)->format('o-\WW');
+        $max = (int) TodoItem::query()->whereNull('date')->where('week', $week)->max('position');
+
+        DB::transaction(function () use ($item, $week, &$max): void {
+            $max++;
+
+            $item->update([
+                'date' => null,
+                'week' => $week,
+                'parent_id' => null,
+                'position' => $max,
+            ]);
+
+            $item->children()->update([
+                'date' => null,
+                'week' => $week,
+            ]);
+        });
+
+        $this->dispatch('todo-moved-to-week');
     }
 
     public function copyUnfinishedFromPreviousDay(): void

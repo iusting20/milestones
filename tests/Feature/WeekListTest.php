@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\DayList;
 use App\Livewire\WeekBoard;
 use App\Livewire\WeekList;
+use App\Models\BacklogItem;
 use App\Models\TodoItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -160,6 +161,140 @@ class WeekListTest extends TestCase
         Livewire::test(WeekBoard::class)
             ->assertSee('For this week')
             ->assertSeeLivewire(WeekList::class);
+    }
+
+    public function test_copy_unfinished_from_last_week_copies_only_that_weeks_open_items(): void
+    {
+        $item = TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W38',
+            'title' => 'Carry me',
+            'is_completed' => false,
+            'drip_tag' => 'D',
+            'position' => 1,
+        ]);
+        $item->links()->create([
+            'title' => 'Example',
+            'url' => 'https://example.com',
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W38',
+            'title' => 'Already done',
+            'is_completed' => true,
+            'position' => 2,
+        ]);
+        TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W39',
+            'title' => 'Already here',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W38',
+            'title' => 'Already here',
+            'is_completed' => false,
+            'position' => 3,
+        ]);
+        TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W38',
+            'title' => null,
+            'is_separator' => true,
+            'is_completed' => false,
+            'position' => 4,
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-09-14',
+            'week' => null,
+            'title' => 'Day task',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+
+        Livewire::test(WeekList::class, ['week' => '2026-W39'])
+            ->assertSee('copy unfinished milestones from last week')
+            ->call('copyUnfinishedFromPreviousWeek');
+
+        $copied = TodoItem::query()
+            ->whereNull('date')
+            ->where('week', '2026-W39')
+            ->where('title', 'Carry me')
+            ->where('is_completed', false)
+            ->where('drip_tag', 'D')
+            ->first();
+
+        $this->assertNotNull($copied);
+        $this->assertTrue(
+            $copied->links()
+                ->where('url', 'https://example.com')
+                ->where('title', 'Example')
+                ->exists()
+        );
+        $this->assertSame(
+            1,
+            TodoItem::query()->whereNull('date')->where('week', '2026-W39')->where('title', 'Already here')->count()
+        );
+        $this->assertFalse(
+            TodoItem::query()
+                ->whereNull('date')
+                ->where('week', '2026-W39')
+                ->where('is_separator', true)
+                ->exists()
+        );
+        $this->assertFalse(
+            TodoItem::query()
+                ->whereNull('date')
+                ->where('week', '2026-W39')
+                ->where('title', 'Already done')
+                ->exists()
+        );
+        $this->assertFalse(
+            TodoItem::query()
+                ->whereNull('date')
+                ->where('week', '2026-W39')
+                ->where('title', 'Day task')
+                ->exists()
+        );
+        $this->assertTrue(
+            TodoItem::query()
+                ->whereNull('date')
+                ->where('week', '2026-W38')
+                ->where('title', 'Carry me')
+                ->exists()
+        );
+    }
+
+    public function test_can_move_week_item_to_backlog(): void
+    {
+        BacklogItem::query()->create([
+            'title' => 'Already parked',
+            'position' => 1,
+        ]);
+
+        $item = TodoItem::query()->create([
+            'date' => null,
+            'week' => '2026-W39',
+            'title' => 'Park this',
+            'drip_tag' => 'D',
+            'position' => 1,
+        ]);
+
+        Livewire::test(WeekList::class, ['week' => '2026-W39'])
+            ->assertSeeHtml('title="Move to backlog"')
+            ->call('moveToBacklog', $item->id);
+
+        $this->assertDatabaseMissing('todo_items', ['id' => $item->id]);
+
+        $backlog = BacklogItem::query()->where('title', 'Park this')->first();
+
+        $this->assertNotNull($backlog);
+        $this->assertNull($backlog->drip_tag);
+        $this->assertSame(1, $backlog->position);
+        $this->assertSame(2, BacklogItem::query()->where('title', 'Already parked')->value('position'));
     }
 
     public function test_rejects_move_to_date_outside_week(): void

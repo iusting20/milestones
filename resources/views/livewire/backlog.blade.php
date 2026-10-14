@@ -2,6 +2,22 @@
     <div class="mb-6 flex flex-wrap items-center gap-2">
         <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Backlog</h1>
 
+        <div class="flex items-center gap-1 text-sm text-muted" role="group" aria-label="Display">
+            <span class="mr-1">display:</span>
+            @foreach (['pending', 'finished', 'all'] as $option)
+                <button type="button"
+                        wire:click="$set('display', '{{ $option }}')"
+                        @class([
+                            'rounded px-2 py-1 transition',
+                            'bg-white/10 text-body' => $display === $option,
+                            'text-muted hover:text-body' => $display !== $option,
+                        ])
+                        aria-pressed="{{ $display === $option ? 'true' : 'false' }}">
+                    {{ $option }}
+                </button>
+            @endforeach
+        </div>
+
         <div class="ml-auto flex items-center gap-2">
             <button type="button"
                     wire:click="$toggle('showTags')"
@@ -77,15 +93,14 @@
                     @endif
 
                     <button type="button"
-                            wire:click="toggle({{ $item->id }})"
-                            class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition
-                                {{ $item->is_completed ? 'todo-check-done' : 'border-muted/60 bg-transparent' }}"
-                            aria-label="{{ $item->is_completed ? 'Mark incomplete' : 'Mark complete' }}">
-                        @if ($item->is_completed)
-                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        @endif
+                            wire:click="moveToThisWeek({{ $item->id }})"
+                            wire:confirm="Move this to For this week? It will be removed from the backlog."
+                            class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted/60 opacity-0 transition group-hover:opacity-100 hover:text-[#ffe600] focus:opacity-100 focus-visible:text-[#ffe600] [@media(hover:none)]:opacity-70"
+                            title="Move to For this week"
+                            aria-label="Move to For this week">
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                            <path d="M4 10L10 4M6 4h4v4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     </button>
 
                     <span @class([
@@ -96,16 +111,16 @@
                         {{ $item->title }}
                     </span>
 
-                    <button type="button"
-                            wire:click="moveToThisWeek({{ $item->id }})"
-                            wire:confirm="Move this to For this week? It will be removed from the backlog."
-                            class="mt-0.5 shrink-0 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-link focus:opacity-100 [@media(hover:none)]:opacity-70"
-                            title="Move to For this week"
-                            aria-label="Move to For this week">
-                        <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                            <path d="M4 10L10 4M6 4h4v4" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </button>
+                    @if ($item->is_completed && $item->completed_at)
+                        <span class="inline-flex shrink-0 items-center gap-1.5 self-center tabular-nums text-link"
+                              title="Completed {{ $item->completed_at->timezone('Europe/Bucharest')->format('D j M') }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                <circle cx="12" cy="14" r="7"/>
+                            </svg>
+                            <span class="text-[15px] font-semibold leading-none">{{ $item->completed_at->timezone('Europe/Bucharest')->format('D j M') }}</span>
+                        </span>
+                    @endif
 
                     <button type="button"
                             wire:click="deleteItem({{ $item->id }})"
@@ -117,18 +132,32 @@
         @endforeach
     </ul>
 
-    <form wire:submit="addItem" class="mt-6 flex max-w-xl flex-col gap-2 sm:flex-row">
-        <input type="text"
-               wire:model="newTitle"
-               placeholder="Add backlog item..."
-               class="flex-1 rounded border border-white/10 bg-sidebar px-3 py-2 text-sm focus:border-link focus:outline-none" />
-        <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-2 text-sm font-medium hover:border-link/40">
-            Add
+    @if ($adding)
+        <form wire:submit.prevent="addItem" class="mt-1 flex items-center gap-2 px-1 py-1.5" wire:key="adding-backlog">
+            <span class="ml-6 flex h-5 w-5 shrink-0 rounded-full border-2 border-muted/40" aria-hidden="true"></span>
+            <input
+                type="text"
+                wire:model="newTitle"
+                wire:blur="finishAdding"
+                placeholder="New backlog item…"
+                x-init="$nextTick(() => $el.focus())"
+                class="w-full flex-1 border-0 bg-transparent px-0 py-0 text-[15px] text-body placeholder:text-muted/50 focus:outline-none focus:ring-0"
+            />
+        </form>
+    @endif
+
+    <div class="group/add mt-2 flex flex-wrap items-center gap-2">
+        <button type="button"
+                wire:click="startAdding"
+                class="flex h-8 w-8 items-center justify-center rounded text-lg leading-none text-muted/40 transition hover:text-link"
+                aria-label="Add backlog item">
+            +
         </button>
         <button type="button"
                 wire:click="addDivider"
-                class="rounded border border-dashed border-white/15 px-4 py-2 text-sm text-muted hover:border-link/40 hover:text-link">
-            Add divider
+                class="text-xs text-muted opacity-0 transition group-hover/add:opacity-100 hover:text-link"
+                aria-label="Add divider">
+            ---
         </button>
-    </form>
+    </div>
 </div>

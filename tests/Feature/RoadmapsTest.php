@@ -23,10 +23,44 @@ class RoadmapsTest extends TestCase
             ->assertSeeLivewire(Roadmaps::class);
     }
 
+    public function test_year_minimap_uses_event_colors(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $pending = RoadmapItem::query()->create([
+            'title' => 'Amber range',
+            'started_on' => '2026-03-04',
+            'completed_on' => null,
+        ]);
+        RoadmapItem::query()->create([
+            'title' => 'Finished range',
+            'started_on' => '2026-03-10',
+            'completed_on' => '2026-03-12',
+        ]);
+
+        $pendingColor = ['#ffc107', '#ff9800', '#ff5722', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3', '#00bcd4'][$pending->id % 8];
+
+        Livewire::test(Roadmaps::class)
+            ->assertSee($pendingColor, false)
+            ->assertSee('#7cb518', false);
+    }
+
+    public function test_year_minimap_jumps_to_a_month(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->assertSee('JAN')
+            ->assertSee('DEC')
+            ->call('showMonth', '2026-03')
+            ->assertSet('month', '2026-03')
+            ->assertSee('MARCH 2026');
+    }
+
     public function test_nav_shows_roadmaps_after_backlog(): void
     {
         $this->get(route('milestones'))
-            ->assertSeeInOrder(['Backlog', 'Roadmaps']);
+            ->assertSeeInOrder(['Backlog', 'Roadmaps', 'Links']);
     }
 
     public function test_can_add_pending_range_from_selected_day(): void

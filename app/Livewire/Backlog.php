@@ -15,7 +15,26 @@ class Backlog extends Component
 
     public string $newTitle = '';
 
+    public bool $adding = false;
+
     public bool $showTags = false;
+
+    public string $display = 'pending';
+
+    public function startAdding(): void
+    {
+        $this->adding = true;
+        $this->newTitle = '';
+    }
+
+    public function finishAdding(): void
+    {
+        $this->addItem();
+
+        if (trim($this->newTitle) === '') {
+            $this->adding = false;
+        }
+    }
 
     public function addItem(): void
     {
@@ -57,8 +76,11 @@ class Backlog extends Component
             return;
         }
 
+        $completing = ! $item->is_completed;
+
         $item->update([
-            'is_completed' => ! $item->is_completed,
+            'is_completed' => $completing,
+            'completed_at' => $completing ? now() : null,
         ]);
     }
 
@@ -109,11 +131,26 @@ class Backlog extends Component
 
     public function render()
     {
+        if (! in_array($this->display, ['pending', 'finished', 'all'], true)) {
+            $this->display = 'pending';
+        }
+
+        $items = BacklogItem::query()
+            ->orderBy('position')
+            ->orderBy('id');
+
+        if ($this->display === 'pending') {
+            $items->where(function ($query): void {
+                $query->where('is_separator', true)
+                    ->orWhere('is_completed', false);
+            });
+        } elseif ($this->display === 'finished') {
+            $items->where('is_separator', false)
+                ->where('is_completed', true);
+        }
+
         return view('livewire.backlog', [
-            'items' => BacklogItem::query()
-                ->orderBy('position')
-                ->orderBy('id')
-                ->get(),
+            'items' => $items->get(),
         ]);
     }
 

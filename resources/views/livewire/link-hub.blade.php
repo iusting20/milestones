@@ -39,6 +39,10 @@
                                 class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">
                             {{ $selected->is_archived ? 'Unarchive' : 'Archive' }}
                         </button>
+                        <button type="button" wire:click="moveToOtherHub({{ $selected->id }})"
+                                class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">
+                            move to {{ $hub === 'partners' ? 'assets' : 'partners' }}
+                        </button>
                         <button type="button"
                                 wire:click="deleteProject({{ $selected->id }})"
                                 wire:confirm="Delete this project and all its links?"
@@ -69,8 +73,9 @@
                 </form>
             @endif
 
+            <div @if ($editMode) x-data="linkSortList('reorderGroups')" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)" @endif>
             @forelse ($selected->linkGroups as $group)
-                <section class="mb-8 border-b border-dashed border-white/15 pb-8 last:border-0" id="group-{{ $group->id }}">
+                <section class="mb-8 border-b border-dashed border-white/15 pb-8 last:border-0" id="group-{{ $group->id }}" data-sort-item="{{ $group->id }}" wire:key="group-{{ $group->id }}">
                     <div class="mb-3 flex flex-wrap items-center gap-2">
                         @if ($renamingGroupId === $group->id)
                             <form wire:submit="saveRenameGroup" class="flex flex-wrap gap-2">
@@ -82,18 +87,11 @@
                         @else
                             <h3 class="text-lg font-bold text-body">{{ $group->name }}</h3>
                             @if ($editMode)
-                                <span class="flex flex-col">
-                                    <button type="button"
-                                            wire:click="moveGroup({{ $group->id }}, 'up')"
-                                            @disabled($loop->first)
-                                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
-                                            aria-label="Move {{ $group->name }} up">▲</button>
-                                    <button type="button"
-                                            wire:click="moveGroup({{ $group->id }}, 'down')"
-                                            @disabled($loop->last)
-                                            class="px-0.5 text-[9px] leading-none text-muted hover:text-body disabled:pointer-events-none disabled:opacity-20"
-                                            aria-label="Move {{ $group->name }} down">▼</button>
-                                </span>
+                                <button type="button" draggable="true" x-on:dragstart.stop="start($event)"
+                                        class="text-muted hover:text-body" style="cursor:grab"
+                                        aria-label="Drag {{ $group->name }}">
+                                    @include('livewire.partials.drag-handle')
+                                </button>
                                 <button type="button" wire:click="startRenameGroup({{ $group->id }})"
                                         class="text-xs text-muted hover:text-body">rename</button>
                                 <button type="button"
@@ -161,6 +159,38 @@
             @empty
                 <p class="mb-4 text-sm text-muted"><mark>... TO ADD groups ...</mark></p>
             @endforelse
+            </div>
+
+            <script>
+                function linkSortList(method) {
+                    return {
+                        dragEl: null,
+                        start(event) {
+                            this.dragEl = event.target.closest('[data-sort-item]');
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', this.dragEl.dataset.sortItem);
+                        },
+                        over(event) {
+                            const item = event.target.closest('[data-sort-item]');
+                            if (! this.dragEl || ! item || item === this.dragEl || item.parentElement !== this.dragEl.parentElement) {
+                                return;
+                            }
+                            const rect = item.getBoundingClientRect();
+                            const after = event.clientY > rect.top + rect.height / 2;
+                            item.parentElement.insertBefore(this.dragEl, after ? item.nextSibling : item);
+                        },
+                        drop(event) {
+                            if (! this.dragEl) {
+                                return;
+                            }
+                            const ids = [...event.currentTarget.querySelectorAll(':scope > [data-sort-item]')]
+                                .map((el) => Number(el.dataset.sortItem));
+                            this.dragEl = null;
+                            this.$wire[method](ids);
+                        },
+                    };
+                }
+            </script>
 
             @if ($editMode)
                 <form wire:submit="addGroup" class="mt-2 flex max-w-md flex-col gap-2 sm:flex-row">

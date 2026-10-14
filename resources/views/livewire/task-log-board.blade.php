@@ -250,6 +250,8 @@
                                                 class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted">
                                                 @include('livewire.partials.task-log-times', [
                                                     'logId' => $session['id'],
+                                                    'startLogId' => $session['startLogId'] ?? $session['id'],
+                                                    'finishLogId' => $session['finishLogId'] ?? $session['id'],
                                                     'todoItemId' => $session['todoItemId'] ?? null,
                                                     'started' => $session['started'],
                                                     'finished' => $session['finished'],

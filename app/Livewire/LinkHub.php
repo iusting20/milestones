@@ -5,7 +5,7 @@ namespace App\Livewire;
 use App\Models\Link;
 use App\Models\LinkGroup;
 use App\Models\Project;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class LinkHub extends Component
@@ -56,12 +56,15 @@ class LinkHub extends Component
         $this->selectedSlug = $slug;
 
         if ($this->selectedSlug === null) {
-            $first = $this->projectsQuery()->first();
+            $first = $this->projectsQuery()->where('is_delimiter', false)->first();
             if ($first) {
                 $this->selectedSlug = $first->slug;
             }
         } else {
-            $exists = $this->projectsQuery()->where('slug', $this->selectedSlug)->exists();
+            $exists = $this->projectsQuery()
+                ->where('is_delimiter', false)
+                ->where('slug', $this->selectedSlug)
+                ->exists();
             if (! $exists) {
                 abort(404);
             }
@@ -113,6 +116,23 @@ class LinkHub extends Component
         $this->redirect(route('links.hub', ['hub' => $this->hub, 'slug' => $slug]), navigate: true);
     }
 
+    public function addDelimiter(): void
+    {
+        $max = (int) Project::query()->where('hub', $this->hub)->max('position');
+
+        Project::query()->create([
+            'hub' => $this->hub,
+            'name' => '',
+            'slug' => 'delimiter-'.Str::lower((string) Str::ulid()),
+            'position' => $max + 1,
+            'is_archived' => false,
+            'is_delimiter' => true,
+        ]);
+
+        $this->addingProject = false;
+        $this->newProjectName = '';
+    }
+
     public function startRenameProject(int $id): void
     {
         $project = $this->findProject($id);
@@ -156,6 +176,26 @@ class LinkHub extends Component
     {
         $project = $this->findProject($id);
         $project->update(['is_archived' => ! $project->is_archived]);
+    }
+
+    public function moveToOtherHub(int $id): void
+    {
+        $project = $this->findProject($id);
+        $targetHub = $this->hub === 'partners' ? 'assets' : 'partners';
+        $max = (int) Project::query()->where('hub', $targetHub)->max('position');
+
+        $project->update([
+            'hub' => $targetHub,
+            'slug' => Project::uniqueSlug($targetHub, $project->name, $project->id),
+            'position' => $max + 1,
+        ]);
+
+        $next = $this->projectsQuery()->where('is_delimiter', false)->value('slug');
+
+        $this->redirect(
+            route('links.hub', array_filter(['hub' => $this->hub, 'slug' => $next])),
+            navigate: true
+        );
     }
 
     public function deleteProject(int $id): void
@@ -226,31 +266,75 @@ class LinkHub extends Component
         $this->findGroup($id)->delete();
     }
 
-    public function moveProject(int $id, string $direction): void
+    /**
+     * @param  array<int, int|string>  $ids
+     */
+    public function reorderProjects(array $ids): void
     {
-        $project = $this->findProject($id);
+        $ids = array_values(array_map(intval(...), $ids));
 
-        $siblings = Project::query()
+        if ($ids === []) {
+            return;
+        }
+
+        $projects = Project::query()
             ->where('hub', $this->hub)
-            ->where('is_archived', $project->is_archived)
-            ->orderBy('position')
-            ->orderBy('id')
+            ->whereIn('id', $ids)
             ->get();
 
-        $this->moveNeighbor($siblings, $id, $direction);
+        if ($projects->count() !== count($ids) || $projects->pluck('is_archived')->unique()->count() !== 1) {
+            return;
+        }
+
+        $archived = (bool) $projects->first()->is_archived;
+        $expected = Project::query()
+            ->where('hub', $this->hub)
+            ->where('is_archived', $archived)
+            ->pluck('id');
+
+        if ($expected->count() !== count($ids) || $expected->diff($ids)->isNotEmpty()) {
+            return;
+        }
+
+        $byId = $projects->keyBy('id');
+
+        foreach ($ids as $index => $id) {
+            $byId[$id]->update(['position' => $index + 1]);
+        }
     }
 
-    public function moveGroup(int $id, string $direction): void
+    /**
+     * @param  array<int, int|string>  $ids
+     */
+    public function reorderGroups(array $ids): void
     {
-        $group = $this->findGroup($id);
+        $project = $this->selectedProject();
 
-        $siblings = LinkGroup::query()
-            ->where('project_id', $group->project_id)
-            ->orderBy('position')
-            ->orderBy('id')
+        if (! $project) {
+            return;
+        }
+
+        $ids = array_values(array_map(intval(...), $ids));
+
+        if ($ids === []) {
+            return;
+        }
+
+        $expected = $project->linkGroups()->pluck('link_groups.id');
+        $groups = LinkGroup::query()
+            ->where('project_id', $project->id)
+            ->whereIn('id', $ids)
             ->get();
 
-        $this->moveNeighbor($siblings, $id, $direction);
+        if ($groups->count() !== count($ids) || $expected->count() !== count($ids) || $expected->diff($ids)->isNotEmpty()) {
+            return;
+        }
+
+        $byId = $groups->keyBy('id');
+
+        foreach ($ids as $index => $id) {
+            $byId[$id]->update(['position' => $index + 1]);
+        }
     }
 
     public function startAddLink(int $groupId): void
@@ -406,37 +490,6 @@ class LinkHub extends Component
             ->whereKey($id)
             ->whereHas('linkGroup.project', fn ($q) => $q->where('hub', $this->hub))
             ->firstOrFail();
-    }
-
-    /**
-     * @param  Collection<int, Project|LinkGroup>  $siblings
-     */
-    private function moveNeighbor(Collection $siblings, int $id, string $direction): void
-    {
-        if (! in_array($direction, ['up', 'down'], true)) {
-            return;
-        }
-
-        $index = $siblings->search(fn (Project|LinkGroup $item): bool => $item->id === $id);
-
-        if ($index === false) {
-            return;
-        }
-
-        $neighborIndex = $direction === 'up' ? $index - 1 : $index + 1;
-
-        if (! $siblings->has($neighborIndex)) {
-            return;
-        }
-
-        $ordered = $siblings->values();
-        $current = $ordered[$index];
-        $ordered[$index] = $ordered[$neighborIndex];
-        $ordered[$neighborIndex] = $current;
-
-        $ordered->each(function (Project|LinkGroup $item, int $position): void {
-            $item->update(['position' => $position + 1]);
-        });
     }
 
     private function resetLinkForms(): void

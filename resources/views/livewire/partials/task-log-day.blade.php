@@ -50,6 +50,8 @@
                 </div>
                 @include('livewire.partials.task-log-times', [
                     'logId' => $log['id'],
+                    'startLogId' => $log['startLogId'] ?? $log['id'],
+                    'finishLogId' => $log['finishLogId'] ?? $log['id'],
                     'todoItemId' => $log['todoItemId'] ?? null,
                     'started' => $log['started'],
                     'finished' => $log['finished'],

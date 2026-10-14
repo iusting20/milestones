@@ -18,10 +18,6 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('milestones*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Milestones
             </a>
-            <a href="{{ route('links.hub', 'partners') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
-                Links
-            </a>
             <a href="{{ route('backlog') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('backlog*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Backlog
@@ -29,6 +25,11 @@
             <a href="{{ route('roadmaps') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Roadmaps
+            </a>
+            <span class="mx-1 h-5 w-px shrink-0 bg-white/15" aria-hidden="true"></span>
+            <a href="{{ route('links.hub', 'partners') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Links
             </a>
         </nav>
         @if (request()->routeIs('links.*'))

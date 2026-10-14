@@ -1,4 +1,4 @@
-<section class="rounded-lg px-2 py-3 sm:px-3">
+<section class="rounded-lg border-l-4 border-[#ffe600] bg-today px-2 py-3 sm:px-3">
     <h2 class="mb-0 flex w-full items-center gap-2 text-left text-sm font-bold uppercase tracking-wider text-muted">
         <span>For this week</span>
     </h2>
@@ -20,7 +20,7 @@
                     >
                         <button type="button"
                                 data-drag-handle
-                                class="shrink-0 cursor-grab touch-none px-0.5 text-muted/50 opacity-0 transition group-hover:opacity-100 hover:text-muted focus:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-70"
+                                class="hover:text-[#ffe600] focus-visible:text-[#ffe600] shrink-0 cursor-grab touch-none px-0.5 text-muted/50 opacity-0 transition group-hover:opacity-100 focus:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-70"
                                 aria-label="Drag to reorder">
                             <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
@@ -62,13 +62,19 @@
         <div class="group/add mt-2 flex flex-wrap items-center gap-2">
             <button type="button"
                     wire:click="startAdding"
-                    class="flex h-8 w-8 items-center justify-center rounded text-lg leading-none text-muted/40 transition hover:text-link"
+                    class="hover:text-[#ffe600] focus-visible:text-[#ffe600] flex h-8 w-8 items-center justify-center rounded text-lg leading-none text-muted/40 transition"
                     aria-label="Add task">
                 +
             </button>
             <button type="button"
+                    wire:click="copyUnfinishedFromPreviousWeek"
+                    class="hover:text-[#ffe600] focus-visible:text-[#ffe600] text-xs text-muted opacity-0 transition group-hover/add:opacity-100"
+                    aria-label="Copy unfinished milestones from last week">
+                copy unfinished milestones from last week
+            </button>
+            <button type="button"
                     wire:click="addDivider"
-                    class="text-xs text-muted opacity-0 transition group-hover/add:opacity-100 hover:text-link"
+                    class="hover:text-[#ffe600] focus-visible:text-[#ffe600] text-xs text-muted opacity-0 transition group-hover/add:opacity-100"
                     aria-label="Add divider">
                 ---
             </button>
@@ -100,7 +106,7 @@
                         @foreach ($selectableDays as $day)
                             <button type="button"
                                     wire:click="moveToDay('{{ $day['date'] }}')"
-                                    class="rounded border border-white/10 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted transition hover:border-link/40 hover:text-link">
+                                    class="hover:border-[#ffe600] hover:text-[#ffe600] focus-visible:border-[#ffe600] focus-visible:text-[#ffe600] rounded border border-white/10 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted transition">
                                 {{ $day['label'] }}
                             </button>
                         @endforeach

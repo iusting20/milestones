@@ -132,7 +132,7 @@ class LinksTest extends TestCase
         $this->assertDatabaseMissing('links', ['id' => $link->id]);
     }
 
-    public function test_edit_mode_moves_projects_and_groups_with_arrows(): void
+    public function test_edit_mode_reorders_projects_and_groups(): void
     {
         $first = Project::query()->create([
             'hub' => 'partners',
@@ -158,8 +158,10 @@ class LinksTest extends TestCase
         ]);
 
         Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
-            ->call('moveProject', $second->id, 'up')
-            ->call('moveGroup', $apps->id, 'up');
+            ->set('editMode', true)
+            ->assertSeeHtml('draggable="true"')
+            ->call('reorderProjects', [$second->id, $first->id])
+            ->call('reorderGroups', [$apps->id, $docs->id]);
 
         $this->assertSame(1, $second->fresh()->position);
         $this->assertSame(2, $first->fresh()->position);
@@ -184,9 +186,61 @@ class LinksTest extends TestCase
         ]);
 
         Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'active'])
-            ->call('moveProject', $archived->id, 'up');
+            ->call('reorderProjects', [$archived->id, $active->id]);
 
         $this->assertSame(1, $active->fresh()->position);
         $this->assertSame(2, $archived->fresh()->position);
+    }
+
+    public function test_can_add_a_delimiter_between_projects(): void
+    {
+        Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'position' => 1,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
+            ->set('editMode', true)
+            ->assertSee('---')
+            ->call('addDelimiter')
+            ->assertSeeHtml('data-delimiter')
+            ->assertSet('addingProject', false);
+
+        $delimiter = Project::query()->where('hub', 'partners')->where('is_delimiter', true)->first();
+
+        $this->assertNotNull($delimiter);
+        $this->assertSame(2, $delimiter->position);
+
+        $this->get(route('links.hub', ['hub' => 'partners', 'slug' => $delimiter->slug]))
+            ->assertNotFound();
+    }
+
+    public function test_can_move_project_to_the_other_hub(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'position' => 1,
+        ]);
+        Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Beta',
+            'slug' => 'beta',
+            'position' => 2,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
+            ->set('editMode', true)
+            ->assertSee('move to assets')
+            ->call('moveToOtherHub', $project->id)
+            ->assertRedirect(route('links.hub', ['hub' => 'partners', 'slug' => 'beta']));
+
+        $project->refresh();
+
+        $this->assertSame('assets', $project->hub);
+        $this->assertSame('alpha', $project->slug);
     }
 }

@@ -56,7 +56,7 @@ class TaskLogTest extends TestCase
             'showLogControls' => true,
         ])
             ->call('startLogging', $item->id)
-            ->assertSeeHtml('aria-label="Logging since 12:15"')
+            ->assertSeeHtml('aria-label="Edit logging start 12:15"')
             ->assertSee('12:15')
             ->assertSee('Ship feature');
 
@@ -763,6 +763,86 @@ class TaskLogTest extends TestCase
         $this->assertSame(
             '2026-03-18 09:00',
             $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_consecutive_same_title_logs_that_touch_on_the_minute_render_as_one(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $first = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'SPRINGS - menu work',
+            'started_at' => Carbon::parse('2026-03-16 10:30:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 11:07:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        $second = TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'SPRINGS - menu work',
+            'started_at' => Carbon::parse('2026-03-16 11:07:20', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 11:55:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'SPRINGS - menu work',
+            'started_at' => Carbon::parse('2026-03-16 12:10:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 12:40:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Other task',
+            'started_at' => Carbon::parse('2026-03-16 12:40:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-16 13:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        $html = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSeeHtml('wire:key="log-'.$first->id.'-'.$second->id.'"')
+            ->html();
+
+        $mondayColumn = Str::between($html, 'wire:key="day-2026-03-16"', 'wire:key="day-2026-03-17"');
+
+        $this->assertSame(1, substr_count($mondayColumn, 'SPRINGS - menu work · 10:30'));
+        $this->assertSame(1, substr_count($mondayColumn, 'SPRINGS - menu work · 12:10'));
+        $this->assertStringContainsString('10:30', $mondayColumn);
+        $this->assertStringContainsString('11:55', $mondayColumn);
+        $this->assertStringContainsString('1h 24m', $mondayColumn);
+        $this->assertStringNotContainsString('11:07', $mondayColumn);
+        $this->assertStringContainsString('Other task · 12:40', $mondayColumn);
+        $this->assertStringContainsString('12:10', $mondayColumn);
+    }
+
+    public function test_in_progress_timer_start_can_be_edited(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest'));
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'In progress',
+            'logging_started_at' => Carbon::parse('2026-03-18 10:15:00', 'Europe/Bucharest')->utc(),
+            'position' => 1,
+        ]);
+
+        Livewire::test(DayList::class, [
+            'date' => '2026-03-18',
+            'dayLabel' => 'WEDNESDAY',
+            'isToday' => true,
+            'showLogControls' => true,
+        ])
+            ->assertSee('10:15')
+            ->call('startEditingLoggingStart', $item->id)
+            ->assertSet('editingLoggingId', $item->id)
+            ->set('editLoggingStartedAt', '09:40')
+            ->call('finishEditingLoggingStart')
+            ->assertSet('editingLoggingId', null)
+            ->assertSee('09:40');
+
+        $this->assertSame(
+            '2026-03-18 09:40',
+            $item->fresh()->logging_started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i')
         );
     }
 }

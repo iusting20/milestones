@@ -1,6 +1,8 @@
 @php
     $timed = $timed ?? true;
     $todoItemId = $todoItemId ?? null;
+    $startLogId = $startLogId ?? $logId;
+    $finishLogId = $finishLogId ?? $logId;
     $isEditingUntimed = ! $timed
         && $editingTodoItemId !== null
         && $editingTodoItemId === $todoItemId
@@ -71,7 +73,7 @@
     </div>
 @else
     <div @class(['flex flex-wrap items-center gap-1 tabular-nums', $textClass ?? 'text-[10px] text-muted/70'])>
-        @if ($editingLogId === $logId && $editingField === 'started' && $editingContext === $context)
+        @if ($editingLogId === $startLogId && $editingField === 'started' && $editingContext === $context)
             <input type="time"
                    wire:model="editTime"
                    x-data="{ armed: false }"
@@ -83,7 +85,7 @@
                    aria-label="Edit start time" />
         @else
             <button type="button"
-                    wire:click="startEditingTime({{ $logId }}, 'started', '{{ $context }}')"
+                    wire:click="startEditingTime({{ $startLogId }}, 'started', '{{ $context }}')"
                     class="cursor-text rounded px-0.5 hover:bg-white/5 hover:text-body"
                     aria-label="Edit start time {{ $started }}">
                 {{ $started }}
@@ -92,7 +94,7 @@
 
         <span aria-hidden="true">→</span>
 
-        @if ($editingLogId === $logId && $editingField === 'finished' && $editingContext === $context)
+        @if ($editingLogId === $finishLogId && $editingField === 'finished' && $editingContext === $context)
             <input type="time"
                    wire:model="editTime"
                    x-data="{ armed: false }"
@@ -104,7 +106,7 @@
                    aria-label="Edit finish time" />
         @else
             <button type="button"
-                    wire:click="startEditingTime({{ $logId }}, 'finished', '{{ $context }}')"
+                    wire:click="startEditingTime({{ $finishLogId }}, 'finished', '{{ $context }}')"
                     class="cursor-text rounded px-0.5 hover:bg-white/5 hover:text-body"
                     aria-label="Edit finish time {{ $finished }}">
                 {{ $finished }}
@@ -112,7 +114,7 @@
         @endif
 
         @error('editTime')
-            @if ($editingLogId === $logId && $editingContext === $context)
+            @if (in_array($editingLogId, [$startLogId, $finishLogId], true) && $editingContext === $context)
                 <p class="basis-full text-[10px] text-red-400">{{ $message }}</p>
             @endif
         @enderror

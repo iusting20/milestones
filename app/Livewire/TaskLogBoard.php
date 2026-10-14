@@ -205,6 +205,7 @@ class TaskLogBoard extends Component
         TodoItem::query()
             ->whereKey($todoItemId)
             ->where('is_separator', false)
+            ->where('is_completed', true)
             ->whereNotNull('date')
             ->firstOrFail();
 
@@ -291,6 +292,7 @@ class TaskLogBoard extends Component
         $item = TodoItem::query()
             ->whereKey($this->editingTodoItemId)
             ->where('is_separator', false)
+            ->where('is_completed', true)
             ->whereNotNull('date')
             ->firstOrFail();
 
@@ -339,18 +341,20 @@ class TaskLogBoard extends Component
             ->orderBy('id')
             ->get();
 
-        /** @var Collection<string, Collection<int, TodoItem>> $tasksByDate */
-        $tasksByDate = TodoItem::query()
+        /** @var Collection<string, Collection<int, TodoItem>> $completedUntimedByDate */
+        $completedUntimedByDate = TodoItem::query()
             ->where('is_separator', false)
+            ->where('is_completed', true)
             ->whereDate('date', '>=', $start->toDateString())
             ->whereDate('date', '<=', $end->toDateString())
+            ->whereDoesntHave('taskLogs')
             ->orderBy('position')
             ->orderBy('id')
             ->get()
             ->groupBy(fn (TodoItem $item): string => $item->date->toDateString());
 
         $titles = $logs->pluck('title')
-            ->merge($tasksByDate->flatten(1)->pluck('title'))
+            ->merge($completedUntimedByDate->flatten(1)->pluck('title'))
             ->unique()
             ->values();
 
@@ -367,13 +371,17 @@ class TaskLogBoard extends Component
                 ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
                 ->values();
 
+            $dayUntimed = $completedUntimedByDate->get($dateKey, collect());
+
             $dayLogs = $this->dayEntries(
                 $dayTimedLogs,
+                $dayUntimed,
                 $maxMinutes,
                 $colorByTitle,
             );
 
-            $totalMinutes = (int) $dayLogs->sum('minutes');
+            $timedDayLogs = $dayLogs->where('timed', true)->values();
+            $totalMinutes = (int) $timedDayLogs->sum('minutes');
 
             $days[] = [
                 'date' => $dateKey,
@@ -383,17 +391,17 @@ class TaskLogBoard extends Component
                 'totalMinutes' => $totalMinutes,
                 'totalDuration' => $this->formatDuration($totalMinutes),
                 'logs' => $dayLogs,
-                'pieSlices' => $this->pieSlices($dayLogs, $totalMinutes),
+                'pieSlices' => $this->pieSlices($timedDayLogs, $totalMinutes),
             ];
         }
 
-        $hasEntries = $logs->isNotEmpty() || $tasksByDate->flatten(1)->isNotEmpty();
+        $hasEntries = $logs->isNotEmpty() || $completedUntimedByDate->flatten(1)->isNotEmpty();
 
         return view('livewire.task-log-board', [
             'days' => $days,
             'weekNumber' => $this->weekNumber(),
             'hasLogs' => $hasEntries,
-            'stats' => $this->stats($logs, $tasksByDate, $colorByTitle),
+            'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
             'selectableDays' => $this->selectableDays(),
             'tasks' => $this->tasksForLogDate(),
         ]);
@@ -401,17 +409,23 @@ class TaskLogBoard extends Component
 
     /**
      * @param  Collection<int, TaskLog>  $dayTimedLogs
+     * @param  Collection<int, TodoItem>  $dayUntimed
      * @param  array<string, string>  $colorByTitle
-     * @return Collection<int, array{id: int|null, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}>
+     * @return Collection<int, array{id: int|null, todoItemId?: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}>
      */
     private function dayEntries(
         Collection $dayTimedLogs,
+        Collection $dayUntimed,
         int $maxMinutes,
         array $colorByTitle,
     ): Collection {
-        return $dayTimedLogs
-            ->map(fn (TaskLog $log): array => $this->timedEntry($log, $maxMinutes, $colorByTitle))
-            ->values();
+        $timed = $dayTimedLogs
+            ->map(fn (TaskLog $log): array => $this->timedEntry($log, $maxMinutes, $colorByTitle));
+
+        $untimed = $dayUntimed
+            ->map(fn (TodoItem $task): array => $this->untimedDayEntry($task, $colorByTitle));
+
+        return $timed->concat($untimed)->values();
     }
 
     /**
@@ -433,6 +447,27 @@ class TaskLogBoard extends Component
             'duration' => $this->formatDuration($minutes),
             'width' => round(($minutes / $maxMinutes) * 100, 1),
             'color' => $colorByTitle[$log->title],
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $colorByTitle
+     * @return array{id: null, todoItemId: int, key: string, title: string, started: string, finished: string, timed: bool, minutes: int, duration: string, width: float, color: string}
+     */
+    private function untimedDayEntry(TodoItem $task, array $colorByTitle): array
+    {
+        return [
+            'id' => null,
+            'todoItemId' => $task->id,
+            'key' => 'untimed-'.$task->id,
+            'title' => $task->title,
+            'started' => 'N/A',
+            'finished' => 'N/A',
+            'timed' => false,
+            'minutes' => 0,
+            'duration' => 'N/A',
+            'width' => 40.0,
+            'color' => $colorByTitle[$task->title],
         ];
     }
 
@@ -540,17 +575,12 @@ class TaskLogBoard extends Component
 
     /**
      * @param  Collection<int, TaskLog>  $logs
-     * @param  Collection<string, Collection<int, TodoItem>>  $tasksByDate
+     * @param  Collection<string, Collection<int, TodoItem>>  $completedUntimedByDate
      * @param  array<string, string>  $colorByTitle
-     * @return array{totalMinutes: int, totalDuration: string, sessionCount: int, itemCount: int, days: list<array{date: string, label: string, heading: string, totalMinutes: int, totalDuration: string, items: list<array{title: string, minutes: int, duration: string, share: float, width: float, color: string, timed: bool, sessions: list<array{id: int|null, day: string, date: string, started: string, finished: string, timed: bool, minutes: int, duration: string}>}>}>}
+     * @return array{totalMinutes: int, totalDuration: string, sessionCount: int, itemCount: int, days: list<array{date: string, label: string, heading: string, totalMinutes: int, totalDuration: string, items: list<array{title: string, minutes: int, duration: string, share: float, width: float, color: string, timed: bool, sessions: list<array{id: int|null, todoItemId?: int, day: string, date: string, started: string, finished: string, timed: bool, minutes: int, duration: string}>}>}>}
      */
-    private function stats(Collection $logs, Collection $tasksByDate, array $colorByTitle): array
+    private function stats(Collection $logs, Collection $completedUntimedByDate, array $colorByTitle): array
     {
-        $loggedTodoIdsByDate = $logs
-            ->filter(fn (TaskLog $log): bool => $log->todo_item_id !== null)
-            ->groupBy(fn (TaskLog $log): string => $log->finished_at->timezone('Europe/Bucharest')->toDateString())
-            ->map(fn (Collection $dayLogs): array => $dayLogs->pluck('todo_item_id')->unique()->all());
-
         $logsByDate = $logs->groupBy(
             fn (TaskLog $log): string => $log->finished_at->timezone('Europe/Bucharest')->toDateString()
         );
@@ -563,8 +593,11 @@ class TaskLogBoard extends Component
             $day = $weekStart->copy()->addDays($i);
             $dateKey = $day->toDateString();
             $dayLogs = $logsByDate->get($dateKey, collect());
-            $dayTasks = $tasksByDate->get($dateKey, collect());
-            $loggedTodoIds = $loggedTodoIdsByDate->get($dateKey, []);
+            $dayUntimed = $completedUntimedByDate->get($dateKey, collect());
+
+            if ($dayLogs->isEmpty() && $dayUntimed->isEmpty()) {
+                continue;
+            }
 
             $items = $dayLogs
                 ->groupBy(fn (TaskLog $log): string => $log->title)
@@ -601,11 +634,7 @@ class TaskLogBoard extends Component
                     ];
                 });
 
-            foreach ($dayTasks as $task) {
-                if (in_array($task->id, $loggedTodoIds, true)) {
-                    continue;
-                }
-
+            foreach ($dayUntimed as $task) {
                 $title = $task->title ?? '';
 
                 if ($items->has($title)) {
@@ -630,10 +659,6 @@ class TaskLogBoard extends Component
                         'duration' => 'N/A',
                     ]],
                 ];
-            }
-
-            if ($items->isEmpty()) {
-                continue;
             }
 
             $items = $items

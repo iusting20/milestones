@@ -159,7 +159,7 @@
     @endif
 
     @unless ($hasLogs)
-        <p class="text-sm text-muted">No tasks or log entries this week.</p>
+        <p class="text-sm text-muted">No finished log entries this week.</p>
     @endunless
 
     @php
@@ -213,7 +213,6 @@
                             <h3 class="text-base font-semibold uppercase tracking-[0.14em] text-muted sm:text-lg">
                                 {{ $dayStats['heading'] }}
                             </h3>
-                            <span class="text-sm tabular-nums text-body/90 sm:text-base">{{ $dayStats['totalDuration'] }}</span>
                         </header>
 
                         <ul class="space-y-3">
@@ -234,10 +233,7 @@
                                             <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {{ $item['color'] }}"></span>
                                             <span class="truncate text-[15px] text-body">{{ $item['title'] }}</span>
                                         </div>
-                                        <div class="flex shrink-0 items-baseline gap-3 tabular-nums">
-                                            <span class="text-sm font-semibold text-body">{{ $item['duration'] }}</span>
-                                            <span class="text-xs text-muted">{{ $item['share'] }}%</span>
-                                        </div>
+                                        <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['share'] }}%</span>
                                     </div>
                                     <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
                                         <div class="h-full cursor-pointer rounded-full transition-opacity duration-150"

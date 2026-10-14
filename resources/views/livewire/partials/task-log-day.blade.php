@@ -34,10 +34,7 @@
                 </div>
                 <div class="flex h-6 items-center gap-1.5">
                     <div class="min-w-0 flex-1">
-                        <div @class([
-                                 'h-5 rounded-sm transition-opacity duration-150',
-                                 'cursor-pointer' => true,
-                             ])
+                        <div class="h-5 cursor-pointer rounded-sm transition-opacity duration-150"
                              style="width: {{ max(8, $log['width']) }}%; @if ($log['timed']) background-color: {{ $log['color'] }}; @else background-color: transparent; background-image: repeating-linear-gradient(-45deg, {{ $log['color'] }} 0 3px, transparent 3px 7px); @endif"
                              role="img"
                              aria-label="{{ $log['duration'] }}"
@@ -53,6 +50,7 @@
                 </div>
                 @include('livewire.partials.task-log-times', [
                     'logId' => $log['id'],
+                    'todoItemId' => $log['todoItemId'] ?? null,
                     'started' => $log['started'],
                     'finished' => $log['finished'],
                     'timed' => $log['timed'],

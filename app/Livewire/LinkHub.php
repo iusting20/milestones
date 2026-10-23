@@ -337,6 +337,46 @@ class LinkHub extends Component
         }
     }
 
+    /**
+     * @param  array<int, int|string>  $ids
+     */
+    public function reorderLinks(array $ids): void
+    {
+        $project = $this->selectedProject();
+
+        if (! $project) {
+            return;
+        }
+
+        $ids = array_values(array_map(intval(...), $ids));
+
+        if ($ids === []) {
+            return;
+        }
+
+        $links = Link::query()
+            ->whereIn('id', $ids)
+            ->whereHas('linkGroup', fn ($query) => $query->where('project_id', $project->id))
+            ->get();
+
+        if ($links->count() !== count($ids) || $links->pluck('link_group_id')->unique()->count() !== 1) {
+            return;
+        }
+
+        $groupId = (int) $links->first()->link_group_id;
+        $expected = Link::query()->where('link_group_id', $groupId)->pluck('id');
+
+        if ($expected->count() !== count($ids) || $expected->diff($ids)->isNotEmpty()) {
+            return;
+        }
+
+        $byId = $links->keyBy('id');
+
+        foreach ($ids as $index => $id) {
+            $byId[$id]->update(['position' => $index + 1]);
+        }
+    }
+
     public function startAddLink(int $groupId): void
     {
         $this->findGroup($groupId);
@@ -378,9 +418,27 @@ class LinkHub extends Component
         $this->resetLinkForms();
     }
 
+    public function addLinkDelimiter(int $groupId): void
+    {
+        $group = $this->findGroup($groupId);
+        $max = (int) $group->links()->max('position');
+
+        Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => '',
+            'url' => '',
+            'position' => $max + 1,
+            'is_delimiter' => true,
+        ]);
+    }
+
     public function startEditLink(int $id): void
     {
         $link = $this->findLink($id);
+
+        if ($link->is_delimiter) {
+            return;
+        }
         $this->editingLinkId = $link->id;
         $this->editLinkTitle = $link->title;
         $this->editLinkUrl = $link->url;

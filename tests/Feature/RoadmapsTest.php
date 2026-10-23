@@ -68,18 +68,48 @@ class RoadmapsTest extends TestCase
         $this->travelTo('2026-09-18 12:00:00');
 
         Livewire::test(Roadmaps::class)
-            ->call('selectDay', '2026-09-03')
+            ->call('openCreate')
+            ->assertSet('creating', true)
+            ->assertSet('startedOn', '2026-09-18')
             ->set('newTitle', 'Auth rewrite')
+            ->set('startedOn', '2026-09-03')
             ->call('addItem')
+            ->assertSet('creating', false)
             ->assertSee('Auth rewrite')
             ->assertSee('pending')
-            ->assertSee('Add from 3 Sep');
+            ->assertSee('Add project');
 
         $item = RoadmapItem::query()->where('title', 'Auth rewrite')->first();
 
         $this->assertNotNull($item);
         $this->assertSame('2026-09-03', $item->started_on->toDateString());
         $this->assertNull($item->completed_on);
+    }
+
+    public function test_status_counts_split_active_completed_and_future_ranges(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'In progress',
+            'started_on' => '2026-09-01',
+            'completed_on' => null,
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Finished',
+            'started_on' => '2026-09-02',
+            'completed_on' => '2026-09-10',
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Later',
+            'started_on' => '2026-10-01',
+            'completed_on' => null,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->assertSee('1 active')
+            ->assertSee('1 completed')
+            ->assertSee('1 not yet started');
     }
 
     public function test_does_not_add_blank_title(): void

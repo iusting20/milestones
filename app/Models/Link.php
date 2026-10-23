@@ -13,12 +13,14 @@ class Link extends Model
         'url',
         'note',
         'position',
+        'is_delimiter',
     ];
 
     protected function casts(): array
     {
         return [
             'position' => 'integer',
+            'is_delimiter' => 'boolean',
         ];
     }
 

@@ -97,20 +97,63 @@
         background-color: #7cb518;
     }
 
+    .roadmap-track {
+        position: relative;
+        min-width: 0;
+    }
+
+    .roadmap-track-done {
+        --roadmap-color: #7cb518;
+        --roadmap-ink: #111;
+    }
+
     .roadmap-bar {
         @apply relative flex min-w-0 items-center gap-1 px-1.5 text-[10px] font-semibold leading-none tracking-wide;
         height: 18px;
         transition: opacity 120ms ease;
     }
 
+    .roadmap-bar-from-dot {
+        margin-left: calc((100% - (var(--span) - 1) * 0.125rem) / var(--span) / 2 + 15px);
+    }
+
+    .roadmap-bar-to-dot {
+        margin-right: calc((100% - (var(--span) - 1) * 0.125rem) / var(--span) / 2 + 15px);
+    }
+
     .roadmap-bar-dimmed {
         opacity: 0.3;
     }
 
-    .roadmap-bar-start-flag {
-        width: 10px;
-        height: 12px;
+    .roadmap-endpoint {
+        position: absolute;
+        top: 50%;
+        z-index: 1;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background-color: var(--roadmap-color);
+        color: var(--roadmap-ink);
+        box-shadow: 0 0 0 2px #0b1220;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+    }
+
+    .roadmap-endpoint svg {
+        width: 18px;
+        height: 18px;
         display: block;
+    }
+
+    .roadmap-endpoint-start {
+        left: calc((100% - (var(--span) - 1) * 0.125rem) / var(--span) / 2);
+    }
+
+    .roadmap-endpoint-end {
+        left: calc(100% - (100% - (var(--span) - 1) * 0.125rem) / var(--span) / 2);
     }
 
     .roadmap-bar-done {

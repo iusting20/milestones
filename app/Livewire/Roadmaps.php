@@ -35,6 +35,8 @@ class Roadmaps extends Component
 
     public string $startedOn = '';
 
+    public bool $creating = false;
+
     public function mount(): void
     {
         if ($this->month === '' || ! $this->parseMonth($this->month)) {
@@ -80,6 +82,18 @@ class Roadmaps extends Component
         $this->startedOn = $date;
     }
 
+    public function openCreate(): void
+    {
+        $this->newTitle = '';
+        $this->startedOn = now()->toDateString();
+        $this->creating = true;
+    }
+
+    public function closeCreate(): void
+    {
+        $this->creating = false;
+    }
+
     public function addItem(): void
     {
         $title = trim($this->newTitle);
@@ -96,6 +110,8 @@ class Roadmaps extends Component
         ]);
 
         $this->newTitle = '';
+        $this->creating = false;
+        $this->month = $startedOn->format('Y-m');
     }
 
     public function toggleComplete(int $id): void
@@ -196,7 +212,15 @@ class Roadmaps extends Component
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
             'visibleItems' => $visibleItems,
-            'pendingCount' => $visibleItems->filter(fn (RoadmapItem $item) => $item->isPending())->count(),
+            'activeCount' => RoadmapItem::query()
+                ->whereDate('started_on', '<=', $today->toDateString())
+                ->whereNull('completed_on')
+                ->count(),
+            'completedCount' => RoadmapItem::query()->whereNotNull('completed_on')->count(),
+            'notStartedCount' => RoadmapItem::query()
+                ->whereDate('started_on', '>', $today->toDateString())
+                ->whereNull('completed_on')
+                ->count(),
         ]);
     }
 

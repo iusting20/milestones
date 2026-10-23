@@ -156,17 +156,33 @@ class LinksTest extends TestCase
             'name' => 'Apps',
             'position' => 2,
         ]);
+        $wiki = Link::query()->create([
+            'link_group_id' => $docs->id,
+            'title' => 'Wiki',
+            'url' => 'https://wiki.example.com',
+            'position' => 1,
+        ]);
+        $drive = Link::query()->create([
+            'link_group_id' => $docs->id,
+            'title' => 'Drive',
+            'url' => 'https://drive.example.com',
+            'position' => 2,
+        ]);
 
         Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
             ->set('editMode', true)
             ->assertSeeHtml('draggable="true"')
+            ->assertSeeHtml('Drag Wiki')
             ->call('reorderProjects', [$second->id, $first->id])
-            ->call('reorderGroups', [$apps->id, $docs->id]);
+            ->call('reorderGroups', [$apps->id, $docs->id])
+            ->call('reorderLinks', [$drive->id, $wiki->id]);
 
         $this->assertSame(1, $second->fresh()->position);
         $this->assertSame(2, $first->fresh()->position);
         $this->assertSame(1, $apps->fresh()->position);
         $this->assertSame(2, $docs->fresh()->position);
+        $this->assertSame(1, $drive->fresh()->position);
+        $this->assertSame(2, $wiki->fresh()->position);
     }
 
     public function test_archived_project_does_not_swap_with_active_neighbor(): void
@@ -186,7 +202,12 @@ class LinksTest extends TestCase
         ]);
 
         Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'active'])
+            ->assertSee('Archived')
+            ->assertSeeHtml('open: false')
             ->call('reorderProjects', [$archived->id, $active->id]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'archived'])
+            ->assertSeeHtml('open: true');
 
         $this->assertSame(1, $active->fresh()->position);
         $this->assertSame(2, $archived->fresh()->position);
@@ -215,6 +236,51 @@ class LinksTest extends TestCase
 
         $this->get(route('links.hub', ['hub' => 'partners', 'slug' => $delimiter->slug]))
             ->assertNotFound();
+    }
+
+    public function test_can_add_a_link_break_and_reorder_it(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Alpha',
+            'slug' => 'alpha',
+            'position' => 1,
+        ]);
+        $group = LinkGroup::query()->create([
+            'project_id' => $project->id,
+            'name' => 'Docs',
+            'position' => 1,
+        ]);
+        $link = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => 'Wiki',
+            'url' => 'https://wiki.example.com',
+            'position' => 1,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
+            ->set('editMode', true)
+            ->call('addLinkDelimiter', $group->id)
+            ->assertSeeHtml('data-link-break')
+            ->assertSeeHtml('Add break');
+
+        $delimiter = Link::query()->where('link_group_id', $group->id)->where('is_delimiter', true)->first();
+
+        $this->assertNotNull($delimiter);
+        $this->assertSame(2, $delimiter->position);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'alpha'])
+            ->call('reorderLinks', [$delimiter->id, $link->id])
+            ->call('startEditLink', $delimiter->id)
+            ->assertSet('editingLinkId', null);
+
+        $this->assertSame(1, $delimiter->fresh()->position);
+        $this->assertSame(2, $link->fresh()->position);
+
+        $this->get(route('links.hub', ['hub' => 'partners', 'slug' => 'alpha']))
+            ->assertOk()
+            ->assertSeeHtml('data-link-break')
+            ->assertDontSee('href=""', false);
     }
 
     public function test_can_move_project_to_the_other_hub(): void

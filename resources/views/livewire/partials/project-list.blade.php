@@ -26,23 +26,18 @@
 @endif
 
 @php
-    $projectBuckets = [
-        $projects->where('is_archived', false)->values(),
-        $projects->where('is_archived', true)->values(),
-    ];
+    $activeProjects = $projects->where('is_archived', false)->values();
+    $archivedProjects = $projects->where('is_archived', true)->values();
 @endphp
 
 @if ($projects->isEmpty())
     <p class="px-2 py-2 text-xs text-muted">No projects</p>
 @endif
 
-@foreach ($projectBuckets as $bucket)
-    @if ($bucket->isEmpty())
-        @continue
-    @endif
-    <ul @class(['space-y-0.5', 'mt-2' => $loop->last && $projectBuckets[0]->isNotEmpty() && $bucket->first()->is_archived])
+@if ($activeProjects->isNotEmpty())
+    <ul class="space-y-0.5"
         @if ($editMode) x-data="linkSortList('reorderProjects')" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)" @endif>
-        @foreach ($bucket as $project)
+        @foreach ($activeProjects as $project)
             <li class="flex items-center gap-0.5" wire:key="project-{{ $project->id }}" data-sort-item="{{ $project->id }}">
                 @if ($project->is_delimiter)
                     @if ($editMode)
@@ -86,4 +81,43 @@
             </li>
         @endforeach
     </ul>
-@endforeach
+@endif
+
+@if ($archivedProjects->isNotEmpty())
+    <div class="mt-3" x-data="{ open: {{ $selected?->is_archived ? 'true' : 'false' }} }">
+        <button type="button"
+                x-on:click="open = !open"
+                class="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[10px] font-bold uppercase tracking-widest text-muted hover:text-body"
+                :aria-expanded="open.toString()">
+            <span x-cloak x-show="open" class="text-[9px] leading-none">▼</span>
+            <span :hidden="open" aria-hidden="true" style="display:inline-block;width:0;height:0;border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;border-left:5px solid currentColor;vertical-align:-1px"></span>
+            Archived
+            <span class="font-normal tracking-normal">{{ $archivedProjects->count() }}</span>
+        </button>
+        <ul class="mt-0.5 space-y-0.5" x-show="open" x-cloak
+            @if ($editMode) x-data="linkSortList('reorderProjects')" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)" @endif>
+            @foreach ($archivedProjects as $project)
+                <li class="flex items-center gap-0.5" wire:key="project-{{ $project->id }}" data-sort-item="{{ $project->id }}">
+                    @if ($editMode)
+                        <button type="button" draggable="true" x-on:dragstart.stop="start($event)"
+                                class="shrink-0 text-muted hover:text-body" style="cursor:grab"
+                                aria-label="Drag {{ $project->name }}">
+                            @include('livewire.partials.drag-handle')
+                        </button>
+                    @endif
+                    <button type="button"
+                            wire:click="selectProject('{{ $project->slug }}')"
+                            @class([
+                                'flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1.5 text-left text-sm no-underline transition',
+                                'bg-panel text-body font-semibold' => $selected?->id === $project->id,
+                                'text-muted hover:bg-white/5 hover:text-body' => $selected?->id !== $project->id,
+                                'opacity-50' => $project->is_archived,
+                            ])>
+                        <span class="truncate">{{ $project->name }}</span>
+                        <span class="ml-auto text-[10px] uppercase text-muted">arch</span>
+                    </button>
+                </li>
+            @endforeach
+        </ul>
+    </div>
+@endif

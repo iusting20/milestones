@@ -18,9 +18,11 @@
         </button>
     </div>
 
-    <div class="mb-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-muted">
-        <span>{{ $visibleItems->count() }} ranges</span>
-        <span>{{ $pendingCount }} pending</span>
+    <div class="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11px] uppercase tracking-[0.18em] text-muted">
+        <span class="font-bold">{{ $visibleItems->count() }} projects</span>
+        <span>{{ $activeCount }} active</span>
+        <span>{{ $completedCount }} completed</span>
+        <span>{{ $notStartedCount }} not yet started</span>
     </div>
 
     <div x-data="{ hoverId: null }" class="flex items-start gap-3">
@@ -64,26 +66,43 @@
                                              @mouseleave="hoverId = null"
                                              :class="{ 'roadmap-bar-dimmed': hoverId !== null && hoverId !== {{ $segment['id'] }} }"
                                              @class([
-                                                 'roadmap-bar',
+                                                 'roadmap-track',
                                                  'roadmap-color-'.$segment['colorIndex'] => $segment['pending'],
-                                                 'roadmap-bar-pending' => $segment['pending'],
-                                                 'roadmap-bar-done' => ! $segment['pending'],
-                                                 'rounded-l-sm' => ! $segment['continuesLeft'],
-                                                 'rounded-r-sm' => ! $segment['continuesRight'],
-                                                 'rounded-l-none' => $segment['continuesLeft'],
-                                                 'rounded-r-none' => $segment['continuesRight'],
-                                                 'justify-end' => $segment['continuesLeft'] && ! $segment['continuesRight'],
+                                                 'roadmap-track-done' => ! $segment['pending'],
                                              ])
-                                             style="grid-column: {{ $segment['col'] }} / span {{ $segment['span'] }}">
+                                             style="grid-column: {{ $segment['col'] }} / span {{ $segment['span'] }}; --span: {{ $segment['span'] }}">
                                             @if (! $segment['continuesLeft'])
-                                                <svg class="roadmap-bar-start-flag shrink-0" viewBox="0 0 10 12" aria-hidden="true">
-                                                    <path fill="currentColor" d="M1 0.75h1.25v10.5H1zM2.25 1.1h6.1L6.7 3.65 8.35 6.2H2.25z"/>
-                                                </svg>
-                                                <span class="shrink-0 whitespace-pre" aria-hidden="true"> --- </span>
+                                                <span class="roadmap-endpoint roadmap-endpoint-start" aria-hidden="true">
+                                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                                                        <path d="M8 2.2v4.2"/>
+                                                        <path d="M4.15 4.7a5 5 0 1 0 7.7 0"/>
+                                                    </svg>
+                                                </span>
                                             @endif
+                                            @if (! $segment['pending'] && ! $segment['continuesRight'])
+                                                <span class="roadmap-endpoint roadmap-endpoint-end" aria-hidden="true">
+                                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M3.2 8.2 6.4 11.4 12.8 4.6"/>
+                                                    </svg>
+                                                </span>
+                                            @endif
+                                            <div @class([
+                                                'roadmap-bar',
+                                                'roadmap-color-'.$segment['colorIndex'] => $segment['pending'],
+                                                'roadmap-bar-pending' => $segment['pending'],
+                                                'roadmap-bar-done' => ! $segment['pending'],
+                                                'roadmap-bar-from-dot' => ! $segment['continuesLeft'] && ! ($segment['span'] === 1 && ! $segment['pending'] && ! $segment['continuesRight']),
+                                                'roadmap-bar-to-dot' => ! $segment['pending'] && ! $segment['continuesRight'] && ! ($segment['span'] === 1 && ! $segment['continuesLeft']),
+                                                'rounded-l-sm' => ! $segment['continuesLeft'],
+                                                'rounded-r-sm' => ! $segment['continuesRight'],
+                                                'rounded-l-none' => $segment['continuesLeft'],
+                                                'rounded-r-none' => $segment['continuesRight'],
+                                                'justify-end' => $segment['continuesLeft'] && ! $segment['continuesRight'],
+                                            ])>
                                             @if (! $segment['continuesLeft'] || ! $segment['continuesRight'])
                                                 <span class="truncate">{{ $segment['title'] }}</span>
                                             @endif
+                                            </div>
                                         </div>
                                     @endforeach
                                 </div>
@@ -210,13 +229,57 @@
     </nav>
     </div>
 
-    <form wire:submit="addItem" class="mt-6 flex max-w-xl flex-col gap-2 sm:flex-row">
-        <input type="text"
-               wire:model="newTitle"
-               placeholder="Start a range…"
-               class="flex-1 rounded border border-white/10 bg-sidebar px-3 py-2 text-sm focus:border-link focus:outline-none" />
-        <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-2 text-sm font-medium hover:border-link/40">
-            Add from {{ \Carbon\Carbon::parse($startedOn)->format('j M') }}
-        </button>
-    </form>
+    <button type="button"
+            wire:click="openCreate"
+            class="mt-6 rounded border border-white/15 px-4 py-2 text-sm font-medium text-muted hover:bg-panel hover:text-body">
+        Add project
+    </button>
+
+    @if ($creating)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             wire:keydown.escape.window="closeCreate"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="start-project-title">
+            <div class="absolute inset-0 bg-black/60" wire:click="closeCreate" aria-hidden="true"></div>
+
+            <form wire:submit="addItem" class="relative z-10 w-full max-w-md rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 id="start-project-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        Start a project
+                    </h2>
+                    <button type="button"
+                            wire:click="closeCreate"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Close">×</button>
+                </div>
+
+                <label class="mb-3 block text-xs uppercase tracking-[0.14em] text-muted">
+                    Name
+                    <input type="text"
+                           wire:model="newTitle"
+                           autofocus
+                           class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                </label>
+
+                <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                    Start date
+                    <input type="date"
+                           wire:model="startedOn"
+                           class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                </label>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button"
+                            wire:click="closeCreate"
+                            class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">
+                        Cancel
+                    </button>
+                    <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
+                        Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endif
 </div>

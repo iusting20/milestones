@@ -102,10 +102,28 @@
                         @endif
                     </div>
 
-                    <ul class="space-y-2">
+                    <ul class="space-y-2"
+                        @if ($editMode) x-data="linkSortList('reorderLinks')" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)" @endif>
                         @forelse ($group->links as $link)
-                            <li class="group/link flex flex-wrap items-baseline gap-x-2 gap-y-1" wire:key="link-{{ $link->id }}">
-                                @if ($editingLinkId === $link->id)
+                            <li @class([
+                                    'group/link flex flex-wrap items-baseline gap-x-2 gap-y-1',
+                                    'min-h-4 items-center' => $link->is_delimiter,
+                                ]) wire:key="link-{{ $link->id }}" data-sort-item="{{ $link->id }}" @if ($link->is_delimiter) data-link-break @endif>
+                                @if ($link->is_delimiter)
+                                    @if ($editMode)
+                                        <button type="button" draggable="true" x-on:dragstart.stop="start($event)"
+                                                class="self-center text-muted hover:text-body" style="cursor:grab"
+                                                aria-label="Drag break">
+                                            @include('livewire.partials.drag-handle')
+                                        </button>
+                                        <button type="button"
+                                                wire:click="deleteLink({{ $link->id }})"
+                                                wire:confirm="Remove this break?"
+                                                class="text-[10px] leading-none text-muted/50 hover:text-red-400"
+                                                aria-label="Remove break">x</button>
+                                    @endif
+                                    <span class="block h-4 flex-1" aria-hidden="true"></span>
+                                @elseif ($editingLinkId === $link->id)
                                     <form wire:submit="saveEditLink" class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
                                         <input type="text" wire:model="editLinkTitle" placeholder="Title"
                                                class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:w-40" />
@@ -117,6 +135,13 @@
                                         <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
                                     </form>
                                 @else
+                                    @if ($editMode)
+                                        <button type="button" draggable="true" x-on:dragstart.stop="start($event)"
+                                                class="self-center text-muted hover:text-body" style="cursor:grab"
+                                                aria-label="Drag {{ $link->title }}">
+                                            @include('livewire.partials.drag-handle')
+                                        </button>
+                                    @endif
                                     <span class="text-link" aria-hidden="true">◆</span>
                                     <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer"
                                        class="font-medium text-link no-underline hover:underline">{{ $link->title }}</a>
@@ -151,8 +176,13 @@
                                 <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
                             </form>
                         @else
-                            <button type="button" wire:click="startAddLink({{ $group->id }})"
-                                    class="mt-3 text-sm text-link no-underline hover:underline">+ Add link</button>
+                            <div class="mt-3 flex items-center gap-3">
+                                <button type="button" wire:click="startAddLink({{ $group->id }})"
+                                        class="text-sm text-link no-underline hover:underline">+ Add link</button>
+                                <button type="button" wire:click="addLinkDelimiter({{ $group->id }})"
+                                        class="text-[10px] leading-none tracking-widest text-muted/40 transition hover:text-link"
+                                        aria-label="Add break">---</button>
+                            </div>
                         @endif
                     @endif
                 </section>

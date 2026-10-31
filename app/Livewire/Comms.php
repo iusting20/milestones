@@ -325,28 +325,48 @@ class Comms extends Component
             'panels' => [
                 [
                     'title' => 'Clients',
-                    'rows' => $clients,
+                    'rows' => $this->byStaleness($clients, $latestByProject),
                     'latest' => $latestByProject,
                     'reviews' => $latestReviewByProject,
                     'empty' => 'No clients',
                 ],
                 [
+                    'title' => 'Key people',
+                    'rows' => $this->byStaleness($people, $latestByPerson),
+                    'latest' => $latestByPerson,
+                    'reviews' => $latestReviewByPerson,
+                    'empty' => 'No key people',
+                ],
+                [
                     'title' => 'Assets',
-                    'rows' => $assets,
+                    'rows' => $this->byStaleness($assets, $latestByProject),
                     'latest' => $latestByProject,
                     'reviews' => $latestReviewByProject,
                     'empty' => 'No assets',
                 ],
-                [
-                    'title' => 'People',
-                    'rows' => $people,
-                    'latest' => $latestByPerson,
-                    'reviews' => $latestReviewByPerson,
-                    'empty' => 'No people',
-                ],
             ],
             'types' => CommunicationType::cases(),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, Project|Person>  $rows
+     * @param  Collection<int, Communication>  $latest
+     * @return Collection<int, Project|Person>
+     */
+    private function byStaleness(Collection $rows, Collection $latest): Collection
+    {
+        return $rows->sortBy(function (Project|Person $row) use ($latest): array {
+            $occurredOn = $latest->get($row->id)?->occurred_on;
+
+            return [
+                $occurredOn === null ? 0 : 1,
+                $occurredOn?->timestamp ?? 0,
+                $row->position ?? 0,
+                $row->name,
+                $row->id,
+            ];
+        })->values();
     }
 
     /**

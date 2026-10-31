@@ -57,10 +57,10 @@ class CommsTest extends TestCase
             ->assertOk()
             ->assertSee('Comms')
             ->assertSee('OCTOBER 2026')
-            ->assertSeeInOrder(['Clients', 'Assets', 'People'])
+            ->assertSeeInOrder(['Clients', 'Key people', 'Assets'])
             ->assertSee('Tudia')
             ->assertSee('Radiologie')
-            ->assertSee('No people')
+            ->assertSee('No key people')
             ->assertDontSee('Add entry')
             ->assertDontSee('Old Client')
             ->assertDontSee('Old Asset')
@@ -345,8 +345,7 @@ class CommsTest extends TestCase
             ->assertSee('Last review meeting: 2 weeks ago')
             ->assertSee('Last comm.: none yet')
             ->assertSee('Last review meeting: none yet')
-            ->assertSee('Tudia')
-            ->assertSee('Northwind');
+            ->assertSeeInOrder(['Northwind', 'Tudia']);
 
         $this->assertNull($quiet->communications()->first());
     }
@@ -377,7 +376,7 @@ class CommsTest extends TestCase
         ]);
 
         Livewire::test(Comms::class)
-            ->assertSeeInOrder(['Assets', 'Radiologie', 'People', 'Alex Pal'])
+            ->assertSeeInOrder(['Key people', 'Alex Pal', 'Assets', 'Radiologie'])
             ->assertSee('Last comm.: 1 week ago')
             ->assertSee('Last review meeting: 1 week ago')
             ->assertSee('Last comm.: today')

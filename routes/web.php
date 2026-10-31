@@ -1,10 +1,17 @@
 <?php
 
+use App\Http\Controllers\LoginController;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\LinkHub;
 use App\Livewire\TaskLogBoard;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/login', [LoginController::class, 'create'])->name('login');
+Route::post('/login', [LoginController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('login.store');
+Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
 Route::redirect('/', '/milestones');
 
@@ -18,6 +25,8 @@ Route::view('/backlog', 'backlog')->name('backlog');
 Route::get('/backlog/drip-matrix', BacklogDripMatrix::class)->name('backlog.drip-matrix');
 
 Route::view('/roadmaps', 'roadmaps')->name('roadmaps');
+
+Route::view('/comms', 'comms')->name('comms');
 
 Route::redirect('/links', '/links/partners');
 

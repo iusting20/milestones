@@ -31,6 +31,11 @@ class Project extends Model
         return $this->hasMany(LinkGroup::class)->orderBy('position');
     }
 
+    public function communications(): HasMany
+    {
+        return $this->hasMany(Communication::class)->orderBy('occurred_on')->orderBy('id');
+    }
+
     public static function uniqueSlug(string $hub, string $name, ?int $ignoreId = null): string
     {
         $base = Str::slug($name) ?: 'project';

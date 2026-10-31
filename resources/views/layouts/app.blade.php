@@ -26,11 +26,19 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Roadmaps
             </a>
+            <a href="{{ route('comms') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('comms') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Comms
+            </a>
             <span class="mx-1 h-5 w-px shrink-0 bg-white/15" aria-hidden="true"></span>
             <a href="{{ route('links.hub', 'partners') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Links
             </a>
+            <form method="POST" action="{{ route('logout') }}" class="ml-auto shrink-0">
+                @csrf
+                <button type="submit" class="rounded px-3 py-1.5 text-muted hover:text-body">Log out</button>
+            </form>
         </nav>
         @if (request()->routeIs('links.*'))
             <nav class="mx-auto flex max-w-6xl gap-1 border-t border-white/5 px-3 py-2 text-sm sm:px-4">

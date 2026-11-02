@@ -150,6 +150,43 @@ class ClientWeekBoardTest extends TestCase
             ->call('addCard', $client->id, 'planned');
     }
 
+    public function test_can_rename_card_inline_without_renaming_started_milestone(): void
+    {
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Old']);
+
+        $component = Livewire::test(ClientWeekBoard::class)
+            ->call('startCard', $item->id)
+            ->call('startEditingCard', $item->id)
+            ->assertSet('editCardTitle', 'Old')
+            ->set('editCardTitle', '  New title  ')
+            ->call('saveCardTitle')
+            ->assertSet('editingCardId', null)
+            ->assertSee('New title');
+
+        $this->assertSame('New title', $item->fresh()->title);
+        $this->assertSame('Acme - Old', \App\Models\TodoItem::query()->sole()->title);
+
+        $component->call('startEditingCard', $item->id)
+            ->set('editCardTitle', '   ')
+            ->call('saveCardTitle')
+            ->call('startEditingCard', $item->id)
+            ->set('editCardTitle', 'Discarded')
+            ->call('cancelEditingCard');
+
+        $this->assertSame('New title', $item->fresh()->title);
+    }
+
+    public function test_cannot_edit_card_from_other_view(): void
+    {
+        $asset = $this->client('Website', 1, 'assets');
+        $item = WeekBoardItem::factory()->create(['project_id' => $asset->id]);
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        Livewire::test(ClientWeekBoard::class)->call('startEditingCard', $item->id);
+    }
+
     public function test_reorder_ignores_unknown_lane(): void
     {
         $item = WeekBoardItem::factory()->create();

@@ -28,6 +28,10 @@ class ClientWeekBoard extends Component
 
     public ?string $addingLane = null;
 
+    public ?int $editingCardId = null;
+
+    public string $editCardTitle = '';
+
     public function startAdding(int $projectId, string $status): void
     {
         $this->addingLane = $projectId.'-'.$status;
@@ -121,6 +125,42 @@ class ClientWeekBoard extends Component
         });
     }
 
+    public function startEditingCard(int $id): void
+    {
+        $item = $this->cardInView($id);
+
+        $this->editingCardId = $item->id;
+        $this->editCardTitle = $item->title;
+    }
+
+    /**
+     * Save the edited card title (card only; an already-started milestone keeps its title).
+     */
+    public function saveCardTitle(): void
+    {
+        if ($this->editingCardId === null) {
+            return;
+        }
+
+        $title = trim($this->editCardTitle);
+
+        if ($title !== '') {
+            $item = $this->cardInView($this->editingCardId);
+
+            if ($item->title !== $title) {
+                $item->update(['title' => $title]);
+            }
+        }
+
+        $this->cancelEditingCard();
+    }
+
+    public function cancelEditingCard(): void
+    {
+        $this->editingCardId = null;
+        $this->editCardTitle = '';
+    }
+
     public function deleteCard(int $id): void
     {
         WeekBoardItem::query()->whereKey($id)->delete();
@@ -193,6 +233,14 @@ class ClientWeekBoard extends Component
             'items' => $items,
             'statuses' => WeekBoardStatus::cases(),
         ]);
+    }
+
+    private function cardInView(int $id): WeekBoardItem
+    {
+        return WeekBoardItem::query()
+            ->whereKey($id)
+            ->whereIn('project_id', $this->clientsQuery()->select('id'))
+            ->firstOrFail();
     }
 
     private function hub(): string

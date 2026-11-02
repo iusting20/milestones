@@ -85,11 +85,26 @@
                                                     <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
                                                 </svg>
                                             </button>
-                                            <span @class([
-                                                'min-w-0 flex-1 leading-snug',
+                                            @if ($editingCardId === $item->id)
+                                                <input type="text"
+                                                       wire:model="editCardTitle"
+                                                       wire:key="edit-card-{{ $item->id }}"
+                                                       x-data="{ cancelled: false }"
+                                                       x-init="$nextTick(() => { $el.focus(); $el.select() })"
+                                                       x-on:keydown.enter.prevent="cancelled = true; $wire.saveCardTitle()"
+                                                       x-on:keydown.escape.prevent="cancelled = true; $wire.cancelEditingCard()"
+                                                       x-on:blur="if (! cancelled) { $wire.saveCardTitle() }"
+                                                       class="min-w-0 flex-1 rounded border border-white/10 bg-canvas px-1 py-0.5 text-sm text-body"
+                                                       aria-label="Card title">
+                                            @else
+                                            <span wire:dblclick="startEditingCard({{ $item->id }})"
+                                                  title="Double-click to edit"
+                                                  @class([
+                                                'min-w-0 flex-1 cursor-text select-none leading-snug',
                                                 'text-muted line-through' => $status === \App\Enums\WeekBoardStatus::Done,
                                                 'text-body' => $status !== \App\Enums\WeekBoardStatus::Done,
                                             ])>{{ $item->title }}</span>
+                                            @endif
                                             <span class="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
                                                 @if ($item->todoItem === null)
                                                     <button type="button"

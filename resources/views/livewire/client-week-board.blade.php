@@ -105,6 +105,15 @@
                                                 'text-body' => $status !== \App\Enums\WeekBoardStatus::Done,
                                             ])>{{ $item->title }}</span>
                                             @endif
+                                            @if ($item->todoItem?->isLogging())
+                                                <span class="flex shrink-0 items-center self-center text-link" title="Timer running on Milestones">
+                                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                                        <circle cx="12" cy="14" r="7"/>
+                                                    </svg>
+                                                    <span class="sr-only">Timer running</span>
+                                                </span>
+                                            @endif
                                             <span class="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
                                                 @if ($item->todoItem === null)
                                                     <button type="button"

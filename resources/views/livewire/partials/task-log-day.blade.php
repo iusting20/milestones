@@ -64,6 +64,30 @@
         @endforelse
     </div>
 
+    @php($idle = $day['idle'])
+    <div class="mt-3 border-t border-white/10 pt-3" data-idle-bar="{{ $day['date'] }}">
+        <div class="mb-1 flex items-baseline justify-between text-[10px] uppercase tracking-[0.16em] text-muted">
+            <span>Idle 08–17</span>
+            <span class="text-faint">{{ $idle['idleMinutes'] > 0 ? $idle['idleDuration'] : '—' }}</span>
+        </div>
+        <div class="relative h-3 w-full overflow-hidden rounded-sm bg-white/5 ring-1 ring-white/10">
+            @if ($idle['future'])
+                <div class="absolute inset-y-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_3px,rgba(255,255,255,0.04)_3px,rgba(255,255,255,0.04)_6px)]"
+                     style="left: {{ $idle['future']['left'] }}%; width: {{ $idle['future']['width'] }}%"></div>
+            @endif
+            @foreach ($idle['segments'] as $segment)
+                <div class="absolute inset-y-0 bg-zinc-500/80 hover:bg-zinc-400"
+                     style="left: {{ $segment['left'] }}%; width: {{ $segment['width'] }}%"
+                     title="{{ $segment['label'] }}"></div>
+            @endforeach
+        </div>
+        <div class="relative mt-1 h-3 text-[9px] text-faint">
+            @foreach ($idle['ticks'] as $tick)
+                <span class="absolute {{ $loop->first ? '' : ($loop->last ? '-translate-x-full' : '-translate-x-1/2') }}" style="left: {{ $tick['left'] }}%">{{ $tick['hour'] }}</span>
+            @endforeach
+        </div>
+    </div>
+
     <div class="mt-3 border-t border-white/10 pt-3">
         <div class="mx-auto flex h-48 w-48 items-center justify-center sm:h-52 sm:w-52">
             @if ($day['pieSlices'] === [])

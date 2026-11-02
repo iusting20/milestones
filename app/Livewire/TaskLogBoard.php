@@ -2,9 +2,10 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
+use App\Support\Clock;
+use App\Support\IdleTimeline;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -405,6 +406,10 @@ class TaskLogBoard extends Component
                 'totalDuration' => $this->formatDuration($totalMinutes),
                 'logs' => $dayLogs,
                 'pieSlices' => $this->pieSlices($timedDayLogs, $totalMinutes),
+                'idle' => IdleTimeline::forDay(
+                    $dateKey,
+                    $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at]),
+                ),
             ];
         }
 

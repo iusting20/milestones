@@ -70,14 +70,16 @@
                                                 'text-body' => $status !== \App\Enums\WeekBoardStatus::Done,
                                             ])>{{ $item->title }}</span>
                                             <span class="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
-                                                @foreach ($statuses as $target)
-                                                    @if ($target !== $status)
-                                                        <button type="button"
-                                                                wire:click="moveCard({{ $item->id }}, '{{ $target->value }}')"
-                                                                class="px-1 text-[10px] uppercase text-muted hover:text-link"
-                                                                title="Move to {{ $target->label() }}">{{ $target->label() }}</button>
-                                                    @endif
-                                                @endforeach
+                                                @if ($item->todoItem === null)
+                                                    <button type="button"
+                                                            wire:click="startCard({{ $item->id }})"
+                                                            class="px-1 text-[10px] uppercase text-muted hover:text-link"
+                                                            title="Create a milestone for today and start its timer">Start</button>
+                                                @else
+                                                    <a href="{{ route('milestones') }}"
+                                                       class="px-1 text-[10px] uppercase text-link no-underline"
+                                                       title="Started as a milestone on {{ $item->todoItem->date?->format('D j M') }}">Started</a>
+                                                @endif
                                                 <button type="button"
                                                         wire:click="deleteCard({{ $item->id }})"
                                                         wire:confirm="Delete this card?"

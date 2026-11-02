@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Enums\WeekBoardStatus;
 use App\Models\Project;
+use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -79,6 +80,39 @@ class ClientWeekBoard extends Component
         $item->update(['status' => $statusEnum, 'position' => $max + 1]);
     }
 
+    /**
+     * Create a milestone for today titled "<Client> - <Card>", start its timer
+     * (same fields DayList::addItem and DayList::startLogging set) and move the card to WIP.
+     */
+    public function startCard(int $id): void
+    {
+        $item = WeekBoardItem::query()->with(['project', 'todoItem'])->findOrFail($id);
+
+        if ($item->todoItem !== null) {
+            return;
+        }
+
+        $today = now()->toDateString();
+
+        DB::transaction(function () use ($item, $today): void {
+            $max = (int) TodoItem::query()->whereDate('date', $today)->max('position');
+
+            $todo = TodoItem::query()->create([
+                'date' => $today,
+                'title' => $item->project->name.' - '.$item->title,
+                'is_completed' => false,
+                'is_separator' => false,
+                'position' => $max + 1,
+            ]);
+
+            $todo->update(['logging_started_at' => now()]);
+
+            $this->moveCard($item->id, WeekBoardStatus::Wip->value);
+
+            $item->refresh()->update(['todo_item_id' => $todo->id]);
+        });
+    }
+
     public function deleteCard(int $id): void
     {
         WeekBoardItem::query()->whereKey($id)->delete();
@@ -138,6 +172,7 @@ class ClientWeekBoard extends Component
         $clients = $this->clientsQuery()->get();
 
         $items = WeekBoardItem::query()
+            ->with('todoItem')
             ->whereIn('project_id', $clients->pluck('id'))
             ->orderBy('position')
             ->orderBy('id')

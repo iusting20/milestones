@@ -92,6 +92,26 @@ class ClientWeekBoardTest extends TestCase
         $this->assertNull($globex->fresh()->week_board_position);
     }
 
+    public function test_start_creates_running_milestone_and_moves_card_to_wip(): void
+    {
+        $this->travelTo('2026-11-02 10:00:00');
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship landing page']);
+
+        Livewire::test(ClientWeekBoard::class)
+            ->call('startCard', $item->id)
+            ->call('startCard', $item->id)
+            ->assertSee('Started')
+            ->assertDontSee('title="Move to', false);
+
+        $todo = \App\Models\TodoItem::query()->sole();
+        $this->assertSame('Acme - Ship landing page', $todo->title);
+        $this->assertSame('2026-11-02', $todo->date->toDateString());
+        $this->assertTrue($todo->isLogging());
+        $this->assertSame(WeekBoardStatus::Wip, $item->fresh()->status);
+        $this->assertSame($todo->id, $item->fresh()->todo_item_id);
+    }
+
     public function test_reorder_ignores_unknown_lane(): void
     {
         $item = WeekBoardItem::factory()->create();

@@ -13,6 +13,7 @@ class WeekBoardItem extends Model
 
     protected $fillable = [
         'project_id',
+        'todo_item_id',
         'title',
         'status',
         'position',
@@ -29,5 +30,10 @@ class WeekBoardItem extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function todoItem(): BelongsTo
+    {
+        return $this->belongsTo(TodoItem::class);
     }
 }

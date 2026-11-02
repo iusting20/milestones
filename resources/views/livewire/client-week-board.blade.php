@@ -1,0 +1,92 @@
+<div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <h1 class="mb-6 text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Week Board</h1>
+
+    @if ($clients->isEmpty())
+        <p class="text-muted">No partners yet. Add clients under Links → Partners.</p>
+    @else
+        <div class="overflow-x-auto">
+            <div class="min-w-[720px]">
+                <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 pb-2 text-xs font-semibold uppercase tracking-widest text-muted">
+                    <div>Partner</div>
+                    @foreach ($statuses as $status)
+                        <div>{{ $status->label() }}</div>
+                    @endforeach
+                </div>
+
+                @foreach ($clients as $client)
+                    <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 border-t border-white/10 py-3" wire:key="client-{{ $client->id }}">
+                        <div class="pt-1 font-semibold text-body">{{ $client->name }}</div>
+
+                        @foreach ($statuses as $status)
+                            @php($lane = $client->id.'-'.$status->value)
+                            <div class="flex flex-col rounded bg-panel p-2" wire:key="lane-{{ $lane }}">
+                                <ul
+                                    class="min-h-[2.5rem] flex-1 space-y-1"
+                                    data-sortable
+                                    data-sortable-nest
+                                    data-parent-id="{{ $client->id * 10 + $status->code() }}"
+                                    data-component-id="{{ $this->getId() }}"
+                                    wire:key="list-{{ $lane }}"
+                                >
+                                    @foreach ($items->get($lane, collect()) as $item)
+                                        <li
+                                            data-item-id="{{ $item->id }}"
+                                            wire:key="card-{{ $item->id }}"
+                                            class="group flex items-start gap-1 rounded border border-white/10 bg-canvas px-2 py-1.5 text-sm"
+                                        >
+                                            <button type="button"
+                                                    data-drag-handle
+                                                    class="mt-0.5 shrink-0 cursor-grab touch-none text-muted/50 hover:text-muted active:cursor-grabbing"
+                                                    aria-label="Drag to move">
+                                                <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                    <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+                                                    <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+                                                    <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+                                                </svg>
+                                            </button>
+                                            <span @class([
+                                                'min-w-0 flex-1 leading-snug',
+                                                'text-muted line-through' => $status === \App\Enums\WeekBoardStatus::Done,
+                                                'text-body' => $status !== \App\Enums\WeekBoardStatus::Done,
+                                            ])>{{ $item->title }}</span>
+                                            <span class="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
+                                                @foreach ($statuses as $target)
+                                                    @if ($target !== $status)
+                                                        <button type="button"
+                                                                wire:click="moveCard({{ $item->id }}, '{{ $target->value }}')"
+                                                                class="px-1 text-[10px] uppercase text-muted hover:text-link"
+                                                                title="Move to {{ $target->label() }}">{{ $target->label() }}</button>
+                                                    @endif
+                                                @endforeach
+                                                <button type="button"
+                                                        wire:click="deleteCard({{ $item->id }})"
+                                                        wire:confirm="Delete this card?"
+                                                        class="px-1 text-xs text-muted hover:text-red-400"
+                                                        aria-label="Delete">×</button>
+                                            </span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+
+                                @if ($addingLane === $lane)
+                                    <form wire:submit.prevent="addCard({{ $client->id }}, '{{ $status->value }}')" class="mt-1" wire:key="adding-{{ $lane }}">
+                                        <input type="text"
+                                               wire:model="newTitles.{{ $lane }}"
+                                               wire:keydown.escape="cancelAdding"
+                                               class="w-full rounded border border-white/10 bg-canvas px-2 py-1 text-sm text-body"
+                                               placeholder="Card title…"
+                                               autofocus>
+                                    </form>
+                                @else
+                                    <button type="button"
+                                            wire:click="startAdding({{ $client->id }}, '{{ $status->value }}')"
+                                            class="mt-1 self-start rounded px-1 text-xs text-muted hover:text-body">+ Add</button>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+</div>

@@ -60,7 +60,7 @@ class RoadmapsTest extends TestCase
     public function test_nav_shows_roadmaps_after_backlog(): void
     {
         $this->get(route('milestones'))
-            ->assertSeeInOrder(['Backlog', 'Timeline', 'Comms', 'Links']);
+            ->assertSeeInOrder(['Backlog', 'Timeline', 'Week Board', 'Comms', 'Links']);
     }
 
     public function test_can_add_pending_range_from_selected_day(): void

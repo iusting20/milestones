@@ -127,5 +127,31 @@ class TodoItem extends Model
         if ($completed) {
             $this->finishLogging();
         }
+
+        $this->syncWeekBoardCards($completed);
+    }
+
+    /**
+     * Mirror of ClientWeekBoard::syncMilestone: ticking moves linked Week Board cards to the
+     * bottom of their client's Done lane; unticking moves Done cards back to WIP (a linked card
+     * was started, which is what puts it in WIP).
+     */
+    private function syncWeekBoardCards(bool $completed): void
+    {
+        $from = $completed ? [\App\Enums\WeekBoardStatus::Planned, \App\Enums\WeekBoardStatus::Wip] : [\App\Enums\WeekBoardStatus::Done];
+        $to = $completed ? \App\Enums\WeekBoardStatus::Done : \App\Enums\WeekBoardStatus::Wip;
+
+        WeekBoardItem::query()
+            ->where('todo_item_id', $this->id)
+            ->whereIn('status', $from)
+            ->get()
+            ->each(function (WeekBoardItem $card) use ($to): void {
+                $max = (int) WeekBoardItem::query()
+                    ->where('project_id', $card->project_id)
+                    ->where('status', $to)
+                    ->max('position');
+
+                $card->update(['status' => $to, 'position' => $max + 1]);
+            });
     }
 }

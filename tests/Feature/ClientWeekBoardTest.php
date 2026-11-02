@@ -77,19 +77,33 @@ class ClientWeekBoardTest extends TestCase
         $this->assertSame(2, $first->fresh()->position);
     }
 
-    public function test_client_rows_can_be_reordered_without_changing_shared_position(): void
+    public function test_client_rows_reorder_syncs_with_links_order(): void
+    {
+        $acme = $this->client('Acme', 1);
+        $divider = $this->client('Divider', 2);
+        $divider->update(['is_delimiter' => true]);
+        $globex = $this->client('Globex', 3);
+        $initech = $this->client('Initech', 4);
+
+        Livewire::test(ClientWeekBoard::class)
+            ->call('reorderClients', [$initech->id, $acme->id, $globex->id])
+            ->assertSeeInOrder(['Initech', 'Acme', 'Globex']);
+
+        $this->assertSame(1, $initech->fresh()->position);
+        $this->assertSame(2, $divider->fresh()->position);
+        $this->assertSame(3, $acme->fresh()->position);
+        $this->assertSame(4, $globex->fresh()->position);
+    }
+
+    public function test_incomplete_reorder_is_ignored(): void
     {
         $acme = $this->client('Acme', 1);
         $globex = $this->client('Globex', 2);
-        $initech = $this->client('Initech', 3);
 
-        Livewire::test(ClientWeekBoard::class)
-            ->call('reorderClients', [$initech->id, $acme->id])
-            ->assertSeeInOrder(['Initech', 'Acme', 'Globex']);
+        Livewire::test(ClientWeekBoard::class)->call('reorderClients', [$globex->id]);
 
-        $this->assertSame(1, $initech->fresh()->week_board_position);
-        $this->assertSame(3, $initech->fresh()->position);
-        $this->assertNull($globex->fresh()->week_board_position);
+        $this->assertSame(1, $acme->fresh()->position);
+        $this->assertSame(2, $globex->fresh()->position);
     }
 
     public function test_start_creates_running_milestone_and_moves_card_to_wip(): void

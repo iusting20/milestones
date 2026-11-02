@@ -236,12 +236,30 @@ class ClientWeekBoard extends Component
      */
     public function reorderClients(array $orderedIds): void
     {
+        // Shares the Links page order (projects.position): delimiters and other
+        // hidden rows keep their slots; visible clients fill theirs in the new order.
+        $orderedIds = array_values(array_map(intval(...), $orderedIds));
+
         DB::transaction(function () use ($orderedIds): void {
-            foreach (array_values($orderedIds) as $index => $id) {
-                Project::query()
-                    ->where('hub', $this->hub())
-                    ->whereKey($id)
-                    ->update(['week_board_position' => $index + 1]);
+            $all = Project::query()
+                ->where('hub', $this->hub())
+                ->where('is_archived', false)
+                ->orderBy('position')
+                ->orderBy('id')
+                ->get();
+
+            $visible = $all->where('is_delimiter', false)->pluck('id')->all();
+
+            if (count($visible) !== count($orderedIds) || array_diff($visible, $orderedIds) !== []) {
+                return;
+            }
+
+            $queue = $orderedIds;
+            $position = 1;
+
+            foreach ($all as $project) {
+                $id = $project->is_delimiter ? $project->id : array_shift($queue);
+                Project::query()->whereKey($id)->update(['position' => $position++]);
             }
         });
     }
@@ -288,8 +306,6 @@ class ClientWeekBoard extends Component
             ->where('hub', $this->hub())
             ->where('is_delimiter', false)
             ->where('is_archived', false)
-            ->orderByRaw('week_board_position is null')
-            ->orderBy('week_board_position')
             ->orderBy('position')
             ->orderBy('id');
     }

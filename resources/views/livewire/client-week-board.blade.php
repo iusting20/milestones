@@ -68,6 +68,7 @@
                                     @endforeach
                                 </ul>
 
+                                @if ($status === \App\Enums\WeekBoardStatus::Planned)
                                 @if ($addingLane === $lane)
                                     <form wire:submit.prevent="addCard({{ $client->id }}, '{{ $status->value }}')" class="mt-1" wire:key="adding-{{ $lane }}">
                                         <input type="text"
@@ -81,6 +82,7 @@
                                     <button type="button"
                                             wire:click="startAdding({{ $client->id }}, '{{ $status->value }}')"
                                             class="mt-1 self-start rounded px-1 text-xs text-muted hover:text-body">+ Add</button>
+                                @endif
                                 @endif
                             </div>
                         @endforeach

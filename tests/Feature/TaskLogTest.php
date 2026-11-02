@@ -147,6 +147,54 @@ class TaskLogTest extends TestCase
             ->assertSee('MON');
     }
 
+    public function test_timer_left_running_past_task_day_keeps_start_and_caps_at_end_of_day(): void
+    {
+        Carbon::setTestNow('2026-10-30 11:30:00');
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-10-30',
+            'title' => 'Forgot to stop',
+            'position' => 1,
+        ]);
+
+        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => false, 'showLogControls' => true];
+
+        Livewire::test(DayList::class, $props)->call('startLogging', $item->id);
+
+        Carbon::setTestNow('2026-10-31 10:28:00');
+
+        Livewire::test(DayList::class, $props)->call('finishLogging', $item->id);
+
+        $log = TaskLog::query()->sole();
+
+        $this->assertSame('2026-10-30 13:30', $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i'));
+        $this->assertSame('2026-10-30 23:59', $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i'));
+    }
+
+    public function test_overnight_session_started_evening_before_task_day_is_kept(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-29 23:00:00', 'Europe/Bucharest')->utc());
+
+        $item = TodoItem::query()->create([
+            'date' => '2026-10-30',
+            'title' => 'Late night',
+            'position' => 1,
+        ]);
+
+        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => true, 'showLogControls' => true];
+
+        Livewire::test(DayList::class, $props)->call('startLogging', $item->id);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-30 01:00:00', 'Europe/Bucharest')->utc());
+
+        Livewire::test(DayList::class, $props)->call('finishLogging', $item->id);
+
+        $log = TaskLog::query()->sole();
+
+        $this->assertSame('2026-10-29 23:00', $log->started_at->timezone('Europe/Bucharest')->format('Y-m-d H:i'));
+        $this->assertSame('2026-10-30 01:00', $log->finished_at->timezone('Europe/Bucharest')->format('Y-m-d H:i'));
+    }
+
     public function test_finish_logging_without_start_is_a_noop(): void
     {
         $date = now()->toDateString();

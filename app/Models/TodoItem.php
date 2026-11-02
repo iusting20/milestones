@@ -80,7 +80,13 @@ class TodoItem extends Model
         $finishedOnDay = $finished->copy()->setDateFrom($taskDay);
 
         if ($finishedOnDay->lte($startedOnDay)) {
-            $startedOnDay->subDay();
+            if ($started->toDateString() < $taskDay->toDateString()) {
+                // Genuine overnight session: started the evening before the task's day.
+                $startedOnDay->subDay();
+            } else {
+                // Timer left running past the task's day: keep the real start, cap at end of day.
+                $finishedOnDay = $taskDay->copy()->endOfDay()->startOfMinute();
+            }
         }
 
         return [$startedOnDay->utc(), $finishedOnDay->utc()];

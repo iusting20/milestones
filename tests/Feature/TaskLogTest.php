@@ -930,4 +930,22 @@ class TaskLogTest extends TestCase
 
         $this->assertDatabaseCount('task_logs', 0);
     }
+
+    public function test_week_totals_show_idle_hours_excluding_empty_weekends(): void
+    {
+        // Wed 2026-03-18 12:00 Bucharest: Mon+Tue fully idle (9h each), Wed idle 08-10 (one log 10-12), Thu/Fri future.
+        Carbon::setTestNow(Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest')->utc());
+
+        TaskLog::query()->create([
+            'todo_item_id' => null,
+            'title' => 'Work',
+            'started_at' => Carbon::parse('2026-03-18 10:00:00', 'Europe/Bucharest')->utc(),
+            'finished_at' => Carbon::parse('2026-03-18 12:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertViewHas('weekIdleMinutes', 20 * 60)
+            ->assertSee('Idle hours');
+    }
 }

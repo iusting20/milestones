@@ -195,6 +195,10 @@
                         <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Logged</dt>
                         <dd class="text-lg font-semibold text-body">{{ $stats['totalDuration'] }}</dd>
                     </div>
+                    <div data-week-idle>
+                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Idle hours</dt>
+                        <dd class="text-lg font-semibold text-body">{{ $weekIdleDuration }}</dd>
+                    </div>
                     <div>
                         <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Items</dt>
                         <dd class="text-lg font-semibold text-body">{{ $stats['itemCount'] }}</dd>

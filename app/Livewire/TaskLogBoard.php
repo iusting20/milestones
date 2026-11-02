@@ -427,10 +427,19 @@ class TaskLogBoard extends Component
             ];
         }
 
+        // Weekends only count when something was logged or a timer ran that day.
+        $weekIdleMinutes = (int) collect($days)
+            ->filter(fn (array $day): bool => ! Carbon::parse($day['date'])->isWeekend()
+                || $day['totalMinutes'] > 0
+                || $day['idle']['running'] !== [])
+            ->sum(fn (array $day): int => $day['idle']['idleMinutes']);
+
         $hasEntries = $logs->isNotEmpty() || $completedUntimedByDate->flatten(1)->isNotEmpty();
 
         return view('livewire.task-log-board', [
             'days' => $days,
+            'weekIdleDuration' => $this->formatDuration($weekIdleMinutes),
+            'weekIdleMinutes' => $weekIdleMinutes,
             'weekNumber' => $this->weekNumber(),
             'hasLogs' => $hasEntries,
             'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),

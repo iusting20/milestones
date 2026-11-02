@@ -52,11 +52,12 @@
 
                     <div class="mt-1 grid grid-cols-7 gap-x-0.5">
                         @foreach ($week as $day)
-                            <div wire:key="chips-{{ $day['date']->toDateString() }}" class="min-h-2 space-y-0.5">
+                            <div wire:key="chips-{{ $day['date']->toDateString() }}" class="min-h-2 space-y-0.5" x-data="{ open: false }">
                                 @foreach ($day['entries']->take(3) as $entry)
                                     <div title="{{ $entry->subjectName() }} · {{ $entry->type->label() }}"
+                                         x-on:click="open = true"
                                          @class([
-                                             'truncate rounded-sm px-1 py-0.5 text-center text-[10px] leading-tight',
+                                             'cursor-pointer truncate rounded-sm px-1 py-0.5 text-center text-[10px] leading-tight',
                                              'bg-check/20 text-link' => $entry->type === \App\Enums\CommunicationType::QuickUpdate,
                                              'bg-mark/20 text-mark' => $entry->type === \App\Enums\CommunicationType::ReviewPlanning,
                                          ])>
@@ -64,7 +65,35 @@
                                     </div>
                                 @endforeach
                                 @if ($day['entries']->count() > 3)
-                                    <div class="px-1 text-center text-[10px] text-muted">+{{ $day['entries']->count() - 3 }}</div>
+                                    <button type="button" x-on:click="open = true" class="block w-full cursor-pointer px-1 text-center text-[10px] text-muted hover:text-link">+{{ $day['entries']->count() - 3 }}</button>
+                                @endif
+                                @if ($day['entries']->isNotEmpty())
+                                    <template x-teleport="body">
+                                        <div x-show="open" x-cloak x-on:keydown.escape.window="open = false"
+                                             class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                                            <div class="absolute inset-0 bg-black/60" x-on:click="open = false" aria-hidden="true"></div>
+                                            <div class="relative z-10 max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl">
+                                                <div class="mb-3 flex items-center justify-between gap-3">
+                                                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                                                        {{ $day['date']->format('D j M') }} · {{ $day['entries']->count() }} comms
+                                                    </h2>
+                                                    <button type="button" x-on:click="open = false" class="text-muted hover:text-body" aria-label="Close">×</button>
+                                                </div>
+                                                <ul class="space-y-1.5">
+                                                    @foreach ($day['entries'] as $entry)
+                                                        <li @class([
+                                                            'flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm',
+                                                            'bg-check/20 text-link' => $entry->type === \App\Enums\CommunicationType::QuickUpdate,
+                                                            'bg-mark/20 text-mark' => $entry->type === \App\Enums\CommunicationType::ReviewPlanning,
+                                                        ])>
+                                                            <span class="min-w-0 truncate">{{ $entry->subjectName() }}</span>
+                                                            <span class="shrink-0 text-xs opacity-80">{{ $entry->type->label() }}</span>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </template>
                                 @endif
                             </div>
                         @endforeach

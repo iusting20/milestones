@@ -379,6 +379,12 @@ class TaskLogBoard extends Component
             ->flatten(1)
             ->max(fn (Collection $group): int => $this->groupMinutes($group)));
 
+        // Running timers count as busy on the idle bars (display only, no task_logs written).
+        $runningIntervals = TodoItem::query()
+            ->whereNotNull('logging_started_at')
+            ->pluck('logging_started_at')
+            ->map(fn ($startedAt): array => [Carbon::parse($startedAt), now()]);
+
         $days = [];
 
         for ($i = 0; $i < 7; $i++) {
@@ -408,7 +414,8 @@ class TaskLogBoard extends Component
                 'pieSlices' => $this->pieSlices($timedDayLogs, $totalMinutes),
                 'idle' => IdleTimeline::forDay(
                     $dateKey,
-                    $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at]),
+                    $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at])
+                        ->concat($runningIntervals),
                 ),
             ];
         }

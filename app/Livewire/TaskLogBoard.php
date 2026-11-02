@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Project;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
 use App\Support\Clock;
@@ -440,6 +441,10 @@ class TaskLogBoard extends Component
             'days' => $days,
             'weekIdleDuration' => $this->formatDuration($weekIdleMinutes),
             'weekIdleMinutes' => $weekIdleMinutes,
+            'coverage' => [
+                'partners' => $this->hubCoverage('partners', $logs->pluck('title')),
+                'assets' => $this->hubCoverage('assets', $logs->pluck('title')),
+            ],
             'weekNumber' => $this->weekNumber(),
             'hasLogs' => $hasEntries,
             'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
@@ -922,5 +927,60 @@ class TaskLogBoard extends Component
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * How many non-archived projects of a Links hub had logged time, matched by the
+     * "<Name> - task" title convention (no relation exists between logs and projects).
+     *
+     * @param  Collection<int, string>  $titles
+     * @return array{covered: int, total: int, uncovered: list<string>}
+     */
+    public function hubCoverage(string $hub, Collection $titles): array
+    {
+        $prefixes = $titles
+            ->map(fn (string $title): string => mb_strtolower(trim(explode(' - ', $title, 2)[0])))
+            ->filter(fn (string $prefix): bool => $prefix !== '')
+            ->unique();
+
+        $projects = Project::query()
+            ->where('hub', $hub)
+            ->where('is_delimiter', false)
+            ->where('is_archived', false)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->pluck('name');
+
+        $uncovered = $projects
+            ->reject(fn (string $name): bool => $prefixes->contains(fn (string $prefix): bool => self::prefixMatchesProject($prefix, $name)))
+            ->values()
+            ->all();
+
+        return [
+            'covered' => $projects->count() - count($uncovered),
+            'total' => $projects->count(),
+            'uncovered' => $uncovered,
+        ];
+    }
+
+    /**
+     * "saints" or "saints nearby" or "sn" match "Saints Nearby"; "(cu Sam)" style suffixes are ignored.
+     */
+    public static function prefixMatchesProject(string $prefix, string $name): bool
+    {
+        $normalized = mb_strtolower(trim(preg_replace('/\s*\(.*?\)\s*/u', ' ', $name)));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($prefix === $normalized || str_starts_with($normalized, $prefix.' ') || str_starts_with($prefix, $normalized.' ')) {
+            return true;
+        }
+
+        $words = preg_split('/\s+/u', $normalized);
+        $initials = implode('', array_map(fn (string $word): string => mb_substr($word, 0, 1), $words));
+
+        return count($words) >= 2 && $prefix === $initials;
     }
 }

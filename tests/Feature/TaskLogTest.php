@@ -948,4 +948,31 @@ class TaskLogTest extends TestCase
             ->assertViewHas('weekIdleMinutes', 20 * 60)
             ->assertSee('Idle hours');
     }
+
+    public function test_week_totals_show_partner_and_asset_coverage(): void
+    {
+        Carbon::setTestNow('2026-03-18 10:00:00');
+
+        foreach ([['partners', 'Saints Nearby', false], ['partners', 'Vibrant Health Edu', false], ['partners', 'Tudia', false], ['partners', 'Old Client', true], ['assets', 'Story Creator (cu Sam)', false], ['assets', 'Neo Wars', false]] as $i => [$hub, $name, $archived]) {
+            \App\Models\Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
+        }
+
+        foreach (['SAINTS - web portal', 'VHE - fix topic images', 'Old Client - x', 'story creator - script'] as $title) {
+            TaskLog::query()->create([
+                'todo_item_id' => null,
+                'title' => $title,
+                'started_at' => Carbon::parse('2026-03-17 08:00:00'),
+                'finished_at' => Carbon::parse('2026-03-17 09:00:00'),
+            ]);
+        }
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSee('Partners covered')
+            ->assertSee('2 out of 3')
+            ->assertSee('Not covered: Tudia')
+            ->assertSee('Assets covered')
+            ->assertSee('1 out of 2')
+            ->assertSee('Not covered: Neo Wars');
+    }
 }

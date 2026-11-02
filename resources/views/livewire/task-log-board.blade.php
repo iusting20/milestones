@@ -199,6 +199,13 @@
                         <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Idle hours</dt>
                         <dd class="text-lg font-semibold text-body">{{ $weekIdleDuration }}</dd>
                     </div>
+                    @foreach (['partners' => 'Partners covered', 'assets' => 'Assets covered'] as $hubKey => $hubLabel)
+                        <div data-coverage="{{ $hubKey }}"
+                             title="{{ $coverage[$hubKey]['uncovered'] === [] ? 'All covered' : 'Not covered: '.implode(', ', $coverage[$hubKey]['uncovered']) }}">
+                            <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">{{ $hubLabel }}</dt>
+                            <dd class="text-lg font-semibold text-body">{{ $coverage[$hubKey]['covered'] }} out of {{ $coverage[$hubKey]['total'] }}</dd>
+                        </div>
+                    @endforeach
                     <div>
                         <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Items</dt>
                         <dd class="text-lg font-semibold text-body">{{ $stats['itemCount'] }}</dd>

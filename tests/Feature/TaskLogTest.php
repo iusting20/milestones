@@ -896,7 +896,8 @@ class TaskLogTest extends TestCase
 
     public function test_running_timer_counts_as_busy_on_idle_bars(): void
     {
-        // Started yesterday 15:00 Bucharest, still running at 10:00 today (Fri 2026-10-30).
+        // Today is Fri 2026-10-30 10:00 Bucharest. One timer started today 09:00 is running;
+        // a stale timer started Thu 15:00 was never stopped.
         Carbon::setTestNow(Carbon::parse('2026-10-30 10:00:00', 'Europe/Bucharest')->utc());
 
         TodoItem::query()->create([
@@ -906,12 +907,20 @@ class TaskLogTest extends TestCase
             'logging_started_at' => Carbon::parse('2026-10-29 15:00:00', 'Europe/Bucharest')->utc(),
         ]);
 
+        TodoItem::query()->create([
+            'date' => '2026-10-30',
+            'title' => 'Running today',
+            'position' => 2,
+            'logging_started_at' => Carbon::parse('2026-10-30 09:00:00', 'Europe/Bucharest')->utc(),
+        ]);
+
         Livewire::withQueryParams(['week' => '2026-W44'])
             ->test(TaskLogBoard::class)
             ->assertViewHas('days', function (array $days): bool {
                 $byDate = collect($days)->keyBy('date');
 
-                return $byDate['2026-10-30']['idle']['idleMinutes'] === 0
+                // Stale Thursday timer must not hide Friday's 08:00-09:00 idle time.
+                return array_column($byDate['2026-10-30']['idle']['segments'], 'label') === ['Idle 08:00–09:00 (1h)']
                     && array_column($byDate['2026-10-29']['idle']['segments'], 'label') === ['Idle 08:00–15:00 (7h)'];
             });
 

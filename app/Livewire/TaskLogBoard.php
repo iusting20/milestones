@@ -380,10 +380,17 @@ class TaskLogBoard extends Component
             ->max(fn (Collection $group): int => $this->groupMinutes($group)));
 
         // Running timers count as busy on the idle bars (display only, no task_logs written).
+        // Like loggingWindow(), a timer only covers the day it was started on: a timer left
+        // running for days is stale and must not hide idle time on later days.
         $runningIntervals = TodoItem::query()
             ->whereNotNull('logging_started_at')
             ->pluck('logging_started_at')
-            ->map(fn ($startedAt): array => [Carbon::parse($startedAt), now()]);
+            ->map(function ($startedAt): array {
+                $started = Carbon::parse($startedAt);
+                $endOfStartDay = $started->copy()->timezone(Clock::timezone())->endOfDay();
+
+                return [$started, now()->min($endOfStartDay)];
+            });
 
         $days = [];
 

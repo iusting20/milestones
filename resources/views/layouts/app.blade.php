@@ -24,7 +24,7 @@
             </a>
             <a href="{{ route('roadmaps') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
-                Roadmaps
+                Timeline
             </a>
             <a href="{{ route('comms') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('comms') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">

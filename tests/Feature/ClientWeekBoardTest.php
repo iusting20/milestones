@@ -195,4 +195,60 @@ class ClientWeekBoardTest extends TestCase
 
         $this->assertSame(WeekBoardStatus::Planned, $item->fresh()->status);
     }
+
+    public function test_dragging_started_card_to_done_completes_milestone_and_logs_timer(): void
+    {
+        $this->travelTo('2026-11-02 10:00:00');
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship']);
+
+        $component = Livewire::test(ClientWeekBoard::class)->call('startCard', $item->id);
+
+        $this->travelTo('2026-11-02 11:00:00');
+
+        $component->call('reorder', [$item->id], $client->id * 10 + WeekBoardStatus::Done->code());
+
+        $todo = \App\Models\TodoItem::query()->sole();
+        $this->assertTrue($todo->is_completed);
+        $this->assertFalse($todo->isLogging());
+        $log = \App\Models\TaskLog::query()->sole();
+        $this->assertSame($todo->id, $log->todo_item_id);
+        $this->assertSame(60, (int) $log->started_at->diffInMinutes($log->finished_at));
+
+        $component->call('reorder', [$item->id], $client->id * 10 + WeekBoardStatus::Wip->code());
+
+        $this->assertFalse($todo->fresh()->is_completed);
+        $this->assertSame(1, \App\Models\TaskLog::query()->count());
+
+        $component->call('moveCard', $item->id, WeekBoardStatus::Done->value);
+        $this->assertTrue($todo->fresh()->is_completed);
+    }
+
+    public function test_moving_unstarted_card_to_done_touches_no_milestone(): void
+    {
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship']);
+
+        Livewire::test(ClientWeekBoard::class)->call('moveCard', $item->id, WeekBoardStatus::Done->value);
+
+        $this->assertSame(WeekBoardStatus::Done, $item->fresh()->status);
+        $this->assertDatabaseCount('todo_items', 0);
+    }
+
+    public function test_page_titles_have_no_app_suffix(): void
+    {
+        foreach ([
+            '/milestones' => 'Milestones',
+            '/milestones/drip-matrix' => 'DRIP Matrix',
+            '/milestones/log' => 'Log',
+            '/backlog' => 'Backlog',
+            '/backlog/drip-matrix' => 'Backlog DRIP Matrix',
+            '/roadmaps' => 'Timeline',
+            '/week-board' => 'Week Board',
+            '/comms' => 'Comms',
+            '/links/partners' => 'Links',
+        ] as $url => $title) {
+            $this->get($url)->assertOk()->assertSee('<title>'.$title.'</title>', false);
+        }
+    }
 }

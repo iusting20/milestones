@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Roadmaps - '.config('app.name'))
+@section('title', 'Timeline')
 
 @section('content')
     <livewire:roadmaps />

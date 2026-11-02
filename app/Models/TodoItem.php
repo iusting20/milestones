@@ -91,4 +91,41 @@ class TodoItem extends Model
 
         return [$startedOnDay->utc(), $finishedOnDay->utc()];
     }
+
+    /**
+     * Stop a running timer and write its task_log (no-op when not logging).
+     */
+    public function finishLogging(): void
+    {
+        if ($this->is_separator || ! $this->isLogging()) {
+            return;
+        }
+
+        [$startedAt, $finishedAt] = $this->loggingWindow();
+
+        TaskLog::query()->create([
+            'todo_item_id' => $this->id,
+            'title' => $this->title,
+            'started_at' => $startedAt,
+            'finished_at' => $finishedAt,
+        ]);
+
+        $this->update(['logging_started_at' => null]);
+    }
+
+    /**
+     * Tick/untick exactly like the checkbox on /milestones: completing also stops the timer.
+     */
+    public function setCompleted(bool $completed): void
+    {
+        if ($this->is_separator) {
+            return;
+        }
+
+        $this->update(['is_completed' => $completed]);
+
+        if ($completed) {
+            $this->finishLogging();
+        }
+    }
 }

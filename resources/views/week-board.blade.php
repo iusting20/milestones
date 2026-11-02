@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Week Board - '.config('app.name'))
+@section('title', 'Week Board')
 
 @section('content')
     <livewire:client-week-board />

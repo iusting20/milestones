@@ -6,8 +6,10 @@ use App\Models\Link;
 use App\Models\LinkGroup;
 use App\Models\Project;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
+#[Title('Links')]
 class LinkHub extends Component
 {
     public string $hub = 'partners';

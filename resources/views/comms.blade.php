@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Comms - '.config('app.name'))
+@section('title', 'Comms')
 
 @section('content')
     <livewire:comms />

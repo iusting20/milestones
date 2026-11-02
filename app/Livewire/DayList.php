@@ -352,13 +352,7 @@ class DayList extends Component
             return;
         }
 
-        $completing = ! $item->is_completed;
-
-        $item->update(['is_completed' => $completing]);
-
-        if ($completing) {
-            $this->finishLogging($id);
-        }
+        $item->setCompleted(! $item->is_completed);
     }
 
     public function startLogging(int $id): void
@@ -380,16 +374,7 @@ class DayList extends Component
             return;
         }
 
-        [$startedAt, $finishedAt] = $item->loggingWindow();
-
-        TaskLog::query()->create([
-            'todo_item_id' => $item->id,
-            'title' => $item->title,
-            'started_at' => $startedAt,
-            'finished_at' => $finishedAt,
-        ]);
-
-        $item->update(['logging_started_at' => null]);
+        $item->finishLogging();
     }
 
     public function delete(int $id): void

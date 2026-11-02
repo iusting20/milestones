@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/x-icon" sizes="any">
     <link rel="shortcut icon" href="{{ asset('favicon.ico') }}" type="image/x-icon">
-    <title>@yield('title', config('app.name', 'Milestones'))</title>
+    <title>{{ $title ?? \Illuminate\Support\Facades\View::yieldContent('title', 'Milestones') }}</title>
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles

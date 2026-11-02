@@ -89,7 +89,30 @@ class ClientWeekBoard extends Component
             ->where('status', $statusEnum)
             ->max('position');
 
+        $previous = $item->status;
+
         $item->update(['status' => $statusEnum, 'position' => $max + 1]);
+
+        $this->syncMilestone($item, $previous);
+    }
+
+    /**
+     * Moving a card into Done ticks its linked milestone (same as /milestones, which also
+     * stops a running timer); moving it out of Done unticks it. Cards never started have no milestone.
+     */
+    private function syncMilestone(WeekBoardItem $item, WeekBoardStatus $previous): void
+    {
+        $done = WeekBoardStatus::Done;
+
+        if (($item->status === $done) === ($previous === $done) || $item->todo_item_id === null) {
+            return;
+        }
+
+        $todo = TodoItem::query()->find($item->todo_item_id);
+
+        if ($todo !== null && $todo->is_completed !== ($item->status === $done)) {
+            $todo->setCompleted($item->status === $done);
+        }
     }
 
     /**
@@ -187,13 +210,21 @@ class ClientWeekBoard extends Component
 
         DB::transaction(function () use ($orderedIds, $status, $projectId): void {
             foreach (array_values($orderedIds) as $index => $id) {
-                WeekBoardItem::query()
-                    ->whereKey($id)
-                    ->update([
-                        'project_id' => $projectId,
-                        'status' => $status->value,
-                        'position' => $index + 1,
-                    ]);
+                $card = WeekBoardItem::query()->find($id);
+
+                if ($card === null) {
+                    continue;
+                }
+
+                $previous = $card->status;
+
+                $card->update([
+                    'project_id' => $projectId,
+                    'status' => $status,
+                    'position' => $index + 1,
+                ]);
+
+                $this->syncMilestone($card, $previous);
             }
         });
     }

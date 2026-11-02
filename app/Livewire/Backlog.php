@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Livewire\Concerns\SetsDripTags;
 use App\Models\BacklogItem;
 use App\Models\TodoItem;
@@ -92,7 +93,7 @@ class Backlog extends Component
             return;
         }
 
-        $week = now()->format('o-\WW');
+        $week = Clock::currentWeek();
         $max = (int) TodoItem::query()
             ->whereNull('date')
             ->where('week', $week)

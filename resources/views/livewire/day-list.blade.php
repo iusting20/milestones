@@ -12,8 +12,8 @@
                 wire:click="toggleExpanded"
                 @class([
                     'mb-0 flex w-full items-center gap-2 text-left text-sm font-bold uppercase tracking-wider',
-                    'text-muted hover:text-body' => $date <= now()->toDateString(),
-                    'text-faint hover:text-muted' => $date > now()->toDateString(),
+                    'text-muted hover:text-body' => $date <= \App\Support\Clock::todayString(),
+                    'text-faint hover:text-muted' => $date > \App\Support\Clock::todayString(),
                 ])
                 aria-expanded="{{ $expanded ? 'true' : 'false' }}">
             <span>{{ $dayLabel }}</span>

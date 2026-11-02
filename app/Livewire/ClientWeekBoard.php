@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Enums\WeekBoardStatus;
 use App\Models\Project;
 use App\Models\TodoItem;
@@ -92,7 +93,7 @@ class ClientWeekBoard extends Component
             return;
         }
 
-        $today = now()->toDateString();
+        $today = Clock::todayString();
 
         DB::transaction(function () use ($item, $today): void {
             $max = (int) TodoItem::query()->whereDate('date', $today)->max('position');

@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Enums\CommunicationType;
 use App\Models\Communication;
 use App\Models\Person;
@@ -37,11 +38,11 @@ class Comms extends Component
     public function mount(): void
     {
         if ($this->month === '' || ! $this->parseMonth($this->month)) {
-            $this->month = now()->format('Y-m');
+            $this->month = Clock::currentMonth();
         }
 
         if ($this->occurredOn === '') {
-            $this->occurredOn = now()->toDateString();
+            $this->occurredOn = Clock::todayString();
         }
     }
 
@@ -57,8 +58,8 @@ class Comms extends Component
 
     public function goToThisMonth(): void
     {
-        $this->month = now()->format('Y-m');
-        $this->occurredOn = now()->toDateString();
+        $this->month = Clock::currentMonth();
+        $this->occurredOn = Clock::todayString();
     }
 
     public function selectDay(string $date): void
@@ -217,7 +218,7 @@ class Comms extends Component
 
     public function monthStart(): Carbon
     {
-        return $this->parseMonth($this->month) ?? now()->startOfMonth()->startOfDay();
+        return $this->parseMonth($this->month) ?? Clock::today()->startOfMonth()->startOfDay();
     }
 
     public function lastCommLabel(Carbon $occurredOn): string
@@ -247,7 +248,7 @@ class Comms extends Component
 
     private function elapsedDays(Carbon $occurredOn): int
     {
-        return (int) $occurredOn->copy()->startOfDay()->diff(now()->startOfDay())->days;
+        return (int) $occurredOn->copy()->startOfDay()->diff(Clock::today())->days;
     }
 
     private function elapsedLabel(Carbon $occurredOn): string
@@ -314,7 +315,7 @@ class Comms extends Component
 
         return view('livewire.comms', [
             'monthLabel' => strtoupper($monthStart->format('F Y')),
-            'today' => now()->toDateString(),
+            'today' => Clock::todayString(),
             'clients' => $clients,
             'projectsForAudience' => $this->audience === 'assets' ? $assets : $clients,
             'people' => $people,

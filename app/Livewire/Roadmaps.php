@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Models\RoadmapItem;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -40,11 +41,11 @@ class Roadmaps extends Component
     public function mount(): void
     {
         if ($this->month === '' || ! $this->parseMonth($this->month)) {
-            $this->month = now()->format('Y-m');
+            $this->month = Clock::currentMonth();
         }
 
         if ($this->startedOn === '') {
-            $this->startedOn = now()->toDateString();
+            $this->startedOn = Clock::todayString();
         }
     }
 
@@ -60,8 +61,8 @@ class Roadmaps extends Component
 
     public function goToThisMonth(): void
     {
-        $this->month = now()->format('Y-m');
-        $this->startedOn = now()->toDateString();
+        $this->month = Clock::currentMonth();
+        $this->startedOn = Clock::todayString();
     }
 
     public function showMonth(string $month): void
@@ -85,7 +86,7 @@ class Roadmaps extends Component
     public function openCreate(): void
     {
         $this->newTitle = '';
-        $this->startedOn = now()->toDateString();
+        $this->startedOn = Clock::todayString();
         $this->creating = true;
     }
 
@@ -117,7 +118,7 @@ class Roadmaps extends Component
     public function toggleComplete(int $id): void
     {
         $item = RoadmapItem::query()->findOrFail($id);
-        $today = now()->startOfDay();
+        $today = Clock::today();
 
         if ($item->completed_on !== null) {
             $item->update(['completed_on' => null]);
@@ -181,14 +182,14 @@ class Roadmaps extends Component
 
     public function monthStart(): Carbon
     {
-        return $this->parseMonth($this->month) ?? now()->startOfMonth()->startOfDay();
+        return $this->parseMonth($this->month) ?? Clock::today()->startOfMonth()->startOfDay();
     }
 
     public function render()
     {
         $monthStart = $this->monthStart();
         $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
-        $today = now()->startOfDay();
+        $today = Clock::today();
         $gridStart = $monthStart->copy()->startOfWeek(Carbon::MONDAY);
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
 

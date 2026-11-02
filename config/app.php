@@ -68,6 +68,12 @@ return [
     'timezone' => 'UTC',
 
     /*
+     | Calendar timezone: decides what "today", the current week and month are.
+     | Storage stays in UTC (timezone above).
+     */
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Europe/Bucharest'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

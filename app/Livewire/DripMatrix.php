@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Enums\DripTag;
 use App\Models\TodoItem;
 use Carbon\Carbon;
@@ -26,7 +27,7 @@ class DripMatrix extends Component
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
-            $this->week = now()->format('o-\WW');
+            $this->week = Clock::currentWeek();
         }
     }
 
@@ -42,12 +43,12 @@ class DripMatrix extends Component
 
     public function goToToday(): void
     {
-        $this->week = now()->format('o-\WW');
+        $this->week = Clock::currentWeek();
     }
 
     public function weekStart(): Carbon
     {
-        return $this->parseWeek($this->week) ?? now()->startOfWeek(Carbon::MONDAY);
+        return $this->parseWeek($this->week) ?? Clock::today()->startOfWeek(Carbon::MONDAY);
     }
 
     public function weekNumber(): int
@@ -107,7 +108,7 @@ class DripMatrix extends Component
             ->orderBy('id');
 
         if ($this->todayOnly) {
-            $query->whereDate('date', now()->toDateString());
+            $query->whereDate('date', Clock::todayString());
         } else {
             $start = $this->weekStart()->toDateString();
             $end = $this->weekStart()->copy()->endOfWeek(Carbon::SUNDAY)->toDateString();

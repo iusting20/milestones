@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use Carbon\Carbon;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -18,7 +19,7 @@ class WeekBoard extends Component
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
-            $this->week = now()->format('o-\WW');
+            $this->week = Clock::currentWeek();
         }
     }
 
@@ -36,7 +37,7 @@ class WeekBoard extends Component
 
     public function goToToday(): void
     {
-        $this->week = now()->format('o-\WW');
+        $this->week = Clock::currentWeek();
     }
 
     public function weekStart(): Carbon
@@ -44,7 +45,7 @@ class WeekBoard extends Component
         $parsed = $this->parseWeek($this->week);
 
         if (! $parsed) {
-            return now()->startOfWeek(Carbon::MONDAY);
+            return Clock::today()->startOfWeek(Carbon::MONDAY);
         }
 
         return $parsed;
@@ -75,7 +76,7 @@ class WeekBoard extends Component
         return view('livewire.week-board', [
             'days' => $this->days(),
             'weekNumber' => $this->weekNumber(),
-            'today' => now()->toDateString(),
+            'today' => Clock::todayString(),
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\Clock;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
 use Carbon\Carbon;
@@ -76,7 +77,7 @@ class TaskLogBoard extends Component
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
-            $this->week = now()->format('o-\WW');
+            $this->week = Clock::currentWeek();
         }
     }
 
@@ -92,7 +93,7 @@ class TaskLogBoard extends Component
 
     public function goToToday(): void
     {
-        $this->week = now()->format('o-\WW');
+        $this->week = Clock::currentWeek();
     }
 
     public function openAddModal(): void
@@ -320,7 +321,7 @@ class TaskLogBoard extends Component
 
     public function weekStart(): Carbon
     {
-        return $this->parseWeek($this->week) ?? now()->startOfWeek(Carbon::MONDAY);
+        return $this->parseWeek($this->week) ?? Clock::today()->startOfWeek(Carbon::MONDAY);
     }
 
     public function weekNumber(): int
@@ -332,7 +333,7 @@ class TaskLogBoard extends Component
     {
         $start = $this->weekStart()->copy()->startOfDay();
         $end = $start->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
-        $today = now()->timezone('Europe/Bucharest')->toDateString();
+        $today = Clock::todayString();
 
         /** @var Collection<int, TaskLog> $logs */
         $logs = TaskLog::query()
@@ -558,7 +559,7 @@ class TaskLogBoard extends Component
      */
     private function selectableLogDates(): Collection
     {
-        $today = now()->timezone('Europe/Bucharest')->toDateString();
+        $today = Clock::todayString();
         $start = $this->weekStart()->copy()->startOfDay();
 
         return collect(range(0, 6))
@@ -569,7 +570,7 @@ class TaskLogBoard extends Component
 
     private function defaultLogDate(): string
     {
-        $today = now()->timezone('Europe/Bucharest')->toDateString();
+        $today = Clock::todayString();
         $dates = $this->selectableLogDates();
 
         if ($dates->contains($today)) {

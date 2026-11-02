@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Clock;
 use Carbon\Carbon;
 use Database\Factories\RoadmapItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,7 +43,7 @@ class RoadmapItem extends Model
             return $this->completed_on->copy()->startOfDay();
         }
 
-        $today = ($today ?? now())->copy()->startOfDay();
+        $today = ($today ?? Clock::today())->copy()->startOfDay();
         $start = $this->rangeStart();
 
         return $today->lt($start) ? $start : $today;

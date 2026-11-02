@@ -116,6 +116,23 @@ class ClientWeekBoard extends Component
         });
     }
 
+    /**
+     * Persist the Week Board row order (does not affect Links or Comms ordering).
+     *
+     * @param  array<int, int>  $orderedIds
+     */
+    public function reorderClients(array $orderedIds): void
+    {
+        DB::transaction(function () use ($orderedIds): void {
+            foreach (array_values($orderedIds) as $index => $id) {
+                Project::query()
+                    ->where('hub', 'partners')
+                    ->whereKey($id)
+                    ->update(['week_board_position' => $index + 1]);
+            }
+        });
+    }
+
     public function render()
     {
         $clients = $this->clientsQuery()->get();
@@ -143,6 +160,8 @@ class ClientWeekBoard extends Component
             ->where('hub', 'partners')
             ->where('is_delimiter', false)
             ->where('is_archived', false)
+            ->orderByRaw('week_board_position is null')
+            ->orderBy('week_board_position')
             ->orderBy('position')
             ->orderBy('id');
     }

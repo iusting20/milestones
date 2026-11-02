@@ -13,9 +13,29 @@
                     @endforeach
                 </div>
 
+                <div
+                    data-sortable
+                    data-sortable-group="week-board-rows-{{ $this->getId() }}"
+                    data-sortable-handle="[data-row-handle]"
+                    data-sortable-method="reorderClients"
+                    data-component-id="{{ $this->getId() }}"
+                    wire:key="client-rows"
+                >
                 @foreach ($clients as $client)
-                    <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 border-t border-white/10 py-3" wire:key="client-{{ $client->id }}">
-                        <div class="pt-1 font-semibold text-body">{{ $client->name }}</div>
+                    <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 border-t border-white/10 py-3" data-item-id="{{ $client->id }}" wire:key="client-{{ $client->id }}">
+                        <div class="flex items-start gap-1 pt-1 font-semibold text-body">
+                            <button type="button"
+                                    data-row-handle
+                                    class="mt-0.5 shrink-0 cursor-grab touch-none text-muted/50 hover:text-muted active:cursor-grabbing"
+                                    aria-label="Drag to reorder partner">
+                                <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+                                    <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+                                    <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+                                </svg>
+                            </button>
+                            <span class="min-w-0">{{ $client->name }}</span>
+                        </div>
 
                         @foreach ($statuses as $status)
                             @php($lane = $client->id.'-'.$status->value)
@@ -88,6 +108,7 @@
                         @endforeach
                     </div>
                 @endforeach
+                </div>
             </div>
         </div>
     @endif

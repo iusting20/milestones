@@ -25,8 +25,8 @@ function initSortables() {
         }
 
         el._sortable = Sortable.create(el, {
-            group: el.dataset.componentId || 'todos',
-            handle: '[data-drag-handle]',
+            group: el.dataset.sortableGroup || el.dataset.componentId || 'todos',
+            handle: el.dataset.sortableHandle || '[data-drag-handle]',
             filter: '[data-drop-slot]',
             preventOnFilter: false,
             animation: 150,
@@ -92,5 +92,5 @@ function syncSortableList(list) {
         return;
     }
 
-    component.call('reorder', ids);
+    component.call(list.dataset.sortableMethod || 'reorder', ids);
 }

@@ -77,6 +77,21 @@ class ClientWeekBoardTest extends TestCase
         $this->assertSame(2, $first->fresh()->position);
     }
 
+    public function test_client_rows_can_be_reordered_without_changing_shared_position(): void
+    {
+        $acme = $this->client('Acme', 1);
+        $globex = $this->client('Globex', 2);
+        $initech = $this->client('Initech', 3);
+
+        Livewire::test(ClientWeekBoard::class)
+            ->call('reorderClients', [$initech->id, $acme->id])
+            ->assertSeeInOrder(['Initech', 'Acme', 'Globex']);
+
+        $this->assertSame(1, $initech->fresh()->week_board_position);
+        $this->assertSame(3, $initech->fresh()->position);
+        $this->assertNull($globex->fresh()->week_board_position);
+    }
+
     public function test_reorder_ignores_unknown_lane(): void
     {
         $item = WeekBoardItem::factory()->create();

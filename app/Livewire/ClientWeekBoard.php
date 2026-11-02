@@ -8,10 +8,17 @@ use App\Models\Project;
 use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class ClientWeekBoard extends Component
 {
+    /**
+     * Which Links hub supplies the rows: 'partners' or 'assets'.
+     */
+    #[Url(as: 'view', history: true)]
+    public string $view = 'partners';
+
     /**
      * New card titles keyed by "{projectId}-{status}".
      *
@@ -161,7 +168,7 @@ class ClientWeekBoard extends Component
         DB::transaction(function () use ($orderedIds): void {
             foreach (array_values($orderedIds) as $index => $id) {
                 Project::query()
-                    ->where('hub', 'partners')
+                    ->where('hub', $this->hub())
                     ->whereKey($id)
                     ->update(['week_board_position' => $index + 1]);
             }
@@ -182,9 +189,15 @@ class ClientWeekBoard extends Component
 
         return view('livewire.client-week-board', [
             'clients' => $clients,
+            'hub' => $this->hub(),
             'items' => $items,
             'statuses' => WeekBoardStatus::cases(),
         ]);
+    }
+
+    private function hub(): string
+    {
+        return $this->view === 'assets' ? 'assets' : 'partners';
     }
 
     /**
@@ -193,7 +206,7 @@ class ClientWeekBoard extends Component
     private function clientsQuery()
     {
         return Project::query()
-            ->where('hub', 'partners')
+            ->where('hub', $this->hub())
             ->where('is_delimiter', false)
             ->where('is_archived', false)
             ->orderByRaw('week_board_position is null')

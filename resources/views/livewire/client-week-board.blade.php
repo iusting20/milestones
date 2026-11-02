@@ -1,13 +1,34 @@
 <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-    <h1 class="mb-6 text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Week Board</h1>
+    <div class="mb-6 flex flex-wrap items-center gap-2">
+        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Week Board</h1>
+
+        <div class="ml-auto flex items-center gap-1 rounded border border-white/10 p-0.5 text-sm" role="group" aria-label="Rows">
+            @foreach (['partners' => 'Partners', 'assets' => 'Assets'] as $option => $label)
+                <button type="button"
+                        wire:click="$set('view', '{{ $option }}')"
+                        @class([
+                            'rounded px-3 py-1 transition',
+                            'bg-white/10 text-body font-semibold' => $hub === $option,
+                            'text-muted hover:text-body' => $hub !== $option,
+                        ])
+                        aria-pressed="{{ $hub === $option ? 'true' : 'false' }}">
+                    {{ $label }}
+                </button>
+            @endforeach
+        </div>
+    </div>
 
     @if ($clients->isEmpty())
-        <p class="text-muted">No partners yet. Add clients under Links → Partners.</p>
+        @if ($hub === 'assets')
+            <p class="text-muted">No assets yet. Add them under Links → Assets.</p>
+        @else
+            <p class="text-muted">No partners yet. Add clients under Links → Partners.</p>
+        @endif
     @else
         <div class="overflow-x-auto">
             <div class="min-w-[720px]">
                 <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 pb-2 text-xs font-semibold uppercase tracking-widest text-muted">
-                    <div>Partner</div>
+                    <div>{{ $hub === 'assets' ? 'Asset' : 'Partner' }}</div>
                     @foreach ($statuses as $status)
                         <div>{{ $status->label() }}</div>
                     @endforeach
@@ -19,7 +40,7 @@
                     data-sortable-handle="[data-row-handle]"
                     data-sortable-method="reorderClients"
                     data-component-id="{{ $this->getId() }}"
-                    wire:key="client-rows"
+                    wire:key="client-rows-{{ $hub }}"
                 >
                 @foreach ($clients as $client)
                     <div class="grid grid-cols-[10rem_repeat(3,minmax(0,1fr))] gap-3 border-t border-white/10 py-3" data-item-id="{{ $client->id }}" wire:key="client-{{ $client->id }}">

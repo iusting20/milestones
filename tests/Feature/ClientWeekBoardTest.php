@@ -112,6 +112,44 @@ class ClientWeekBoardTest extends TestCase
         $this->assertSame($todo->id, $item->fresh()->todo_item_id);
     }
 
+    public function test_assets_view_shows_asset_rows_and_starts_with_asset_name(): void
+    {
+        $this->client('Acme', 1);
+        $asset = $this->client('Website', 1, 'assets');
+        $item = WeekBoardItem::factory()->create(['project_id' => $asset->id, 'title' => 'Fix footer']);
+
+        $this->get(route('week-board', ['view' => 'assets']))
+            ->assertOk()
+            ->assertSee('Website')
+            ->assertDontSee('Acme');
+
+        Livewire::withQueryParams(['view' => 'assets'])
+            ->test(ClientWeekBoard::class)
+            ->assertSet('view', 'assets')
+            ->call('startCard', $item->id);
+
+        $this->assertSame('Website - Fix footer', \App\Models\TodoItem::query()->sole()->title);
+    }
+
+    public function test_assets_view_empty_state(): void
+    {
+        Livewire::test(ClientWeekBoard::class)
+            ->set('view', 'assets')
+            ->assertSee('No assets yet. Add them under Links → Assets.');
+    }
+
+    public function test_cannot_add_card_to_partner_row_from_assets_view(): void
+    {
+        $client = $this->client('Acme');
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        Livewire::test(ClientWeekBoard::class)
+            ->set('view', 'assets')
+            ->set('newTitles.'.$client->id.'-planned', 'Nope')
+            ->call('addCard', $client->id, 'planned');
+    }
+
     public function test_reorder_ignores_unknown_lane(): void
     {
         $item = WeekBoardItem::factory()->create();

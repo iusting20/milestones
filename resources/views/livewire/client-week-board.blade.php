@@ -96,6 +96,7 @@
                                         <input type="text"
                                                wire:model="newTitles.{{ $lane }}"
                                                wire:keydown.escape="cancelAdding"
+                                               wire:blur="cancelAdding"
                                                class="w-full rounded border border-white/10 bg-canvas px-2 py-1 text-sm text-body"
                                                placeholder="Card title…"
                                                autofocus>

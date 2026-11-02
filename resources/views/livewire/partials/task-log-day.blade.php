@@ -67,8 +67,8 @@
     @php($idle = $day['idle'])
     <div class="mt-3 border-t border-white/10 pt-3" data-idle-bar="{{ $day['date'] }}">
         <div class="mb-1 flex items-baseline justify-between text-[10px] uppercase tracking-[0.16em] text-muted">
-            <span>Idle 08–17</span>
-            <span class="text-faint">{{ $idle['idleMinutes'] > 0 ? $idle['idleDuration'] : '—' }}</span>
+            <span>Idle</span>
+            <span class="text-faint">{{ $idle['idleMinutes'] > 0 ? round($idle['idleMinutes'] / 540 * 100).'%' : '—' }}</span>
         </div>
         <div class="relative h-3 w-full overflow-hidden rounded-sm bg-white/5 ring-1 ring-white/10">
             @if ($idle['future'])

@@ -187,8 +187,8 @@
     </div>
 
     @if (count($stats['days']) > 0)
-        <section class="mt-8 rounded-lg border border-white/10 bg-sidebar/60">
-            <header class="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
+        <section class="mt-8 space-y-3" data-week-totals>
+            <header class="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3">
                 <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Week totals</h2>
                 <dl class="flex flex-wrap gap-x-5 gap-y-1 text-sm tabular-nums">
                     <div>
@@ -206,10 +206,15 @@
                 </dl>
             </header>
 
-            <div class="divide-y divide-white/10">
+            <div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 @foreach ($stats['days'] as $dayStats)
-                    <section wire:key="stat-day-{{ $dayStats['date'] }}" class="px-4 py-3">
-                        <header class="mb-3 flex items-baseline justify-center gap-3">
+                    <section wire:key="stat-day-{{ $dayStats['date'] }}" data-week-total-day="{{ $dayStats['date'] }}"
+                             @class([
+                                 'rounded-lg border px-4 py-3',
+                                 'border-link/40 bg-today' => $dayStats['date'] === \App\Support\Clock::todayString(),
+                                 'border-white/10 bg-sidebar/60' => $dayStats['date'] !== \App\Support\Clock::todayString(),
+                             ])>
+                        <header class="mb-3 flex items-baseline justify-center gap-3 border-b border-white/10 pb-2">
                             <h3 class="text-base font-semibold uppercase tracking-[0.14em] text-muted sm:text-lg">
                                 {{ $dayStats['heading'] }}
                             </h3>

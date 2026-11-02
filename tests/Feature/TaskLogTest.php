@@ -921,6 +921,7 @@ class TaskLogTest extends TestCase
 
                 // Stale Thursday timer must not hide Friday's 08:00-09:00 idle time.
                 return array_column($byDate['2026-10-30']['idle']['segments'], 'label') === ['Idle 08:00–09:00 (1h)']
+                    && array_column($byDate['2026-10-30']['idle']['running'], 'label') === ['Running: Running today since 09:00']
                     && array_column($byDate['2026-10-29']['idle']['segments'], 'label') === ['Idle 08:00–15:00 (7h)'];
             });
 

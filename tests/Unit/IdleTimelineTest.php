@@ -57,6 +57,24 @@ class IdleTimelineTest extends TestCase
     }
 
     #[Test]
+    public function running_segments_are_clipped_to_window_and_now(): void
+    {
+        $r = IdleTimeline::runningSegments('2026-10-30', [
+            [$this->at('07:00'), $this->at('23:59'), 'Early bird'],
+            [$this->at('10:00'), $this->at('23:59'), 'Mockups'],
+            [$this->at('12:00'), $this->at('23:59'), 'Not yet'],
+        ], $this->at('11:00'));
+
+        $this->assertCount(2, $r);
+        $this->assertSame('Running: Early bird since 07:00', $r[0]['label']);
+        $this->assertEqualsWithDelta(0.0, $r[0]['left'], 0.01);
+        $this->assertEqualsWithDelta(33.333, $r[0]['width'], 0.01);
+        $this->assertSame('Running: Mockups since 10:00', $r[1]['label']);
+        $this->assertEqualsWithDelta(22.222, $r[1]['left'], 0.01);
+        $this->assertEqualsWithDelta(11.111, $r[1]['width'], 0.01);
+    }
+
+    #[Test]
     public function future_day_has_no_idle(): void
     {
         $r = IdleTimeline::forDay('2026-10-30', [], $this->at('07:00'));

@@ -97,6 +97,37 @@ class IdleTimeline
         ];
     }
 
+    /**
+     * Running-timer spans clipped to the day's window and to now.
+     *
+     * @param  iterable<array{0: CarbonInterface, 1: CarbonInterface, 2: string}>  $timers  [start, end, title]
+     * @return array<int, array{left: float, width: float, label: string}>
+     */
+    public static function runningSegments(string $date, iterable $timers, ?CarbonInterface $now = null): array
+    {
+        $tz = Clock::timezone();
+        $windowStart = Carbon::parse($date, $tz)->setTime(self::START_HOUR, 0)->getTimestamp();
+        $windowEnd = Carbon::parse($date, $tz)->setTime(self::END_HOUR, 0)->getTimestamp();
+        $total = $windowEnd - $windowStart;
+        $limit = min($windowEnd, ($now ?? Carbon::now())->getTimestamp());
+
+        $segments = [];
+        foreach ($timers as [$from, $to, $title]) {
+            $a = max($windowStart, $from->getTimestamp());
+            $b = min($limit, $to->getTimestamp());
+            if ($b <= $a) {
+                continue;
+            }
+            $segments[] = [
+                'left' => round(($a - $windowStart) / $total * 100, 3),
+                'width' => round(($b - $a) / $total * 100, 3),
+                'label' => 'Running: '.$title.' since '.Carbon::createFromTimestamp($from->getTimestamp(), $tz)->format('H:i'),
+            ];
+        }
+
+        return $segments;
+    }
+
     private static function duration(int $minutes): string
     {
         $h = intdiv($minutes, 60);

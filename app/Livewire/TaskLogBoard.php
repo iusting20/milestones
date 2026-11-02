@@ -384,12 +384,12 @@ class TaskLogBoard extends Component
         // running for days is stale and must not hide idle time on later days.
         $runningIntervals = TodoItem::query()
             ->whereNotNull('logging_started_at')
-            ->pluck('logging_started_at')
-            ->map(function ($startedAt): array {
-                $started = Carbon::parse($startedAt);
+            ->get(['title', 'logging_started_at'])
+            ->map(function (TodoItem $item): array {
+                $started = Carbon::parse($item->logging_started_at);
                 $endOfStartDay = $started->copy()->timezone(Clock::timezone())->endOfDay();
 
-                return [$started, now()->min($endOfStartDay)];
+                return [$started, now()->min($endOfStartDay), (string) $item->title];
             });
 
         $days = [];
@@ -422,8 +422,8 @@ class TaskLogBoard extends Component
                 'idle' => IdleTimeline::forDay(
                     $dateKey,
                     $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at])
-                        ->concat($runningIntervals),
-                ),
+                        ->concat($runningIntervals->map(fn (array $timer): array => [$timer[0], $timer[1]])),
+                ) + ['running' => IdleTimeline::runningSegments($dateKey, $runningIntervals)],
             ];
         }
 

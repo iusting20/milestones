@@ -80,6 +80,11 @@
                      style="left: {{ $segment['left'] }}%; width: {{ $segment['width'] }}%"
                      title="{{ $segment['label'] }}"></div>
             @endforeach
+            @foreach ($idle['running'] ?? [] as $running)
+                <div class="absolute inset-y-0" data-running-segment
+                     style="left: {{ $running['left'] }}%; width: {{ $running['width'] }}%; background-image: repeating-linear-gradient(45deg, rgba(88,166,255,0.9) 0 3px, rgba(88,166,255,0.25) 3px 6px);"
+                     title="{{ $running['label'] }}"></div>
+            @endforeach
         </div>
         <div class="relative mt-1 h-3 text-[9px] text-faint">
             @foreach ($idle['ticks'] as $tick)

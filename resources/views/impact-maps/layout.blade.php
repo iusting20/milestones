@@ -30,8 +30,8 @@
         .col { position: absolute; top: 8px; color: #b8862b; font-size: 30px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
         .node { position: absolute; transform: translateY(-50%); border-radius: 10px; padding: 6px 10px; font-weight: 700; text-transform: uppercase; line-height: 1.1; font-size: 16px; color: #1f1f1f; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
         .lvl-0 { background: #f9b11b; color: #fff; font-size: 24px; padding: 14px 14px; min-height: 90px; display: flex; flex-direction: column; justify-content: center; }
-        .lvl-1 { background: #9fbf3b; font-size: 18px; }
-        .lvl-2 { background: #7b86c6; }
+        .lvl-1 { background: #7b86c6; font-size: 18px; }
+        .lvl-2 { background: #9fbf3b; }
         .lvl-3 { background: #ef7a7a; }
         .lvl-4 { background: #fbd75b; font-size: 14px; }
         .node .t { cursor: text; display: block; word-wrap: break-word; }

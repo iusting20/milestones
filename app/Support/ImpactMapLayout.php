@@ -16,11 +16,11 @@ class ImpactMapLayout
 
     /** Left edge and box width per level. */
     public const COLUMNS = [
-        [20, 150],
-        [230, 170],
-        [460, 180],
-        [700, 180],
-        [930, 120],
+        [20, 220],
+        [300, 170],
+        [530, 180],
+        [770, 180],
+        [1000, 160],
     ];
 
     /**
@@ -45,7 +45,7 @@ class ImpactMapLayout
         return [
             'boxes' => $boxes,
             'links' => $links,
-            'width' => max(1080, $x + $w + 40),
+            'width' => max(1200, $x + $w + 40),
             'height' => self::TOP + max(1, $row) * self::ROW + 40,
         ];
     }

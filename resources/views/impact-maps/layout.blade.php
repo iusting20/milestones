@@ -35,6 +35,7 @@
         .lvl-3 { background: #ef7a7a; }
         .lvl-4 { background: #fbd75b; font-size: 14px; }
         .node .t { cursor: text; display: block; word-wrap: break-word; }
+        .lvl-0 .t, .lvl-4 .t { text-wrap: balance; overflow-wrap: anywhere; }
         .node form.f-edit, .node form.f-add { display: none; margin: 4px 0 0; }
         .node.editing .t { display: none; }
         .node.editing form.f-edit, .node.adding form.f-add { display: block; }

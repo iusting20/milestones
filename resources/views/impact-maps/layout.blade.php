@@ -82,7 +82,7 @@
         .node[data-reorder] { cursor: grab; touch-action: none; user-select: none; }
         .node[data-reorder] .t { cursor: grab; }
         .node.dragging { z-index: 20; opacity: .85; box-shadow: 4px 4px 0 #2b2b2b; }
-        .sub-label { position: absolute; left: 0; right: 0; text-align: center; bottom: 100%; margin-bottom: 2px; font-size: 15px; font-weight: 400; line-height: 1;
+        .sub-label { position: absolute; left: 0; right: 0; text-align: center; bottom: 100%; margin-bottom: 8px; font-size: 15px; font-weight: 400; line-height: 1;
             text-transform: none; letter-spacing: .02em; pointer-events: none; user-select: none; white-space: nowrap; }
         .sub-3 { color: #d95c5c; }
         .sub-4 { color: #c99a06; }

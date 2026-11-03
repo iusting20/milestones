@@ -33,11 +33,13 @@
         @if ($maps->isEmpty())
             <p class="muted">No impact maps yet. Click + New map to create one.</p>
         @else
+            <div id="im-groups">
             @foreach ($maps as $client => $group)
-            <h2 class="group">{{ $client !== '' ? $client : 'No client / project' }}</h2>
+            <section class="grp" data-client="{{ $client }}">
+            <h2 class="group" title="Drag to reorder">{{ $client !== '' ? $client : 'No client / project' }}</h2>
             <ul class="maps">
                 @foreach ($group as $map)
-                    <li x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+                    <li data-slug="{{ $map->slug }}" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
                         <a href="{{ route('impact-maps.show', ['map' => $map->slug]) }}">{{ $map->name }}</a>
                         <span class="meta">
                             <span class="muted">{{ $map->updated_at->timezone('Europe/Bucharest')->format('j M Y') }}</span>
@@ -67,10 +69,41 @@
                     </li>
                 @endforeach
             </ul>
+            </section>
             @endforeach
+            </div>
         @endif
     </div>
 @push('scripts')
     @livewireScripts
+    @vite(['resources/js/app.js'])
+    <script type="module">
+        const root = document.getElementById('im-groups');
+        if (root && window.Sortable) {
+            const save = (reload) => {
+                document.body.classList.remove('im-dragging');
+                const groups = [...root.querySelectorAll(':scope > .grp')].map((g) => ({
+                    client: g.dataset.client,
+                    maps: [...g.querySelectorAll('.maps > li[data-slug]')].map((li) => li.dataset.slug),
+                }));
+                fetch(@js(route('impact-maps.reorder')), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                    body: JSON.stringify({ groups }),
+                }).then((r) => { if (!r.ok) throw r; if (reload) location.reload(); })
+                  .catch(() => { alert('Could not save the new order.'); location.reload(); });
+            };
+            const common = {
+                animation: 150, ghostClass: 'im-ghost', chosenClass: 'im-chosen',
+                onStart: () => document.body.classList.add('im-dragging'),
+            };
+            Sortable.create(root, { ...common, draggable: '.grp', handle: '.group', onEnd: (e) => e.oldIndex !== e.newIndex ? save(false) : document.body.classList.remove('im-dragging') });
+            root.querySelectorAll('.maps').forEach((ul) => Sortable.create(ul, {
+                ...common, group: 'im-maps', draggable: 'li[data-slug]', emptyInsertThreshold: 24,
+                filter: '.wrench, .cog-menu', preventOnFilter: false,
+                onEnd: (e) => (e.from !== e.to || e.oldIndex !== e.newIndex) ? save(e.from !== e.to) : document.body.classList.remove('im-dragging'),
+            }));
+        }
+    </script>
 @endpush
 @endsection

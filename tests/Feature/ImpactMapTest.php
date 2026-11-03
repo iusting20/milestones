@@ -209,4 +209,51 @@ class ImpactMapTest extends TestCase
             ->assertSee('<option value="__new__" selected', false);
         $this->assertSame(0, ImpactMap::query()->count());
     }
+
+    public function test_new_maps_go_to_top_and_new_clients_last(): void
+    {
+        $this->makeMap('Old A', 'Beta');
+        $this->makeMap('New A', 'Beta');
+        $this->makeMap('Loose', '');
+        $this->makeMap('Alpha map', 'Alpha');
+
+        $this->get('/impact-maps')->assertOk()
+            ->assertSeeInOrder(['>Alpha<', 'Alpha map', '>Beta<', 'New A', 'Old A', 'No client / project', 'Loose'], false);
+    }
+
+    public function test_reorder_saves_group_and_map_order_and_moves_across_groups(): void
+    {
+        $a1 = $this->makeMap('A1', 'Acme');
+        $a2 = $this->makeMap('A2', 'Acme');
+        $z1 = $this->makeMap('Z1', 'Zeta');
+        $n1 = $this->makeMap('N1', '');
+
+        $this->postJson('/impact-maps/reorder', ['groups' => [
+            ['client' => '', 'maps' => [$n1->slug]],
+            ['client' => 'Zeta', 'maps' => [$z1->slug, $a1->slug]],
+            ['client' => 'Acme', 'maps' => [$a2->slug]],
+        ]])->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame('Zeta', $a1->fresh()->client);
+        $this->assertSame(1, $a1->fresh()->position);
+        $this->get('/impact-maps')->assertOk()
+            ->assertSeeInOrder(['No client / project', 'N1', '>Zeta<', 'Z1', 'A1', '>Acme<', 'A2'], false)
+            ->assertSee('data-slug="'.$a1->slug.'"', false);
+
+        $this->postJson('/impact-maps/reorder', ['groups' => [
+            ['client' => 'Acme', 'maps' => [$a2->slug, $a1->slug]],
+        ]])->assertOk();
+        $this->assertSame('Acme', $a1->fresh()->client);
+        $this->assertNull($n1->fresh()->client);
+    }
+
+    public function test_reorder_requires_login_and_valid_payload(): void
+    {
+        $map = $this->makeMap('A1', 'Acme');
+        $this->postJson('/impact-maps/reorder', ['groups' => 'nope'])->assertStatus(422);
+
+        $this->flushSession();
+        $this->post('/impact-maps/reorder', ['groups' => [['client' => 'Hack', 'maps' => [$map->slug]]]])->assertRedirect(route('login'));
+        $this->assertSame('Acme', $map->fresh()->client);
+    }
 }

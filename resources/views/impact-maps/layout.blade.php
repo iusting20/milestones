@@ -74,6 +74,11 @@
         .modal .picker input[type=text] { margin-bottom: 0; }
         .cog-menu form:first-child { flex-direction: column; align-items: stretch; }
         .cog-menu input[type=text] { border: 3px solid #2b2b2b; border-radius: 12px; }
+        #im-groups .group, #im-groups .maps li { cursor: grab; }
+        #im-groups .maps li .cog-menu { cursor: default; }
+        .im-chosen, body.im-dragging, body.im-dragging * { cursor: grabbing !important; }
+        .im-ghost { opacity: .4; border-style: dashed !important; }
+        #im-groups .maps { min-height: 12px; }
         [x-cloak] { display: none !important; }
     </style>
 </head>

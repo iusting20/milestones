@@ -7,7 +7,9 @@ use App\Models\ImpactMap;
 use App\Models\ImpactMapNode;
 use App\Support\ImpactMapLayout;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -18,9 +20,7 @@ class ImpactMapController extends Controller
     public function index(): View
     {
         return view('impact-maps.index', [
-            'maps' => ImpactMap::query()->withCount('nodes')
-                ->orderByRaw("COALESCE(client, '') = ''")->orderBy('client')->orderByDesc('updated_at')->get()
-                ->groupBy(fn (ImpactMap $m) => (string) $m->client),
+            'maps' => $this->orderedGroups(),
             'clients' => ImpactMap::query()->whereNotNull('client')->where('client', '!=', '')
                 ->distinct()->orderBy('client')->pluck('client'),
         ]);
@@ -32,7 +32,10 @@ class ImpactMapController extends Controller
         $client = $this->client($request);
 
         $map = DB::transaction(function () use ($data, $client) {
+            // New maps go to the top of their group.
+            $top = ImpactMap::query()->where(fn ($q) => $client === null ? $q->whereNull('client')->orWhere('client', '') : $q->where('client', $client))->min('position');
             $map = ImpactMap::query()->create(['name' => trim($data['name']), 'client' => $client]);
+            $map->forceFill(['position' => $top === null ? 0 : $top - 1])->save();
             $map->nodes()->create(['level' => ImpactMapNode::GOAL, 'title' => trim($data['name']), 'position' => 0]);
 
             return $map;
@@ -149,5 +152,50 @@ class ImpactMapController extends Controller
         $client = ($data['client'] ?? null) === self::NEW_CLIENT ? ($data['client_new'] ?? '') : ($data['client'] ?? '');
 
         return trim((string) $client) ?: null;
+    }
+
+    /**
+     * Save drag-and-drop order. Payload: groups = [{client: '', maps: [slug, ...]}, ...] in display order.
+     * A map dropped into another group takes that group's client.
+     */
+    public function reorder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'groups' => 'required|array|max:500',
+            'groups.*.client' => 'nullable|string|max:255',
+            'groups.*.maps' => 'present|array|max:2000',
+            'groups.*.maps.*' => 'string|max:64',
+        ]);
+
+        DB::transaction(function () use ($data) {
+            $now = now();
+            foreach (array_values($data['groups']) as $g => $group) {
+                $client = trim((string) ($group['client'] ?? ''));
+                DB::table('impact_map_groups')->upsert(
+                    [['client' => $client, 'position' => $g, 'created_at' => $now, 'updated_at' => $now]],
+                    ['client'], ['position', 'updated_at']
+                );
+                foreach (array_values($group['maps']) as $p => $slug) {
+                    ImpactMap::query()->where('slug', $slug)->update(['position' => $p, 'client' => $client === '' ? null : $client]);
+                }
+            }
+        });
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Groups in saved order (unsaved clients after, alphabetically; "No client" last by default); maps by position. */
+    private function orderedGroups(): Collection
+    {
+        $order = DB::table('impact_map_groups')->pluck('position', 'client');
+        $groups = ImpactMap::query()->withCount('nodes')->orderBy('position')->orderByDesc('updated_at')->get()
+            ->groupBy(fn (ImpactMap $m) => (string) $m->client);
+
+        return $groups->sortBy(fn ($maps, $client) => [
+            $order->has($client) ? 0 : 1,
+            $order->get($client, 0),
+            $client === '' ? 1 : 0,
+            mb_strtolower((string) $client),
+        ]);
     }
 }

@@ -46,6 +46,7 @@ Route::prefix('impact-maps')
     ->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
+        Route::post('/reorder', 'reorder')->name('reorder');
         Route::get('/{map}', 'show')->name('show');
         Route::patch('/{map}', 'update')->name('update');
         Route::delete('/{map}', 'destroy')->name('destroy');

@@ -79,6 +79,9 @@
         .im-chosen, body.im-dragging, body.im-dragging * { cursor: grabbing !important; }
         .im-ghost { opacity: .4; border-style: dashed !important; }
         #im-groups .maps { min-height: 12px; }
+        .node[data-reorder] { cursor: grab; touch-action: none; user-select: none; }
+        .node[data-reorder] .t { cursor: grab; }
+        .node.dragging { z-index: 20; opacity: .85; box-shadow: 4px 4px 0 #2b2b2b; }
         [x-cloak] { display: none !important; }
     </style>
 </head>

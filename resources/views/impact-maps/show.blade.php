@@ -29,7 +29,8 @@
                     $np = $p + ['node' => $node->id];
                     $childLabel = $levels[$node->level + 1] ?? null;
                 @endphp
-                <div class="node lvl-{{ $box['level'] }}" data-node="{{ $node->id }}"
+                <div class="node lvl-{{ $box['level'] }}" data-node="{{ $node->id }}" data-parent="{{ $node->parent_id }}"
+                     @if ($canEdit && $node->parent_id !== null) data-reorder="{{ route('impact-maps.nodes.reorder', $p + ['node' => $node->parent_id]) }}" @endif
                      style="left: {{ $box['x'] }}px; top: {{ $box['y'] }}px; width: {{ $box['w'] }}px;">
                     @if ($canEdit)
                     <span class="t" title="Click to rename" onclick="imEdit(this)">{{ $node->title }}</span>
@@ -80,5 +81,46 @@
             node.classList.add('adding');
             node.querySelector('.f-add input').focus();
         }
+
+        // Drag a node up/down to reorder it among its siblings (same parent only).
+        (() => {
+            const token = @js(csrf_token());
+            let drag = null, swallowClick = false;
+            const siblings = (n) => [...document.querySelectorAll('.node[data-reorder]')].filter((s) => s.dataset.parent === n.dataset.parent);
+            const mid = (n) => { const r = n.getBoundingClientRect(); return r.top + r.height / 2; };
+
+            document.addEventListener('pointerdown', (e) => {
+                const n = e.target.closest('.node[data-reorder]');
+                if (!n || e.button !== 0 || n.matches('.editing, .adding') || e.target.closest('.tools, form, input, button')) return;
+                if (siblings(n).length < 2) return;
+                drag = { n, y0: e.clientY, dy: 0, on: false, id: e.pointerId };
+            });
+            document.addEventListener('pointermove', (e) => {
+                if (!drag || e.pointerId !== drag.id) return;
+                drag.dy = e.clientY - drag.y0;
+                if (!drag.on && Math.abs(drag.dy) < 6) return;
+                if (!drag.on) { drag.on = true; drag.n.classList.add('dragging'); document.body.classList.add('im-dragging'); }
+                drag.n.style.transform = `translateY(calc(-50% + ${drag.dy}px))`;
+                e.preventDefault();
+            });
+            document.addEventListener('pointerup', (e) => {
+                if (!drag || e.pointerId !== drag.id) return;
+                const { n, on } = drag; drag = null;
+                if (!on) return;
+                swallowClick = true; setTimeout(() => swallowClick = false, 0);
+                document.body.classList.remove('im-dragging');
+                const sibs = siblings(n);
+                const before = sibs.map((s) => s.dataset.node);
+                const order = sibs.map((s) => [mid(s), s.dataset.node]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+                if (order.join() === before.join()) { n.style.transform = ''; n.classList.remove('dragging'); return; }
+                fetch(n.dataset.reorder, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                    body: JSON.stringify({ children: order.map(Number) }),
+                }).then((r) => { if (!r.ok) throw r; location.reload(); })
+                  .catch(() => { alert('Could not save the new order.'); location.reload(); });
+            });
+            document.addEventListener('click', (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+        })();
     </script>
 @endsection

@@ -53,4 +53,5 @@ Route::prefix('impact-maps')
         Route::post('/{map}/nodes/{node}', 'storeNode')->name('nodes.store');
         Route::patch('/{map}/nodes/{node}', 'updateNode')->name('nodes.update');
         Route::delete('/{map}/nodes/{node}', 'destroyNode')->name('nodes.destroy');
+        Route::post('/{map}/nodes/{node}/reorder', 'reorderChildren')->name('nodes.reorder');
     });

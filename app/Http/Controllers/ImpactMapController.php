@@ -198,4 +198,28 @@ class ImpactMapController extends Controller
             mb_strtolower((string) $client),
         ]);
     }
+
+    /** Reorder the children of {node}: children = [id, ...] must be exactly that parent's children (no reparenting). */
+    public function reorderChildren(Request $request): JsonResponse
+    {
+        $map = $this->map($request);
+        $parent = $map->nodes()->whereKey((int) $request->route('node'))->firstOrFail();
+        $ids = array_map('intval', $request->validate([
+            'children' => 'required|array|max:500',
+            'children.*' => 'integer|distinct',
+        ])['children']);
+
+        $current = $map->nodes()->where('parent_id', $parent->id)->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $given = $ids;
+        sort($given);
+        abort_unless($given === $current, 422, 'Children do not match this parent.');
+
+        DB::transaction(function () use ($ids, $map) {
+            foreach ($ids as $p => $id) {
+                $map->nodes()->whereKey($id)->update(['position' => $p]);
+            }
+        });
+
+        return response()->json(['ok' => true]);
+    }
 }

@@ -256,4 +256,59 @@ class ImpactMapTest extends TestCase
         $this->post('/impact-maps/reorder', ['groups' => [['client' => 'Hack', 'maps' => [$map->slug]]]])->assertRedirect(route('login'));
         $this->assertSame('Acme', $map->fresh()->client);
     }
+
+    private function kids(ImpactMap $map, ImpactMapNode $parent, array $titles): array
+    {
+        foreach ($titles as $t) {
+            $this->post($this->mapUrl($map, '/nodes/'.$parent->id), ['title' => $t]);
+        }
+
+        return ImpactMapNode::query()->where('parent_id', $parent->id)->orderBy('position')->get()->all();
+    }
+
+    public function test_sibling_nodes_can_be_reordered(): void
+    {
+        $map = $this->makeMap('Goal');
+        [$a, $b, $c] = $this->kids($map, $map->goal, ['Actor A', 'Actor B', 'Actor C']);
+
+        $this->get($this->mapUrl($map))->assertOk()
+            ->assertSeeInOrder(['Actor A', 'Actor B', 'Actor C'])
+            ->assertSee('data-reorder="'.url('/impact-maps/'.$map->slug.'/nodes/'.$map->goal->id.'/reorder').'"', false);
+
+        $this->postJson($this->mapUrl($map, '/nodes/'.$map->goal->id.'/reorder'), ['children' => [$c->id, $a->id, $b->id]])
+            ->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame([0, 1, 2], [$c->fresh()->position, $a->fresh()->position, $b->fresh()->position]);
+        $this->get($this->mapUrl($map))->assertOk()->assertSeeInOrder(['Actor C', 'Actor A', 'Actor B']);
+        $this->assertSame($map->goal->id, $c->fresh()->parent_id);
+    }
+
+    public function test_reorder_rejects_foreign_or_missing_children(): void
+    {
+        $map = $this->makeMap('Goal');
+        [$a, $b] = $this->kids($map, $map->goal, ['Actor A', 'Actor B']);
+        [$i1] = $this->kids($map, $a, ['Impact 1']);
+        $other = $this->makeMap('Other');
+        [$x] = $this->kids($other, $other->goal, ['Foreign']);
+        $url = $this->mapUrl($map, '/nodes/'.$map->goal->id.'/reorder');
+
+        $this->postJson($url, ['children' => [$b->id, $i1->id]])->assertStatus(422);   // grandchild (reparent)
+        $this->postJson($url, ['children' => [$b->id, $a->id, $x->id]])->assertStatus(422); // other map
+        $this->postJson($url, ['children' => [$b->id]])->assertStatus(422);            // incomplete
+        $this->postJson($this->mapUrl($map, '/nodes/'.$other->goal->id.'/reorder'), ['children' => [$x->id]])->assertNotFound();
+        $this->assertSame([$a->position, $b->position], [$a->fresh()->position, $b->fresh()->position]);
+        $this->assertSame($a->id, $i1->fresh()->parent_id);
+    }
+
+    public function test_reorder_requires_login_and_public_view_has_no_drag(): void
+    {
+        $map = $this->makeMap('Goal');
+        [$a, $b] = $this->kids($map, $map->goal, ['Actor A', 'Actor B']);
+
+        $this->flushSession();
+        $this->post($this->mapUrl($map, '/nodes/'.$map->goal->id.'/reorder'), ['children' => [$b->id, $a->id]])
+            ->assertRedirect(route('login'));
+        $this->assertSame($a->position, $a->fresh()->position);
+        $this->get($this->mapUrl($map))->assertOk()->assertDontSee('data-reorder=', false);
+    }
 }

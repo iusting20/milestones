@@ -99,7 +99,8 @@
         .sub-4 { color: #c99a06; }
         /* Progress tracker */
         .track-wrap { margin-top: 28px; }
-        .track-toggle { font-size: 20px; padding: 6px 18px; }
+        .track-toggle { font-family: 'Patrick Hand', cursive; font-size: 20px; text-transform: lowercase; background: none; border: 0; padding: 0; color: #2b2b2b; opacity: .45; cursor: pointer; transition: opacity .2s; white-space: nowrap; }
+        .track-toggle:hover, .track-toggle:focus-visible, .track-toggle[aria-expanded=true] { opacity: .9; }
         .track-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s cubic-bezier(.2,.8,.2,1); }
         .track-wrap.open .track-panel { grid-template-rows: 1fr; }
         .track-inner { overflow: hidden; }

@@ -354,7 +354,7 @@ class ImpactMapTest extends TestCase
     public function test_tracker_and_checkins_crud(): void
     {
         $map = $this->makeMap('Goal');
-        $this->get($this->mapUrl($map))->assertOk()->assertSee('Track Progress')->assertSee('Set start &amp; goal', false);
+        $this->get($this->mapUrl($map))->assertOk()->assertSee('class="track-toggle"', false)->assertSee('Set start &amp; goal', false);
 
         $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '5', 'track_target' => '5'])->assertSessionHasErrors('track_target');
         $this->put($this->mapUrl($map, '/tracker'), ['track_start' => 'abc', 'track_target' => '9'])->assertSessionHasErrors('track_start');
@@ -408,7 +408,7 @@ class ImpactMapTest extends TestCase
     {
         $map = $this->makeMap('Goal');
         $this->flushSession();
-        $this->get($this->mapUrl($map))->assertOk()->assertDontSee('Track Progress');
+        $this->get($this->mapUrl($map))->assertOk()->assertDontSee('class="track-toggle"', false);
         $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '0', 'track_target' => '10'])->assertRedirect(route('login'));
         $this->assertFalse($map->fresh()->hasTracker());
 
@@ -416,7 +416,7 @@ class ImpactMapTest extends TestCase
         $c = $map->checkins()->create(['value' => 420, 'date' => '2026-11-03']);
 
         $this->get($this->mapUrl($map))->assertOk()
-            ->assertSee('Track Progress')->assertSee('42% of the way')
+            ->assertSee('class="track-toggle"', false)->assertSee('42% of the way')
             ->assertDontSee('name="checkin_value"', false)
             ->assertDontSee('name="track_start"', false)
             ->assertDontSee('class="ck-del"', false)

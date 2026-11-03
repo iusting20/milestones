@@ -5,7 +5,12 @@
 @section('content')
     @php $p = ['map' => $map->slug]; @endphp
     <header style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px;">
-        <h1>{{ $map->name }}</h1>
+        <div style="display: flex; align-items: baseline; gap: 14px; min-width: 0;">
+            <h1>{{ $map->name }}</h1>
+            @if ($map->hasTracker() || $canEdit)
+                <button type="button" class="track-toggle" aria-expanded="false" aria-controls="track-panel" onclick="imTrack()">progress</button>
+            @endif
+        </div>
         @if ($map->client) <span class="client" style="text-align: right;">{{ $map->client }}</span>@endif
     </header>
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif
@@ -90,9 +95,6 @@
     @endphp
     @if ($tracker || $canEdit)
     <div class="track-wrap" id="track" data-key="im-track-{{ $map->slug }}" data-force="{{ $trackErr ? 1 : 0 }}">
-        <button type="button" class="toon-btn track-toggle" aria-expanded="false" aria-controls="track-panel" onclick="imTrack()">
-            <span aria-hidden="true">🏁</span> Track Progress
-        </button>
         <section id="track-panel" class="track-panel" aria-label="Progress tracker">
             <div class="track-inner"><div class="track-card">
                 <h2>Track progress</h2>
@@ -185,7 +187,7 @@
             if (!wrap) return;
             const open = force ?? !wrap.classList.contains('open');
             wrap.classList.toggle('open', open);
-            wrap.querySelector('.track-toggle').setAttribute('aria-expanded', open);
+            document.querySelector('.track-toggle').setAttribute('aria-expanded', open);
             try { localStorage.setItem(wrap.dataset.key, open ? '1' : '0'); } catch (e) {}
             if (open && force === undefined) setTimeout(() => wrap.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }), 60);
         }

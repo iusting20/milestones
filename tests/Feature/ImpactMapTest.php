@@ -311,4 +311,28 @@ class ImpactMapTest extends TestCase
         $this->assertSame($a->position, $a->fresh()->position);
         $this->get($this->mapUrl($map))->assertOk()->assertDontSee('data-reorder=', false);
     }
+
+    public function test_epics_and_stories_labels_on_topmost_nodes_only(): void
+    {
+        $map = $this->makeMap('Goal');
+        [$actor] = $this->kids($map, $map->goal, ['Actor']);
+        [$impact] = $this->kids($map, $actor, ['Impact']);
+
+        $this->get($this->mapUrl($map))->assertOk()->assertDontSee("<span class=\"sub-label", false);
+
+        [$e1, $e2] = $this->kids($map, $impact, ['Epic one', 'Epic two']);
+        $this->get($this->mapUrl($map))->assertOk()
+            ->assertSee('<span class="sub-label sub-3" aria-hidden="true">Epics</span>', false)
+            ->assertDontSee('>Stories</span>', false);
+
+        $this->kids($map, $e2, ['Story x']);
+        $this->kids($map, $e1, ['Story a', 'Story b']);
+
+        $this->flushSession();
+        $html = $this->get($this->mapUrl($map))->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, '>Epics</span>'));
+        $this->assertSame(1, substr_count($html, '>Stories</span>'));
+        $this->assertMatchesRegularExpression('/>Epics<\/span>\s*<span class="t"[^>]*>Epic one</', $html);
+        $this->assertMatchesRegularExpression('/>Stories<\/span>\s*<span class="t"[^>]*>Story a</', $html);
+    }
 }

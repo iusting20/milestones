@@ -23,6 +23,14 @@
                 <div class="col" style="left: {{ $columns[$i][0] }}px;">{{ $label }}</div>
             @endforeach
 
+            @php
+                // Subtle sub-labels in the Deliverable column: topmost epic (level 3) and topmost story (level 4).
+                $subLabels = [];
+                foreach ([3 => 'Epics', 4 => 'Stories'] as $lvl => $text) {
+                    $top = collect($layout['boxes'])->where('level', $lvl)->sortBy('y')->first();
+                    if ($top) { $subLabels[$top['node']->id] = [$lvl, $text]; }
+                }
+            @endphp
             @foreach ($layout['boxes'] as $box)
                 @php
                     $node = $box['node'];
@@ -32,6 +40,9 @@
                 <div class="node lvl-{{ $box['level'] }}" data-node="{{ $node->id }}" data-parent="{{ $node->parent_id }}"
                      @if ($canEdit && $node->parent_id !== null) data-reorder="{{ route('impact-maps.nodes.reorder', $p + ['node' => $node->parent_id]) }}" @endif
                      style="left: {{ $box['x'] }}px; top: {{ $box['y'] }}px; width: {{ $box['w'] }}px;">
+                    @isset($subLabels[$node->id])
+                        <span class="sub-label sub-{{ $subLabels[$node->id][0] }}" aria-hidden="true">{{ $subLabels[$node->id][1] }}</span>
+                    @endisset
                     @if ($canEdit)
                     <span class="t" title="Click to rename" onclick="imEdit(this)">{{ $node->title }}</span>
                     <form class="f-edit" method="POST" action="{{ route('impact-maps.nodes.update', $np) }}">

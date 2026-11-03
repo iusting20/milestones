@@ -46,11 +46,25 @@
     </style>
     <style>
         .maps li { position: relative; }
-        .cog { background: none; border: 0; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; color: #666; }
-        .cog:hover { color: #000; }
-        .cog-menu { position: absolute; z-index: 10; left: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid #ccc;
-            border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.15); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+        .meta { display: flex; align-items: center; gap: 8px; }
+        .wrench { background: none; border: 0; cursor: pointer; padding: 0; line-height: 0; transition: transform .15s; }
+        .wrench:hover, .wrench[aria-expanded=true] { transform: rotate(-18deg) scale(1.1); }
+        .cog-menu { position: absolute; z-index: 10; right: 0; top: 100%; margin-top: 6px; background: #fffdf7; border: 3px solid #2b2b2b;
+            border-radius: 14px; box-shadow: 4px 4px 0 #2b2b2b; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 280px; }
         .cog-menu form { margin: 0; display: flex; gap: 6px; }
+        .toon-btn { font: inherit; font-size: 17px; cursor: pointer; border: 3px solid #2b2b2b; border-radius: 12px; padding: 4px 14px;
+            text-transform: uppercase; box-shadow: 3px 3px 0 #2b2b2b; background: #f9b11b; color: #2b2b2b; }
+        .toon-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 #2b2b2b; }
+        .toon-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #2b2b2b; }
+        .toon-btn.plain { background: #fff; }
+        .modal-bg { position: fixed; inset: 0; z-index: 50; background: rgba(43, 43, 43, .45); display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal { background: #fffdf7; border: 3px solid #2b2b2b; border-radius: 18px; box-shadow: 6px 6px 0 #2b2b2b; padding: 20px 22px;
+            width: 100%; max-width: 420px; transform: rotate(-.6deg); }
+        .modal h2 { margin: 0 0 14px; color: #b8862b; text-transform: uppercase; font-size: 28px; }
+        .modal label { display: block; font-size: 18px; color: #8a5a12; margin: 0 0 4px; }
+        .modal input[type=text] { width: 100%; border: 3px solid #2b2b2b; border-radius: 12px; padding: 6px 10px; font-size: 19px; margin-bottom: 12px; }
+        .modal input[type=text]:focus { outline: none; box-shadow: 3px 3px 0 #f9b11b; }
+        .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
         [x-cloak] { display: none !important; }
     </style>
 </head>

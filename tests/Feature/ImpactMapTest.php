@@ -136,7 +136,13 @@ class ImpactMapTest extends TestCase
         $this->assertNull($b->client);
 
         $this->get('/impact-maps')->assertOk()->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B'])
-            ->assertSee('class="cog"', false)
+            ->assertSee('class="wrench"', false)
+            ->assertDontSee('class="cog"', false)
+            ->assertDontSee('nodes ·')
+            ->assertSee(now()->timezone('Europe/Bucharest')->format('j M Y'))
+            ->assertDontSee(now()->timezone('Europe/Bucharest')->format('j M Y H:i'))
+            ->assertSee('class="modal-bg"', false)
+            ->assertSee('x-data="{ create: false }"', false)
             ->assertSee('value="Acme"', false)
             ->assertSee('Delete map')
             ->assertSee($this->mapUrl($a), false);
@@ -153,5 +159,13 @@ class ImpactMapTest extends TestCase
         $two = $this->makeMap('Two');
 
         $this->patch($this->mapUrl($one, '/nodes/'.$two->goal->id), ['title' => 'Hijack'])->assertNotFound();
+    }
+
+    public function test_validation_error_reopens_create_modal(): void
+    {
+        $this->from('/impact-maps')->post('/impact-maps', ['name' => ''])->assertRedirect('/impact-maps');
+        $this->followingRedirects()->from('/impact-maps')->post('/impact-maps', ['name' => ''])
+            ->assertOk()->assertSee('x-data="{ create: true }"', false);
+        $this->assertSame(0, ImpactMap::query()->count());
     }
 }

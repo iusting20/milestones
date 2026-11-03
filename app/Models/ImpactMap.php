@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ImpactMap extends Model
 {
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'client'];
 
     public function nodes(): HasMany
     {

@@ -15,16 +15,19 @@ class ImpactMapController extends Controller
     public function index(): View
     {
         return view('impact-maps.index', [
-            'maps' => ImpactMap::query()->withCount('nodes')->orderByDesc('updated_at')->get(),
+            'maps' => ImpactMap::query()->withCount('nodes')
+                ->orderByRaw("COALESCE(client, '') = ''")->orderBy('client')->orderByDesc('updated_at')->get()
+                ->groupBy(fn (ImpactMap $m) => (string) $m->client),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:255']);
+        $data = $request->validate(['name' => 'required|string|max:255', 'client' => 'nullable|string|max:255']);
+        $client = trim((string) ($data['client'] ?? '')) ?: null;
 
-        $map = DB::transaction(function () use ($data) {
-            $map = ImpactMap::query()->create(['name' => trim($data['name'])]);
+        $map = DB::transaction(function () use ($data, $client) {
+            $map = ImpactMap::query()->create(['name' => trim($data['name']), 'client' => $client]);
             $map->nodes()->create(['level' => ImpactMapNode::GOAL, 'title' => trim($data['name']), 'position' => 0]);
 
             return $map;
@@ -48,8 +51,9 @@ class ImpactMapController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $map = $this->map($request);
-        $data = $request->validate(['name' => 'required|string|max:255']);
-        $map->update(['name' => trim($data['name'])]);
+        $data = $request->validate(['name' => 'required|string|max:255', 'client' => 'nullable|string|max:255']);
+        $client = trim((string) ($data['client'] ?? '')) ?: null;
+        $map->update(['name' => trim($data['name']), 'client' => $client]);
 
         return redirect()->route('impact-maps.show', $this->params($map));
     }

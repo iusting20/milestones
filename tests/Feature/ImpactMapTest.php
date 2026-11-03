@@ -91,6 +91,24 @@ class ImpactMapTest extends TestCase
         $this->assertSame(0, ImpactMapNode::query()->count());
     }
 
+    public function test_client_is_optional_set_on_create_editable_and_shown(): void
+    {
+        $this->post($this->url(), ['name' => 'Map A', 'client' => '  Acme  ']);
+        $this->post($this->url(), ['name' => 'Map B', 'client' => '']);
+        [$a, $b] = ImpactMap::query()->orderBy('id')->get()->all();
+        $this->assertSame('Acme', $a->client);
+        $this->assertNull($b->client);
+
+        $this->get($this->url())->assertOk()
+            ->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B']);
+        $this->get($this->url('/'.$a->id))->assertOk()->assertSee('· Acme')->assertSee('name="client" value="Acme"', false);
+
+        $this->patch($this->url('/'.$b->id), ['name' => 'Map B', 'client' => 'Globex'])->assertRedirect();
+        $this->assertSame('Globex', $b->fresh()->client);
+        $this->patch($this->url('/'.$a->id), ['name' => 'Map A', 'client' => ''])->assertRedirect();
+        $this->assertNull($a->fresh()->client);
+    }
+
     public function test_node_from_another_map_is_rejected(): void
     {
         $this->post($this->url(), ['name' => 'One']);

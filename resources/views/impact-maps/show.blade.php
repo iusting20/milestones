@@ -4,13 +4,15 @@
 
 @section('content')
     @php $p = ['token' => $token, 'map' => $map->id]; @endphp
+    <h1>{{ $map->name }}@if ($map->client) <span class="client">· {{ $map->client }}</span>@endif</h1>
     <div class="bar">
         <a href="{{ route('impact-maps.index', ['token' => $token]) }}" class="btn">← All maps</a>
         <form method="POST" action="{{ route('impact-maps.update', $p) }}" class="bar" style="margin:0">
             @csrf
             @method('PATCH')
             <input type="text" name="name" value="{{ $map->name }}" maxlength="255" required aria-label="Map name">
-            <button type="submit" class="btn">Rename</button>
+            <input type="text" name="client" value="{{ $map->client }}" maxlength="255" placeholder="Client / project (optional)" aria-label="Client / project">
+            <button type="submit" class="btn">Save</button>
         </form>
         <form method="POST" action="{{ route('impact-maps.destroy', $p) }}" style="margin:0"
               onsubmit="return confirm('Delete this impact map and all its nodes?')">

@@ -20,6 +20,8 @@
         .btn-danger { border-color: #d9534f; color: #b52b27; }
         .maps { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-width: 640px; }
         .maps li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 2px solid #f0e4c6; border-radius: 10px; padding: 8px 12px; font-size: 20px; }
+        .group { color: #8a5a12; font-size: 22px; text-transform: uppercase; margin: 18px 0 8px; }
+        .client { color: #8b8270; font-size: 24px; }
         .muted { color: #8b8270; font-size: 15px; }
         .err { color: #b52b27; }
         .board { overflow: auto; border-top: 2px dashed #eadfc3; padding-top: 6px; }

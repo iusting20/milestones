@@ -149,6 +149,7 @@
                     @endif
 
                     @if ($canEdit)
+                        <hr class="im-divider">
                         <form method="POST" action="{{ route('impact-maps.checkins.store', $p) }}" class="track-form">
                             @csrf
                             <label>Current value <input type="number" step="any" name="checkin_value" value="{{ old('checkin_value') }}" required></label>

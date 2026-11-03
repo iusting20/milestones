@@ -27,6 +27,7 @@
         .muted { color: #8b8270; font-size: 15px; }
         .err { color: #b52b27; }
         .board { overflow: auto; border-top: 2px dashed #eadfc3; padding-top: 6px; }
+        .im-divider { border: 0; border-top: 2px dashed #eadfc3; margin: 18px 0 12px; } /* same line as under the map title */
         .canvas { position: relative; }
         .canvas svg { position: absolute; inset: 0; pointer-events: none; }
         .col { position: absolute; top: 8px; color: #b8862b; font-size: 30px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }

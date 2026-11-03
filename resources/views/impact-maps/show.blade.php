@@ -4,12 +4,10 @@
 
 @section('content')
     @php $p = ['map' => $map->slug]; @endphp
-    <h1>{{ $map->name }}@if ($map->client) <span class="client">· {{ $map->client }}</span>@endif</h1>
-    @if ($canEdit)
-    <div class="bar">
-        <a href="{{ route('impact-maps.index') }}" class="btn">← All maps</a>
-    </div>
-    @endif
+    <header style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px;">
+        <h1>{{ $map->name }}</h1>
+        @if ($map->client) <span class="client" style="text-align: right;">{{ $map->client }}</span>@endif
+    </header>
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif
 
     <div class="board">

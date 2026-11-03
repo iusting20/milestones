@@ -60,7 +60,7 @@ class ImpactMapTest extends TestCase
         $this->flushSession();
         $this->get($this->mapUrl($map))->assertOk()
             ->assertSee('noindex', false)
-            ->assertSee('Super-fans')->assertSee('· Acme')
+            ->assertSee('Super-fans')->assertSee('<span class="client" style="text-align: right;">Acme</span>', false)->assertDontSee('· Acme')
             ->assertDontSee('class="tools"', false)
             ->assertDontSee('name="client"', false)
             ->assertDontSee('Delete map')
@@ -99,7 +99,7 @@ class ImpactMapTest extends TestCase
             ->assertDontSee('Delete map')
             ->assertDontSee('Save client')
             ->assertDontSee('Click a box to rename')
-            ->assertSee('All maps')
+            ->assertDontSee('All maps')
             ->assertDontSee('name="name"', false)
             ->assertSee('<path d="M', false);
     }

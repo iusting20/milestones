@@ -11,7 +11,7 @@
         * { box-sizing: border-box; }
         body { margin: 0; background: #fffdf7; color: #2b2b2b; font-family: 'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive; }
         a { color: #8a5a12; }
-        .wrap { max-width: 1200px; margin: 0 auto; padding: 18px 20px 60px; }
+        .wrap { max-width: 1280px; margin: 0 auto; padding: 18px 20px 60px; }
         h1 { color: #b8862b; text-transform: uppercase; letter-spacing: .03em; margin: 0 0 12px; font-size: 34px; }
         .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
         input[type=text] { font: inherit; font-size: 17px; padding: 4px 8px; border: 2px solid #d8c9a6; border-radius: 8px; background: #fff; }

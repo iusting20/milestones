@@ -37,9 +37,10 @@ Route::get('/links/{hub}/{slug?}', LinkHub::class)
     ->whereIn('hub', ['partners', 'assets'])
     ->name('links.hub');
 
-// Secret Impact Mapping tool: /impact-maps-{token}. Token is checked in EnsureAuthenticated (404 when wrong).
-Route::prefix('impact-maps-{token}')
-    ->where(['token' => '[A-Za-z0-9-]{16,}', 'map' => '[0-9]+', 'node' => '[0-9]+'])
+// Impact Mapping tool. List + all edits need the normal login; a map page is public (read-only) via its secret slug.
+Route::redirect('/impact-maps-{old}', '/impact-maps')->where('old', '[A-Za-z0-9-]+');
+Route::prefix('impact-maps')
+    ->where(['map' => '[A-Za-z0-9]{24,64}', 'node' => '[0-9]+'])
     ->name('impact-maps.')
     ->controller(ImpactMapController::class)
     ->group(function () {

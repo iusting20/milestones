@@ -3,7 +3,7 @@
 @section('content')
     <h1>Impact Maps</h1>
 
-    <form method="POST" action="{{ route('impact-maps.store', ['token' => $token]) }}" class="bar">
+    <form method="POST" action="{{ route('impact-maps.store') }}" class="bar">
         @csrf
         <input type="text" name="name" placeholder="Goal / map name" maxlength="255" required value="{{ old('name') }}">
         <input type="text" name="client" placeholder="Client / project (optional)" maxlength="255" value="{{ old('client') }}">
@@ -19,7 +19,7 @@
         <ul class="maps">
             @foreach ($group as $map)
                 <li>
-                    <a href="{{ route('impact-maps.show', ['token' => $token, 'map' => $map->id]) }}">{{ $map->name }}</a>
+                    <a href="{{ route('impact-maps.show', ['map' => $map->slug]) }}">{{ $map->name }}</a>
                     <span class="muted">{{ $map->nodes_count }} nodes · {{ $map->updated_at->timezone('Europe/Bucharest')->format('j M Y H:i') }}</span>
                 </li>
             @endforeach

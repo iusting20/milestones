@@ -11,113 +11,140 @@ class ImpactMapTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected bool $authenticate = false;
-
-    private const TOKEN = 'test-secret-token-0123456789abcdef';
-
-    protected function setUp(): void
+    private function mapUrl(ImpactMap $map, string $suffix = ''): string
     {
-        parent::setUp();
-        config(['impact_maps.token' => self::TOKEN]);
+        return '/impact-maps/'.$map->slug.$suffix;
     }
 
-    private function url(string $suffix = ''): string
+    private function makeMap(string $name = 'Grow mobile advertising', ?string $client = null): ImpactMap
     {
-        return '/impact-maps-'.self::TOKEN.$suffix;
+        $this->post('/impact-maps', ['name' => $name, 'client' => $client])->assertRedirect();
+
+        return ImpactMap::query()->where('name', $name)->sole();
     }
 
-    public function test_secret_url_works_without_login(): void
+    public function test_list_requires_login(): void
     {
-        $this->get($this->url())->assertOk()->assertSee('Impact Maps')->assertSee('noindex', false);
+        $this->flushSession();
+        $this->get('/impact-maps')->assertRedirect(route('login'));
+        $this->post('/impact-maps', ['name' => 'X'])->assertRedirect(route('login'));
+        $this->assertSame(0, ImpactMap::query()->count());
     }
 
-    public function test_wrong_or_missing_token_404s(): void
+    public function test_list_works_when_logged_in(): void
     {
-        $this->get('/impact-maps-wrong-token-0123456789abcdef')->assertNotFound();
-        $this->get('/impact-maps')->assertNotFound();
-        config(['impact_maps.token' => '']);
-        $this->get($this->url())->assertNotFound();
+        $map = $this->makeMap();
+        $this->get('/impact-maps')->assertOk()->assertSee('Impact Maps')->assertSee($this->mapUrl($map), false);
     }
 
-    public function test_create_map_adds_goal_and_renders_tree(): void
+    public function test_old_token_url_redirects_to_list(): void
     {
-        $this->post($this->url(), ['name' => 'Grow mobile advertising'])->assertRedirect();
+        $this->get('/impact-maps-b9ef02319b492d009c3d5c6f3f66b77b')->assertRedirect('/impact-maps');
+    }
 
-        $map = ImpactMap::query()->sole();
+    public function test_map_gets_secret_slug_and_numeric_id_does_not_work(): void
+    {
+        $map = $this->makeMap();
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{32}$/', $map->slug);
+        $this->get('/impact-maps/'.$map->id)->assertNotFound();
+        $this->get('/impact-maps/'.str_repeat('x', 32))->assertNotFound();
+    }
+
+    public function test_public_map_is_read_only_for_anonymous_visitors(): void
+    {
+        $map = $this->makeMap('Goal', 'Acme');
+        $goal = $map->goal;
+        $this->post($this->mapUrl($map, '/nodes/'.$goal->id), ['title' => 'Super-fans']);
+        $actor = ImpactMapNode::query()->where('title', 'Super-fans')->sole();
+
+        $this->flushSession();
+        $this->get($this->mapUrl($map))->assertOk()
+            ->assertSee('noindex', false)
+            ->assertSee('Super-fans')->assertSee('· Acme')
+            ->assertDontSee('class="tools"', false)
+            ->assertDontSee('name="client"', false)
+            ->assertDontSee('Delete map')
+            ->assertDontSee('All maps');
+
+        $this->post($this->mapUrl($map, '/nodes/'.$goal->id), ['title' => 'Hack'])->assertRedirect(route('login'));
+        $this->patch($this->mapUrl($map, '/nodes/'.$actor->id), ['title' => 'Hack'])->assertRedirect(route('login'));
+        $this->delete($this->mapUrl($map, '/nodes/'.$actor->id))->assertRedirect(route('login'));
+        $this->patch($this->mapUrl($map), ['client' => 'Hack'])->assertRedirect(route('login'));
+        $this->delete($this->mapUrl($map))->assertRedirect(route('login'));
+
+        $this->assertSame('Super-fans', $actor->fresh()->title);
+        $this->assertSame('Acme', $map->fresh()->client);
+        $this->assertSame(2, ImpactMapNode::query()->count());
+    }
+
+    public function test_logged_in_user_gets_edit_ui_and_builds_five_levels(): void
+    {
+        $map = $this->makeMap();
         $goal = $map->goal;
         $this->assertSame(ImpactMapNode::GOAL, $goal->level);
-        $this->assertSame('Grow mobile advertising', $goal->title);
 
-        $this->post($this->url('/'.$map->id.'/nodes/'.$goal->id), ['title' => 'Super-fans'])->assertRedirect();
-        $actor = ImpactMapNode::query()->where('title', 'Super-fans')->sole();
-        $this->assertSame(1, $actor->level);
-        $this->post($this->url('/'.$map->id.'/nodes/'.$actor->id), ['title' => 'Stay longer']);
-        $impact = ImpactMapNode::query()->where('title', 'Stay longer')->sole();
-        $this->post($this->url('/'.$map->id.'/nodes/'.$impact->id), ['title' => 'Forums']);
-        $deliverable = ImpactMapNode::query()->where('title', 'Forums')->sole();
-        $this->post($this->url('/'.$map->id.'/nodes/'.$deliverable->id), ['title' => 'Story 1']);
-        $story = ImpactMapNode::query()->where('title', 'Story 1')->sole();
-        $this->assertSame(4, $story->level);
-        $this->post($this->url('/'.$map->id.'/nodes/'.$story->id), ['title' => 'Too deep'])->assertStatus(422);
+        $parent = $goal;
+        foreach (['Super-fans', 'Stay longer', 'Forums', 'Story 1'] as $level => $title) {
+            $this->post($this->mapUrl($map, '/nodes/'.$parent->id), ['title' => $title])->assertRedirect($this->mapUrl($map));
+            $parent = ImpactMapNode::query()->where('title', $title)->sole();
+            $this->assertSame($level + 1, $parent->level);
+        }
+        $this->post($this->mapUrl($map, '/nodes/'.$parent->id), ['title' => 'Too deep'])->assertStatus(422);
 
-        $this->get($this->url('/'.$map->id))->assertOk()
+        $this->get($this->mapUrl($map))->assertOk()
             ->assertSeeInOrder(['Goal', 'Actor', 'Impact', 'Deliverable'])
-            ->assertSee('Super-fans')->assertSee('Story 1')
             ->assertSee('class="node lvl-4"', false)
+            ->assertSee('class="tools"', false)
+            ->assertSee('name="client"', false)
+            ->assertSee('Delete map')
+            ->assertDontSee('name="name"', false)
             ->assertSee('<path d="M', false);
     }
 
-    public function test_rename_and_delete_nodes_and_map(): void
+    public function test_goal_rename_renames_map_and_deletes_cascade(): void
     {
-        $this->post($this->url(), ['name' => 'Goal']);
-        $map = ImpactMap::query()->sole();
+        $map = $this->makeMap('Goal');
         $goal = $map->goal;
-        $this->post($this->url('/'.$map->id.'/nodes/'.$goal->id), ['title' => 'Actor A']);
+        $this->post($this->mapUrl($map, '/nodes/'.$goal->id), ['title' => 'Actor A']);
         $actor = ImpactMapNode::query()->where('title', 'Actor A')->sole();
-        $this->post($this->url('/'.$map->id.'/nodes/'.$actor->id), ['title' => 'Impact A']);
+        $this->post($this->mapUrl($map, '/nodes/'.$actor->id), ['title' => 'Impact A']);
 
-        $this->patch($this->url('/'.$map->id.'/nodes/'.$actor->id), ['title' => 'Actor B'])->assertRedirect();
+        $this->patch($this->mapUrl($map, '/nodes/'.$actor->id), ['title' => 'Actor B']);
         $this->assertSame('Actor B', $actor->fresh()->title);
-
-        $this->patch($this->url('/'.$map->id.'/nodes/'.$goal->id), ['title' => 'Renamed goal'])->assertRedirect();
+        $this->patch($this->mapUrl($map, '/nodes/'.$goal->id), ['title' => 'Renamed goal']);
         $this->assertSame('Renamed goal', $map->fresh()->name);
-        $this->patch($this->url('/'.$map->id), ['name' => 'Ignored', 'client' => 'X'])->assertRedirect();
+        $this->patch($this->mapUrl($map), ['name' => 'Ignored', 'client' => 'X']);
         $this->assertSame('Renamed goal', $map->fresh()->name);
-        $this->get($this->url('/'.$map->id))->assertOk()->assertDontSee('name="name"', false)->assertDontSee('>Rename<', false);
 
-        $this->delete($this->url('/'.$map->id.'/nodes/'.$goal->id))->assertStatus(422);
-        $this->delete($this->url('/'.$map->id.'/nodes/'.$actor->id))->assertRedirect();
+        $this->delete($this->mapUrl($map, '/nodes/'.$goal->id))->assertStatus(422);
+        $this->delete($this->mapUrl($map, '/nodes/'.$actor->id))->assertRedirect();
         $this->assertSame(1, ImpactMapNode::query()->count());
 
-        $this->delete($this->url('/'.$map->id))->assertRedirect($this->url());
+        $this->delete($this->mapUrl($map))->assertRedirect('/impact-maps');
         $this->assertSame(0, ImpactMap::query()->count());
         $this->assertSame(0, ImpactMapNode::query()->count());
     }
 
-    public function test_client_is_optional_set_on_create_editable_and_shown(): void
+    public function test_client_is_optional_grouped_and_editable(): void
     {
-        $this->post($this->url(), ['name' => 'Map A', 'client' => '  Acme  ']);
-        $this->post($this->url(), ['name' => 'Map B', 'client' => '']);
-        [$a, $b] = ImpactMap::query()->orderBy('id')->get()->all();
+        $a = $this->makeMap('Map A', '  Acme  ');
+        $b = $this->makeMap('Map B', '');
         $this->assertSame('Acme', $a->client);
         $this->assertNull($b->client);
 
-        $this->get($this->url())->assertOk()
-            ->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B']);
-        $this->get($this->url('/'.$a->id))->assertOk()->assertSee('· Acme')->assertSee('name="client" value="Acme"', false);
+        $this->get('/impact-maps')->assertOk()->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B']);
 
-        $this->patch($this->url('/'.$b->id), ['client' => 'Globex'])->assertRedirect();
+        $this->patch($this->mapUrl($b), ['client' => 'Globex'])->assertRedirect();
         $this->assertSame('Globex', $b->fresh()->client);
-        $this->patch($this->url('/'.$a->id), ['client' => ''])->assertRedirect();
+        $this->patch($this->mapUrl($a), ['client' => ''])->assertRedirect();
         $this->assertNull($a->fresh()->client);
     }
 
     public function test_node_from_another_map_is_rejected(): void
     {
-        $this->post($this->url(), ['name' => 'One']);
-        $this->post($this->url(), ['name' => 'Two']);
-        [$one, $two] = ImpactMap::query()->orderBy('id')->get()->all();
+        $one = $this->makeMap('One');
+        $two = $this->makeMap('Two');
 
-        $this->patch($this->url('/'.$one->id.'/nodes/'.$two->goal->id), ['title' => 'Hijack'])->assertNotFound();
+        $this->patch($this->mapUrl($one, '/nodes/'.$two->goal->id), ['title' => 'Hijack'])->assertNotFound();
     }
 }

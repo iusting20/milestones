@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\EnsureAuthenticated;
 use App\Models\ImpactMap;
 use App\Models\ImpactMapNode;
 use App\Support\ImpactMapLayout;
@@ -45,6 +46,8 @@ class ImpactMapController extends Controller
             'layout' => ImpactMapLayout::compute($map->nodes()->get()),
             'levels' => ImpactMapNode::LEVELS,
             'columns' => ImpactMapLayout::COLUMNS,
+            // Public link: anonymous visitors get a read-only view; logged-in users can edit.
+            'canEdit' => $request->session()->get(EnsureAuthenticated::SESSION_KEY) === true,
         ]);
     }
 
@@ -62,7 +65,7 @@ class ImpactMapController extends Controller
     {
         $this->map($request)->delete();
 
-        return redirect()->route('impact-maps.index', ['token' => config('impact_maps.token')]);
+        return redirect()->route('impact-maps.index');
     }
 
     public function storeNode(Request $request): RedirectResponse
@@ -119,7 +122,7 @@ class ImpactMapController extends Controller
 
     private function map(Request $request): ImpactMap
     {
-        return ImpactMap::query()->findOrFail((int) $request->route('map'));
+        return ImpactMap::query()->where('slug', (string) $request->route('map'))->firstOrFail();
     }
 
     private function node(Request $request, ImpactMap $map): ImpactMapNode
@@ -130,6 +133,6 @@ class ImpactMapController extends Controller
     /** @return array<string, mixed> */
     private function params(ImpactMap $map): array
     {
-        return ['token' => config('impact_maps.token'), 'map' => $map->id];
+        return ['map' => $map->slug];
     }
 }

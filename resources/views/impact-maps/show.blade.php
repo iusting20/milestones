@@ -3,10 +3,11 @@
 @section('title', $map->name.' · Impact Map')
 
 @section('content')
-    @php $p = ['token' => $token, 'map' => $map->id]; @endphp
+    @php $p = ['map' => $map->slug]; @endphp
     <h1>{{ $map->name }}@if ($map->client) <span class="client">· {{ $map->client }}</span>@endif</h1>
+    @if ($canEdit)
     <div class="bar">
-        <a href="{{ route('impact-maps.index', ['token' => $token]) }}" class="btn">← All maps</a>
+        <a href="{{ route('impact-maps.index') }}" class="btn">← All maps</a>
         <form method="POST" action="{{ route('impact-maps.update', $p) }}" class="bar" style="margin:0">
             @csrf
             @method('PATCH')
@@ -21,6 +22,7 @@
         </form>
         <span class="muted">Click a box to rename · hover for + (add child) and × (delete)</span>
     </div>
+    @endif
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif
 
     <div class="board">
@@ -44,6 +46,7 @@
                 @endphp
                 <div class="node lvl-{{ $box['level'] }}" data-node="{{ $node->id }}"
                      style="left: {{ $box['x'] }}px; top: {{ $box['y'] }}px; width: {{ $box['w'] }}px;">
+                    @if ($canEdit)
                     <span class="t" title="Click to rename" onclick="imEdit(this)">{{ $node->title }}</span>
                     <form class="f-edit" method="POST" action="{{ route('impact-maps.nodes.update', $np) }}">
                         @csrf
@@ -71,6 +74,9 @@
                             </form>
                         @endif
                     </div>
+                    @else
+                    <span class="t" style="cursor: default">{{ $node->title }}</span>
+                    @endif
                 </div>
             @endforeach
         </div>

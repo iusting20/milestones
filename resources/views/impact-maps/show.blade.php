@@ -8,7 +8,7 @@
         <div style="display: flex; align-items: baseline; gap: 14px; min-width: 0;">
             <h1>{{ $map->name }}</h1>
             @if ($map->hasTracker() || $canEdit)
-                <button type="button" class="track-toggle" aria-expanded="false" aria-controls="track-panel" onclick="imTrack()">progress</button>
+                <button type="button" class="track-toggle" aria-expanded="false" aria-controls="track-panel" onclick="imTrack()">track progress</button>
             @endif
         </div>
         @if ($map->client) <span class="client" style="text-align: right;">{{ $map->client }}</span>@endif

@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ImpactMapController extends Controller
@@ -221,5 +222,74 @@ class ImpactMapController extends Controller
         });
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Set / edit the progress tracker's start and goal. */
+    public function updateTracker(Request $request): RedirectResponse
+    {
+        $map = $this->map($request);
+        $d = $request->validate([
+            'track_start' => 'required|numeric|between:-1000000000000,1000000000000',
+            'track_start_label' => 'nullable|string|max:100',
+            'track_target' => 'required|numeric|between:-1000000000000,1000000000000',
+            'track_target_label' => 'nullable|string|max:100',
+        ]);
+        if ((float) $d['track_start'] === (float) $d['track_target']) {
+            throw ValidationException::withMessages(['track_target' => 'The goal must be different from the start.']);
+        }
+
+        $map->update([
+            'track_start' => (float) $d['track_start'],
+            'track_start_label' => trim((string) ($d['track_start_label'] ?? '')) ?: null,
+            'track_target' => (float) $d['track_target'],
+            'track_target_label' => trim((string) ($d['track_target_label'] ?? '')) ?: null,
+        ]);
+
+        return $this->toTracker($map);
+    }
+
+    public function destroyTracker(Request $request): RedirectResponse
+    {
+        $map = $this->map($request);
+        DB::transaction(function () use ($map) {
+            $map->checkins()->delete();
+            $map->update(['track_start' => null, 'track_start_label' => null, 'track_target' => null, 'track_target_label' => null]);
+        });
+
+        return $this->toTracker($map);
+    }
+
+    public function storeCheckin(Request $request): RedirectResponse
+    {
+        $map = $this->map($request);
+        if (! $map->hasTracker()) {
+            throw ValidationException::withMessages(['checkin_value' => 'Set a start and goal first.']);
+        }
+        $d = $request->validate([
+            'checkin_value' => 'required|numeric|between:-1000000000000,1000000000000',
+            'checkin_date' => 'required|date',
+            'checkin_note' => 'nullable|string|max:255',
+        ]);
+
+        $map->checkins()->create([
+            'value' => (float) $d['checkin_value'],
+            'date' => $d['checkin_date'],
+            'note' => trim((string) ($d['checkin_note'] ?? '')) ?: null,
+        ]);
+
+        return $this->toTracker($map);
+    }
+
+    public function destroyCheckin(Request $request): RedirectResponse
+    {
+        $map = $this->map($request);
+        $map->checkins()->whereKey((int) $request->route('checkin'))->firstOrFail()->delete();
+
+        return $this->toTracker($map);
+    }
+
+    private function toTracker(ImpactMap $map): RedirectResponse
+    {
+        return redirect()->to(route('impact-maps.show', $this->params($map)).'#track');
     }
 }

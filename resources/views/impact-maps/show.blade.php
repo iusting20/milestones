@@ -79,7 +79,124 @@
         </div>
     </div>
 
+    @php
+        $tracker = $map->hasTracker();
+        $checkins = $tracker ? $map->checkins : collect();
+        $latest = $checkins->last();
+        $clamp = fn ($v) => max(0, min(100, $map->progressPct($v)));
+        $unit = $map->track_target_label ?: $map->track_start_label;
+        $fmt = fn ($v) => \App\Models\ImpactMap::fmt($v);
+        $trackErr = $errors->hasAny(['track_start', 'track_start_label', 'track_target', 'track_target_label', 'checkin_value', 'checkin_date', 'checkin_note']);
+    @endphp
+    @if ($tracker || $canEdit)
+    <div class="track-wrap" id="track" data-key="im-track-{{ $map->slug }}" data-force="{{ $trackErr ? 1 : 0 }}">
+        <button type="button" class="toon-btn track-toggle" aria-expanded="false" aria-controls="track-panel" onclick="imTrack()">
+            <span aria-hidden="true">🏁</span> Track Progress
+        </button>
+        <section id="track-panel" class="track-panel" aria-label="Progress tracker">
+            <div class="track-inner"><div class="track-card">
+                <h2>Track progress</h2>
+                @if ($tracker)
+                    <div class="track-line" style="--fill: {{ $latest ? $clamp($latest->value) : 0 }}%">
+                        <div class="track-bar"><div class="track-fill"></div></div>
+                        <div class="track-end t-start">
+                            <span class="dot"></span>
+                            <span class="lbl"><small>Start</small><b>{{ $fmt($map->track_start) }}</b> {{ $map->track_start_label }}</span>
+                        </div>
+                        <div class="track-end t-goal">
+                            <span class="flag" aria-hidden="true"></span>
+                            <span class="lbl"><small>Goal</small><b>{{ $fmt($map->track_target) }}</b> {{ $map->track_target_label }}</span>
+                        </div>
+                        @foreach ($checkins as $c)
+                            @php $cp = $map->progressPct($c->value); $isLatest = $c->is($latest); @endphp
+                            <div class="track-pt{{ $isLatest ? ' latest' : '' }}{{ $cp >= 100 ? ' done' : '' }}" style="left: {{ $clamp($c->value) }}%"
+                                 title="{{ $fmt($c->value) }} {{ $unit }} · {{ $c->date->format('j M Y') }}{{ $c->note ? ' · '.$c->note : '' }}">
+                                <span class="dot"></span>
+                                @if ($isLatest)
+                                    <span class="badge">{{ $cp >= 100 ? '🎉 Goal reached! ('.round($cp).'%)' : round(max(0, $cp)).'% of the way' }}</span>
+                                    <span class="lbl"><b>{{ $fmt($c->value) }}</b> · {{ $c->date->format('j M') }}</span>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+
+                    @if ($checkins->isNotEmpty())
+                        <ul class="checkins">
+                            @foreach ($checkins->reverse() as $c)
+                                <li>
+                                    <span class="ck-date">{{ $c->date->format('j M Y') }}</span>
+                                    <b>{{ $fmt($c->value) }}</b> {{ $unit }}
+                                    <span class="muted">{{ round($map->progressPct($c->value)) }}%</span>
+                                    @if ($c->note) <span class="ck-note">{{ $c->note }}</span> @endif
+                                    @if ($canEdit)
+                                        <form method="POST" action="{{ route('impact-maps.checkins.destroy', $p + ['checkin' => $c->id]) }}" onsubmit="return confirm('Delete this check-in?')">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="ck-del" title="Delete check-in" aria-label="Delete check-in">×</button>
+                                        </form>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    @elseif (! $canEdit)
+                        <p class="muted">No check-ins yet.</p>
+                    @endif
+
+                    @if ($canEdit)
+                        <form method="POST" action="{{ route('impact-maps.checkins.store', $p) }}" class="track-form">
+                            @csrf
+                            <label>Current value <input type="number" step="any" name="checkin_value" value="{{ old('checkin_value') }}" required></label>
+                            <label>Date <input type="date" name="checkin_date" value="{{ old('checkin_date', now('Europe/Bucharest')->toDateString()) }}" required></label>
+                            <label class="grow">Note <input type="text" name="checkin_note" maxlength="255" value="{{ old('checkin_note') }}" placeholder="optional"></label>
+                            <button type="submit" class="toon-btn">+ Check in</button>
+                        </form>
+                    @endif
+                @else
+                    <p class="muted">Set where you start and where the finish line is.</p>
+                @endif
+
+                @if ($canEdit)
+                    <details class="track-settings" @if (! $tracker || $errors->hasAny(['track_start', 'track_target', 'track_start_label', 'track_target_label'])) open @endif>
+                        <summary>{{ $tracker ? 'Edit start & goal' : 'Set start & goal' }}</summary>
+                        <form method="POST" action="{{ route('impact-maps.tracker.update', $p) }}" class="track-form">
+                            @csrf @method('PUT')
+                            <label>Start <input type="number" step="any" name="track_start" value="{{ old('track_start', $fmt($map->track_start) !== '' ? str_replace(',', '', $fmt($map->track_start)) : '') }}" required placeholder="0"></label>
+                            <label class="grow">Start label <input type="text" name="track_start_label" maxlength="100" value="{{ old('track_start_label', $map->track_start_label) }}" placeholder="e.g. users"></label>
+                            <label>Goal <input type="number" step="any" name="track_target" value="{{ old('track_target', $fmt($map->track_target) !== '' ? str_replace(',', '', $fmt($map->track_target)) : '') }}" required placeholder="1000"></label>
+                            <label class="grow">Goal label <input type="text" name="track_target_label" maxlength="100" value="{{ old('track_target_label', $map->track_target_label) }}" placeholder="e.g. users"></label>
+                            <button type="submit" class="toon-btn">Save</button>
+                        </form>
+                        @if ($tracker)
+                            <form method="POST" action="{{ route('impact-maps.tracker.destroy', $p) }}" onsubmit="return confirm('Remove the tracker and all its check-ins?')">
+                                @csrf @method('DELETE')
+                                <button type="submit" class="toon-btn plain" style="color: #b52b27">Remove tracker</button>
+                            </form>
+                        @endif
+                    </details>
+                @endif
+                @if ($trackErr) <p class="err">{{ $errors->first() }}</p> @endif
+            </div></div>
+        </section>
+    </div>
+    @endif
+
     <script>
+        function imTrack(force) {
+            const wrap = document.getElementById('track');
+            if (!wrap) return;
+            const open = force ?? !wrap.classList.contains('open');
+            wrap.classList.toggle('open', open);
+            wrap.querySelector('.track-toggle').setAttribute('aria-expanded', open);
+            try { localStorage.setItem(wrap.dataset.key, open ? '1' : '0'); } catch (e) {}
+            if (open && force === undefined) setTimeout(() => wrap.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }), 60);
+        }
+        (() => {
+            const wrap = document.getElementById('track');
+            if (!wrap) return;
+            let saved = null; try { saved = localStorage.getItem(wrap.dataset.key); } catch (e) {}
+            if (wrap.dataset.force === '1' || location.hash === '#track' || saved === '1') {
+                requestAnimationFrame(() => requestAnimationFrame(() => imTrack(true)));
+            }
+        })();
         function imEdit(el) {
             const node = el.closest('.node');
             node.classList.add('editing');

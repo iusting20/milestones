@@ -335,4 +335,97 @@ class ImpactMapTest extends TestCase
         $this->assertMatchesRegularExpression('/>Epics<\/span>\s*<span class="t"[^>]*>Epic one</', $html);
         $this->assertMatchesRegularExpression('/>Stories<\/span>\s*<span class="t"[^>]*>Story a</', $html);
     }
+
+    public function test_progress_percentage_increasing_and_decreasing(): void
+    {
+        $up = new ImpactMap(['track_start' => 0, 'track_target' => 200]);
+        $this->assertEqualsWithDelta(42.0, $up->progressPct(84), 0.001);
+        $this->assertEqualsWithDelta(150.0, $up->progressPct(300), 0.001);
+
+        $down = new ImpactMap(['track_start' => 20, 'track_target' => 5]); // e.g. churn 20% -> 5%
+        $this->assertEqualsWithDelta(0.0, $down->progressPct(20), 0.001);
+        $this->assertEqualsWithDelta(40.0, $down->progressPct(14), 0.001);
+        $this->assertEqualsWithDelta(100.0, $down->progressPct(5), 0.001);
+        $this->assertEqualsWithDelta(-20.0, $down->progressPct(23), 0.001);
+
+        $this->assertFalse((new ImpactMap(['track_start' => 3, 'track_target' => 3]))->hasTracker());
+    }
+
+    public function test_tracker_and_checkins_crud(): void
+    {
+        $map = $this->makeMap('Goal');
+        $this->get($this->mapUrl($map))->assertOk()->assertSee('Track Progress')->assertSee('Set start &amp; goal', false);
+
+        $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '5', 'track_target' => '5'])->assertSessionHasErrors('track_target');
+        $this->put($this->mapUrl($map, '/tracker'), ['track_start' => 'abc', 'track_target' => '9'])->assertSessionHasErrors('track_start');
+
+        $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '20', 'track_start_label' => '% retention rate', 'track_target' => '45', 'track_target_label' => '% retention rate'])
+            ->assertRedirect($this->mapUrl($map).'#track');
+        $map->refresh();
+        $this->assertSame(20.0, $map->track_start);
+        $this->assertSame('% retention rate', $map->track_target_label);
+
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => 'x', 'checkin_date' => '2026-11-03'])->assertSessionHasErrors('checkin_value');
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '25', 'checkin_date' => '2026-10-01', 'checkin_note' => 'Onboarding emails'])->assertRedirect($this->mapUrl($map).'#track');
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '30', 'checkin_date' => '2026-11-01']);
+        $this->assertSame(2, $map->checkins()->count());
+
+        $this->get($this->mapUrl($map))->assertOk()
+            ->assertSee('40% of the way')
+            ->assertSee('--fill: 40%', false)
+            ->assertSee('Onboarding emails')
+            ->assertSee('Edit start &amp; goal', false)
+            ->assertSee('class="ck-del"', false);
+
+        $first = $map->checkins()->first();
+        $this->delete($this->mapUrl($map, '/checkins/'.$first->id))->assertRedirect($this->mapUrl($map).'#track');
+        $this->assertSame(1, $map->checkins()->count());
+
+        $other = $this->makeMap('Other');
+        $last = $map->checkins()->first();
+        $this->delete($this->mapUrl($other, '/checkins/'.$last->id))->assertNotFound();
+
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '60', 'checkin_date' => '2026-11-03']);
+        $this->get($this->mapUrl($map))->assertSee('Goal reached! (160%)')->assertSee('--fill: 100%', false);
+
+        $this->delete($this->mapUrl($map, '/tracker'))->assertRedirect($this->mapUrl($map).'#track');
+        $map->refresh();
+        $this->assertFalse($map->hasTracker());
+        $this->assertSame(0, $map->checkins()->count());
+    }
+
+    public function test_checkin_requires_tracker_and_decreasing_goal_renders(): void
+    {
+        $map = $this->makeMap('Churn');
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '1', 'checkin_date' => '2026-11-03'])->assertSessionHasErrors('checkin_value');
+
+        $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '20', 'track_target' => '5', 'track_target_label' => '% churn']);
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '14', 'checkin_date' => '2026-11-03']);
+        $this->get($this->mapUrl($map))->assertOk()->assertSee('40% of the way')->assertSee('left: 40%', false);
+    }
+
+    public function test_tracker_public_read_only_and_auth(): void
+    {
+        $map = $this->makeMap('Goal');
+        $this->flushSession();
+        $this->get($this->mapUrl($map))->assertOk()->assertDontSee('Track Progress');
+        $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '0', 'track_target' => '10'])->assertRedirect(route('login'));
+        $this->assertFalse($map->fresh()->hasTracker());
+
+        $map->update(['track_start' => 0, 'track_target' => 1000, 'track_target_label' => 'users']);
+        $c = $map->checkins()->create(['value' => 420, 'date' => '2026-11-03']);
+
+        $this->get($this->mapUrl($map))->assertOk()
+            ->assertSee('Track Progress')->assertSee('42% of the way')
+            ->assertDontSee('name="checkin_value"', false)
+            ->assertDontSee('name="track_start"', false)
+            ->assertDontSee('class="ck-del"', false)
+            ->assertDontSee('Remove tracker');
+
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '1', 'checkin_date' => '2026-11-03'])->assertRedirect(route('login'));
+        $this->delete($this->mapUrl($map, '/checkins/'.$c->id))->assertRedirect(route('login'));
+        $this->delete($this->mapUrl($map, '/tracker'))->assertRedirect(route('login'));
+        $this->assertSame(1, $map->checkins()->count());
+        $this->assertTrue($map->fresh()->hasTracker());
+    }
 }

@@ -97,6 +97,61 @@
             text-transform: none; letter-spacing: .02em; pointer-events: none; user-select: none; white-space: nowrap; }
         .sub-3 { color: #d95c5c; }
         .sub-4 { color: #c99a06; }
+        /* Progress tracker */
+        .track-wrap { margin-top: 28px; }
+        .track-toggle { font-size: 20px; padding: 6px 18px; }
+        .track-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s cubic-bezier(.2,.8,.2,1); }
+        .track-wrap.open .track-panel { grid-template-rows: 1fr; }
+        .track-inner { overflow: hidden; }
+        .track-card { margin: 16px 6px 10px 0; background: #fffdf7; border: 3px solid #2b2b2b; border-radius: 18px; box-shadow: 6px 6px 0 #2b2b2b;
+            padding: 18px 22px 20px; opacity: 0; transform: translateY(-10px); transition: opacity .35s ease, transform .35s ease; }
+        .track-wrap.open .track-card { opacity: 1; transform: none; }
+        .track-card h2 { margin: 0 0 6px; color: #b8862b; text-transform: uppercase; font-size: 28px; }
+        .track-line { position: relative; height: 150px; margin: 0 70px; }
+        .track-bar { position: absolute; left: 0; right: 0; top: 66px; height: 16px; background: #fff; border: 3px solid #2b2b2b; border-radius: 12px; overflow: hidden; }
+        .track-fill { height: 100%; width: 0; background: repeating-linear-gradient(-45deg, #f9b11b 0 12px, #fbc94a 12px 24px); border-right: 3px solid #2b2b2b;
+            transition: width 1.1s cubic-bezier(.2,.8,.2,1) .25s; }
+        .track-wrap.open .track-fill { width: var(--fill); }
+        .track-fill[style*="0%"] { border-right: 0; }
+        .track-end, .track-pt { position: absolute; top: 74px; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+        .t-start { left: 0; } .t-goal { left: 100%; }
+        .track-end .dot { width: 26px; height: 26px; border-radius: 50%; background: #9fbf3b; border: 3px solid #2b2b2b; box-shadow: 2px 2px 0 #2b2b2b; }
+        .track-end .lbl, .track-pt .lbl { position: absolute; top: 26px; white-space: nowrap; text-align: center; font-size: 17px; line-height: 1.1; }
+        .track-end .lbl small { display: block; color: #8b8270; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+        .flag { position: relative; width: 6px; height: 54px; margin-top: -40px; background: #2b2b2b; border-radius: 3px; }
+        .flag::after { content: ''; position: absolute; left: 4px; top: 2px; width: 38px; height: 26px; border: 3px solid #2b2b2b; border-radius: 3px 6px 6px 3px;
+            background: repeating-conic-gradient(#2b2b2b 0 25%, #fff 0 50%) 0 0 / 12px 12px; transform: skewY(-6deg); }
+        .t-goal .lbl { top: 40px; }
+        .track-pt { z-index: 2; cursor: help; }
+        .track-pt .dot { width: 16px; height: 16px; border-radius: 50%; background: #7b86c6; border: 3px solid #2b2b2b; transition: transform .2s; }
+        .track-pt:hover .dot { transform: scale(1.25); }
+        .track-pt.latest { z-index: 3; }
+        .track-pt.latest .dot { width: 26px; height: 26px; background: #ef7a7a; box-shadow: 2px 2px 0 #2b2b2b; animation: imPulse 1.8s ease-in-out infinite; }
+        .track-pt.done .dot { background: #f9b11b; }
+        .track-pt .badge { position: absolute; bottom: 30px; white-space: nowrap; background: #fbd75b; border: 3px solid #2b2b2b; border-radius: 14px;
+            box-shadow: 3px 3px 0 #2b2b2b; padding: 2px 10px; font-size: 17px; transform: rotate(-2deg); }
+        .track-pt .badge::after { content: ''; position: absolute; left: 50%; bottom: -9px; width: 12px; height: 12px; background: #fbd75b;
+            border-right: 3px solid #2b2b2b; border-bottom: 3px solid #2b2b2b; transform: translateX(-50%) rotate(45deg); }
+        .track-pt.done .badge { background: #9fbf3b; } .track-pt.done .badge::after { background: #9fbf3b; }
+        @keyframes imPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+        .checkins { list-style: none; padding: 0; margin: 4px 0 14px; display: grid; gap: 6px; max-width: 720px; }
+        .checkins li { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #2b2b2b; border-radius: 10px; padding: 4px 10px; font-size: 17px; }
+        .checkins .ck-date { color: #8a5a12; min-width: 96px; }
+        .checkins .ck-note { color: #555; flex: 1; }
+        .checkins form { margin: 0 0 0 auto; }
+        .ck-del { font: inherit; width: 24px; height: 24px; line-height: 18px; padding: 0; border-radius: 50%; border: 2px solid #2b2b2b; background: #fff; cursor: pointer; }
+        .track-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 10px 0; }
+        .track-form label { display: flex; flex-direction: column; font-size: 15px; color: #8a5a12; gap: 2px; }
+        .track-form label.grow { flex: 1; min-width: 140px; }
+        .track-form input { font: inherit; font-size: 17px; padding: 4px 8px; border: 3px solid #2b2b2b; border-radius: 10px; background: #fff; }
+        .track-form input[type=number] { width: 120px; }
+        .track-settings { margin-top: 8px; }
+        .track-settings summary { cursor: pointer; color: #8a5a12; font-size: 18px; }
+        .track-settings > form:last-child { margin-top: 4px; }
+        @media (prefers-reduced-motion: reduce) {
+            .track-panel, .track-card, .track-fill { transition: none; }
+            .track-pt.latest .dot { animation: none; }
+        }
         [x-cloak] { display: none !important; }
     </style>
 </head>

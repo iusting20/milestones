@@ -126,6 +126,20 @@ class ClientWeekBoardTest extends TestCase
         $this->assertSame($todo->id, $item->fresh()->todo_item_id);
     }
 
+    public function test_running_card_shows_start_time_and_elapsed_element(): void
+    {
+        $this->travelTo('2026-11-02 10:00:00');
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship landing page']);
+
+        $component = Livewire::test(ClientWeekBoard::class)->assertDontSeeHtml('data-elapsed-since=');
+        $component->call('startCard', $item->id);
+
+        $todo = \App\Models\TodoItem::query()->sole();
+        $component->assertSeeHtml('data-elapsed-since="'.$todo->logging_started_at->getTimestampMs().'"')
+            ->assertSee($todo->logging_started_at->timezone('Europe/Bucharest')->format('H:i'));
+    }
+
     public function test_assets_view_shows_asset_rows_and_starts_with_asset_name(): void
     {
         $this->client('Acme', 1);

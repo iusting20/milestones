@@ -112,6 +112,10 @@
                                                         <circle cx="12" cy="14" r="7"/>
                                                     </svg>
                                                     <span class="sr-only">Timer running</span>
+                                                    <span class="ml-1 flex flex-col items-center tabular-nums">
+                                                        <span class="text-[11px] font-semibold leading-none">{{ $item->todoItem->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
+                                                        @include('partials.elapsed-time', ['startedAt' => $item->todoItem->logging_started_at, 'key' => 'card-'.$item->id, 'class' => 'mt-0.5 text-[9px] font-normal leading-none text-white'])
+                                                    </span>
                                                 </span>
                                             @endif
                                             <span class="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">

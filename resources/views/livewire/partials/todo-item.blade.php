@@ -155,23 +155,9 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
                                         <circle cx="12" cy="14" r="7"/>
                                     </svg>
-                                    <span class="flex flex-col items-start">
+                                    <span class="flex flex-col items-center">
                                         <span class="text-[15px] font-semibold leading-none">{{ $item->logging_started_at->timezone('Europe/Bucharest')->format('H:i') }}</span>
-                                        <span class="mt-0.5 text-[10px] font-normal leading-none text-white"
-                                              wire:key="elapsed-{{ $item->id }}-{{ $item->logging_started_at->getTimestampMs() }}"
-                                              data-elapsed-since="{{ $item->logging_started_at->getTimestampMs() }}"
-                                              x-data="{
-                                                  start: {{ $item->logging_started_at->getTimestampMs() }},
-                                                  label: '',
-                                                  timer: null,
-                                                  tick() {
-                                                      const m = Math.max(0, Math.floor((Date.now() - this.start) / 60000));
-                                                      this.label = m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'min';
-                                                  },
-                                                  init() { this.tick(); this.timer = setInterval(() => this.tick(), 15000); },
-                                                  destroy() { clearInterval(this.timer); },
-                                              }"
-                                              x-text="label"></span>
+                                        @include('partials.elapsed-time', ['startedAt' => $item->logging_started_at, 'key' => 'todo-'.$item->id, 'class' => 'mt-0.5 text-[10px] font-normal leading-none text-white'])
                                     </span>
                                 </button>
                             @endif

@@ -1,21 +1,50 @@
 @extends('impact-maps.layout')
 
 @section('content')
-    <div x-data="{ create: {{ $errors->hasAny(['name', 'client', 'client_new']) ? 'true' : 'false' }} }"
+    <div x-data="{ create: {{ $errors->hasAny(['name', 'client', 'client_new']) ? 'true' : 'false' }}, tpl: false,
+            pickTpl(t) { this.$refs.mapName.value = t; this.tpl = false; this.$nextTick(() => { this.$refs.mapName.focus(); this.$refs.mapName.select(); }); },
+            closeTpl() { this.tpl = false; this.$nextTick(() => this.$refs.tplBtn.focus()); } }"
          x-init="$watch('create', v => v && $nextTick(() => $refs.mapName.focus()))"
-         @keydown.escape.window="create = false">
+         @keydown.escape.window="tpl ? closeTpl() : (create = false)">
         <h1>Impact Maps</h1>
 
         <div class="bar">
             <button type="button" class="toon-btn" @click="create = true">+ New map</button>
         </div>
 
+        @php
+            $templates = [
+                ['📣', 'Increase awareness', '#7b86c6'],
+                ['🧲', 'Increase acquisition rate', '#9fbf3b'],
+                ['⚡', 'Increase activation rate', '#f9b11b'],
+                ['💬', 'Increase engagement rate', '#ef7a7a'],
+                ['🔁', 'Increase retention rate', '#7b86c6'],
+                ['💰', 'Increase revenue', '#9fbf3b'],
+                ['🤝', 'Increase referrals', '#fbd75b'],
+            ];
+        @endphp
+        <div class="modal-bg tpl-bg" x-show="tpl" x-cloak x-transition.opacity @click.self="closeTpl()">
+            <div class="modal tpl-modal" role="dialog" aria-modal="true" aria-labelledby="tpl-title">
+                <h2 id="tpl-title">Goal templates</h2>
+                <div class="tpl-grid">
+                    @foreach ($templates as [$icon, $label, $color])
+                        <button type="button" class="tpl-card" style="--c: {{ $color }}" @click="pickTpl(@js($label))">
+                            <span class="tpl-ico" aria-hidden="true">{{ $icon }}</span>{{ $label }}
+                        </button>
+                    @endforeach
+                </div>
+                <div class="actions"><button type="button" class="toon-btn plain" @click="closeTpl()">Back</button></div>
+            </div>
+        </div>
         <div class="modal-bg" x-show="create" x-cloak x-transition.opacity @click.self="create = false">
             <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-map-title">
                 <h2 id="new-map-title">New impact map</h2>
                 <form method="POST" action="{{ route('impact-maps.store') }}">
                     @csrf
-                    <label for="map-name">Goal / map name</label>
+                    <div class="name-row">
+                        <label for="map-name">Goal / map name</label>
+                        <button type="button" class="tpl-btn" x-ref="tplBtn" @click="tpl = true" aria-haspopup="dialog">view templates</button>
+                    </div>
                     <input id="map-name" x-ref="mapName" type="text" name="name" maxlength="255" required value="{{ old('name') }}">
                     @error('name') <p class="err" style="margin: -8px 0 10px">{{ $message }}</p> @enderror
                     <label for="map-client">Client / project <span class="muted">(optional)</span></label>

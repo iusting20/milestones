@@ -142,7 +142,7 @@ class ImpactMapTest extends TestCase
             ->assertSee(now()->timezone('Europe/Bucharest')->format('j M Y'))
             ->assertDontSee(now()->timezone('Europe/Bucharest')->format('j M Y H:i'))
             ->assertSee('class="modal-bg"', false)
-            ->assertSee('x-data="{ create: false }"', false)
+            ->assertSee('x-data="{ create: false, tpl: false', false)
             ->assertSee('value="Acme"', false)
             ->assertSee('Delete map')
             ->assertSee($this->mapUrl($a), false);
@@ -165,7 +165,7 @@ class ImpactMapTest extends TestCase
     {
         $this->from('/impact-maps')->post('/impact-maps', ['name' => ''])->assertRedirect('/impact-maps');
         $this->followingRedirects()->from('/impact-maps')->post('/impact-maps', ['name' => ''])
-            ->assertOk()->assertSee('x-data="{ create: true }"', false);
+            ->assertOk()->assertSee('x-data="{ create: true, tpl: false', false);
         $this->assertSame(0, ImpactMap::query()->count());
     }
 
@@ -203,7 +203,7 @@ class ImpactMapTest extends TestCase
         $this->followingRedirects()->from('/impact-maps')
             ->post('/impact-maps', ['name' => 'Keep me', 'client' => '__new__', 'client_new' => ''])
             ->assertOk()
-            ->assertSee('x-data="{ create: true }"', false)
+            ->assertSee('x-data="{ create: true, tpl: false', false)
             ->assertSee('Type the new client / project name.')
             ->assertSee('value="Keep me"', false)
             ->assertSee('<option value="__new__" selected', false);
@@ -427,5 +427,14 @@ class ImpactMapTest extends TestCase
         $this->delete($this->mapUrl($map, '/tracker'))->assertRedirect(route('login'));
         $this->assertSame(1, $map->checkins()->count());
         $this->assertTrue($map->fresh()->hasTracker());
+    }
+
+    public function test_new_map_modal_lists_goal_templates(): void
+    {
+        $res = $this->get('/impact-maps')->assertOk()->assertSee('view templates');
+        foreach (['Increase awareness', 'Increase acquisition rate', 'Increase activation rate', 'Increase engagement rate', 'Increase retention rate', 'Increase revenue', 'Increase referrals'] as $label) {
+            $res->assertSee($label);
+        }
+        $this->assertSame(7, substr_count($res->getContent(), 'class="tpl-card"'));
     }
 }

@@ -72,6 +72,19 @@
             appearance: none; -webkit-appearance: none; color: #2b2b2b; box-shadow: 3px 3px 0 #f9b11b; }
         .toon-select:focus { outline: none; box-shadow: 3px 3px 0 #b8862b; }
         .modal .picker { margin-bottom: 12px; }
+        .name-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+        .tpl-btn { font: inherit; font-size: 15px; background: #fbd75b; border: 2px solid #2b2b2b; border-radius: 10px; box-shadow: 2px 2px 0 #2b2b2b;
+            padding: 0 8px; margin-bottom: 4px; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+        .tpl-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 #2b2b2b; }
+        .tpl-bg { z-index: 60; }
+        .tpl-modal { max-width: 560px; }
+        .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+        .tpl-card { font: inherit; font-size: 18px; text-align: left; display: flex; align-items: center; gap: 10px; background: #fff;
+            border: 3px solid #2b2b2b; border-left: 10px solid var(--c); border-radius: 12px; box-shadow: 3px 3px 0 #2b2b2b; padding: 8px 12px; cursor: pointer;
+            transition: transform .12s, box-shadow .12s; }
+        .tpl-card:hover, .tpl-card:focus-visible { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #2b2b2b; outline: none; }
+        .tpl-ico { font-size: 22px; }
+        @media (prefers-reduced-motion: reduce) { .tpl-btn, .tpl-card { transition: none; } }
         .modal .picker input[type=text] { margin-bottom: 0; }
         .cog-menu form:first-child { flex-direction: column; align-items: stretch; }
         .cog-menu input[type=text] { border: 3px solid #2b2b2b; border-radius: 12px; }

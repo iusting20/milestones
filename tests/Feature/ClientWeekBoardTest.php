@@ -115,7 +115,7 @@ class ClientWeekBoardTest extends TestCase
         Livewire::test(ClientWeekBoard::class)
             ->call('startCard', $item->id)
             ->call('startCard', $item->id)
-            ->assertSee('Started')
+            ->assertDontSeeHtml('>Started</a>')
             ->assertDontSee('title="Move to', false);
 
         $todo = \App\Models\TodoItem::query()->sole();
@@ -124,6 +124,20 @@ class ClientWeekBoardTest extends TestCase
         $this->assertTrue($todo->isLogging());
         $this->assertSame(WeekBoardStatus::Wip, $item->fresh()->status);
         $this->assertSame($todo->id, $item->fresh()->todo_item_id);
+    }
+
+    public function test_started_link_shows_only_when_linked_timer_is_not_running(): void
+    {
+        $this->travelTo('2026-11-02 10:00:00');
+        $client = $this->client('Acme');
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship landing page']);
+
+        $component = Livewire::test(ClientWeekBoard::class)->call('startCard', $item->id)
+            ->assertDontSeeHtml('>Started</a>');
+
+        \App\Models\TodoItem::query()->sole()->update(['logging_started_at' => null]);
+
+        $component->call('$refresh')->assertSeeHtml('>Started</a>');
     }
 
     public function test_running_card_shows_start_time_and_elapsed_element(): void

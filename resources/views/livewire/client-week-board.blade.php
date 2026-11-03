@@ -124,7 +124,7 @@
                                                             wire:click="startCard({{ $item->id }})"
                                                             class="px-1 text-[10px] uppercase text-muted hover:text-link"
                                                             title="Create a milestone for today and start its timer">Start</button>
-                                                @else
+                                                @elseif (! $item->todoItem->isLogging())
                                                     <a href="{{ route('milestones') }}"
                                                        class="px-1 text-[10px] uppercase text-link no-underline"
                                                        title="Started as a milestone on {{ $item->todoItem->date?->format('D j M') }}">Started</a>

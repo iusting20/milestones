@@ -467,7 +467,8 @@ class MilestonesTest extends TestCase
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(WeekBoard::class)
             ->assertSet('week', '2026-W12')
-            ->assertSee('Week 12');
+            ->assertSee('Week: 16-22 Mar')
+            ->assertDontSee('Week 12');
     }
 
     public function test_can_copy_unfinished_from_previous_day(): void

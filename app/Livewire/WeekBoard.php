@@ -76,6 +76,7 @@ class WeekBoard extends Component
         return view('livewire.week-board', [
             'days' => $this->days(),
             'weekNumber' => $this->weekNumber(),
+            'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
             'today' => Clock::todayString(),
         ]);
     }

@@ -6,8 +6,8 @@
                     aria-label="Previous week">‹</button>
 
             <h1 class="inline-block max-w-[min(100%,12rem)] truncate bg-mark px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-black sm:max-w-none sm:px-3 sm:text-sm md:text-base">
-                <span class="sm:hidden">DRIP · W{{ $weekNumber }}</span>
-                <span class="hidden sm:inline">DRIP Matrix - Week {{ $weekNumber }}</span>
+                <span class="sm:hidden">DRIP · {{ $weekRange }}</span>
+                <span class="hidden sm:inline">DRIP Matrix - Week: {{ $weekRange }}</span>
             </h1>
 
             <button type="button" wire:click="nextWeek"

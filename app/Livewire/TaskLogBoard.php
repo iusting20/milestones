@@ -446,6 +446,7 @@ class TaskLogBoard extends Component
                 'assets' => $this->hubCoverage('assets', $logs->pluck('title')),
             ],
             'weekNumber' => $this->weekNumber(),
+            'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
             'hasLogs' => $hasEntries,
             'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
             'selectableDays' => $this->selectableDays(),

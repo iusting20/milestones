@@ -5,7 +5,7 @@
                 aria-label="Previous week">‹</button>
 
         <h1 class="inline-block bg-mark px-3 py-1 text-sm font-bold uppercase tracking-wide text-black sm:text-base">
-            Productivity Log - Week {{ $weekNumber }}
+            Productivity Log - Week: {{ $weekRange }}
         </h1>
 
         <button type="button" wire:click="nextWeek"

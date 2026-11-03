@@ -1,6 +1,7 @@
 @php($startMs = $startedAt->getTimestampMs())
 <span class="{{ $class ?? 'text-[10px] font-normal leading-none text-white' }}"
       wire:key="elapsed-{{ $key ?? 'item' }}-{{ $startMs }}"
+      style="color: #ffe600"
       data-elapsed-since="{{ $startMs }}"
       x-data="{
           start: {{ $startMs }},

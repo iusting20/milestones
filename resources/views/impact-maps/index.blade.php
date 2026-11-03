@@ -18,12 +18,30 @@
         <h2 class="group">{{ $client !== '' ? $client : 'No client / project' }}</h2>
         <ul class="maps">
             @foreach ($group as $map)
-                <li>
+                <li x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+                    <button type="button" class="cog" title="Settings" aria-label="Map settings" @click="open = !open">⚙</button>
                     <a href="{{ route('impact-maps.show', ['map' => $map->slug]) }}">{{ $map->name }}</a>
                     <span class="muted">{{ $map->nodes_count }} nodes · {{ $map->updated_at->timezone('Europe/Bucharest')->format('j M Y H:i') }}</span>
+                    <div class="cog-menu" x-show="open" x-cloak>
+                        <form method="POST" action="{{ route('impact-maps.update', ['map' => $map->slug]) }}">
+                            @csrf
+                            @method('PATCH')
+                            <input type="text" name="client" value="{{ $map->client }}" maxlength="255" placeholder="Client / project (optional)" aria-label="Client / project">
+                            <button type="submit" class="btn">Save</button>
+                        </form>
+                        <form method="POST" action="{{ route('impact-maps.destroy', ['map' => $map->slug]) }}"
+                              onsubmit="return confirm('Delete this impact map and all its nodes?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-danger">Delete map</button>
+                        </form>
+                    </div>
                 </li>
             @endforeach
         </ul>
         @endforeach
     @endif
+@push('scripts')
+    @livewireScripts
+@endpush
 @endsection

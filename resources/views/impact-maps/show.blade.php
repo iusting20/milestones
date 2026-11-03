@@ -8,19 +8,6 @@
     @if ($canEdit)
     <div class="bar">
         <a href="{{ route('impact-maps.index') }}" class="btn">← All maps</a>
-        <form method="POST" action="{{ route('impact-maps.update', $p) }}" class="bar" style="margin:0">
-            @csrf
-            @method('PATCH')
-            <input type="text" name="client" value="{{ $map->client }}" maxlength="255" placeholder="Client / project (optional)" aria-label="Client / project">
-            <button type="submit" class="btn">Save client</button>
-        </form>
-        <form method="POST" action="{{ route('impact-maps.destroy', $p) }}" style="margin:0"
-              onsubmit="return confirm('Delete this impact map and all its nodes?')">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-danger">Delete map</button>
-        </form>
-        <span class="muted">Click a box to rename · hover for + (add child) and × (delete)</span>
     </div>
     @endif
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif

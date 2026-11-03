@@ -44,10 +44,20 @@
         .tools button { font: inherit; font-size: 14px; width: 22px; height: 22px; line-height: 18px; padding: 0; border-radius: 50%; border: 2px solid #2b2b2b; background: #fff; color: #2b2b2b; cursor: pointer; }
         .tools form { margin: 0; }
     </style>
+    <style>
+        .maps li { position: relative; }
+        .cog { background: none; border: 0; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; color: #666; }
+        .cog:hover { color: #000; }
+        .cog-menu { position: absolute; z-index: 10; left: 0; top: 100%; margin-top: 4px; background: #fff; border: 1px solid #ccc;
+            border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.15); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+        .cog-menu form { margin: 0; display: flex; gap: 6px; }
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
 <body>
 <div class="wrap">
     @yield('content')
 </div>
+    @stack('scripts')
 </body>
 </html>

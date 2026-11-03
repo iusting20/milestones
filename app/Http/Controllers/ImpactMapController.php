@@ -58,7 +58,7 @@ class ImpactMapController extends Controller
         $data = $request->validate(['client' => 'nullable|string|max:255']);
         $map->update(['client' => trim((string) ($data['client'] ?? '')) ?: null]);
 
-        return redirect()->route('impact-maps.show', $this->params($map));
+        return redirect()->route('impact-maps.index');
     }
 
     public function destroy(Request $request): RedirectResponse

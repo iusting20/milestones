@@ -95,8 +95,11 @@ class ImpactMapTest extends TestCase
             ->assertSeeInOrder(['Goal', 'Actor', 'Impact', 'Deliverable'])
             ->assertSee('class="node lvl-4"', false)
             ->assertSee('class="tools"', false)
-            ->assertSee('name="client"', false)
-            ->assertSee('Delete map')
+            ->assertDontSee('name="client"', false)
+            ->assertDontSee('Delete map')
+            ->assertDontSee('Save client')
+            ->assertDontSee('Click a box to rename')
+            ->assertSee('All maps')
             ->assertDontSee('name="name"', false)
             ->assertSee('<path d="M', false);
     }
@@ -132,9 +135,13 @@ class ImpactMapTest extends TestCase
         $this->assertSame('Acme', $a->client);
         $this->assertNull($b->client);
 
-        $this->get('/impact-maps')->assertOk()->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B']);
+        $this->get('/impact-maps')->assertOk()->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B'])
+            ->assertSee('class="cog"', false)
+            ->assertSee('value="Acme"', false)
+            ->assertSee('Delete map')
+            ->assertSee($this->mapUrl($a), false);
 
-        $this->patch($this->mapUrl($b), ['client' => 'Globex'])->assertRedirect();
+        $this->patch($this->mapUrl($b), ['client' => 'Globex'])->assertRedirect('/impact-maps');
         $this->assertSame('Globex', $b->fresh()->client);
         $this->patch($this->mapUrl($a), ['client' => ''])->assertRedirect();
         $this->assertNull($a->fresh()->client);

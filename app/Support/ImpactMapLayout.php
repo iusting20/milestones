@@ -12,7 +12,7 @@ class ImpactMapLayout
 {
     public const ROW = 56;
 
-    public const TOP = 70;
+    public const TOP = 100;
 
     /** Left edge and box width per level. */
     public const COLUMNS = [

@@ -356,6 +356,6 @@ class ImpactMapController extends Controller
 
     private function toTracker(ImpactMap $map): RedirectResponse
     {
-        return redirect()->to(route('impact-maps.show', $this->params($map)).'#track');
+        return redirect()->route('impact-maps.show', $this->params($map))->with('track_open', true);
     }
 }

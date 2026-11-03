@@ -94,7 +94,7 @@
         $trackErr = $errors->hasAny(['track_start', 'track_start_label', 'track_target', 'track_target_label', 'checkin_value', 'checkin_date', 'checkin_note']);
     @endphp
     @if ($tracker || $canEdit)
-    <div class="track-wrap" id="track" data-key="im-track-{{ $map->slug }}" data-force="{{ $trackErr ? 1 : 0 }}">
+    <div class="track-wrap" id="track" data-key="im-track-{{ $map->slug }}" data-force="{{ ($trackErr || session('track_open')) ? 1 : 0 }}">
         <section id="track-panel" class="track-panel" aria-label="Progress tracker">
             <div class="track-inner"><div class="track-card">
                 <h2>Track progress</h2>
@@ -188,14 +188,14 @@
             const open = force ?? !wrap.classList.contains('open');
             wrap.classList.toggle('open', open);
             document.querySelector('.track-toggle').setAttribute('aria-expanded', open);
-            try { localStorage.setItem(wrap.dataset.key, open ? '1' : '0'); } catch (e) {}
             if (open && force === undefined) setTimeout(() => wrap.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }), 60);
         }
         (() => {
             const wrap = document.getElementById('track');
             if (!wrap) return;
-            let saved = null; try { saved = localStorage.getItem(wrap.dataset.key); } catch (e) {}
-            if (wrap.dataset.force === '1' || location.hash === '#track' || saved === '1') {
+            try { localStorage.removeItem(wrap.dataset.key); } catch (e) {} // legacy remembered state
+            // Always closed on a fresh open; only auto-open right after a tracker action / validation error.
+            if (wrap.dataset.force === '1') {
                 requestAnimationFrame(() => requestAnimationFrame(() => imTrack(true)));
             }
         })();

@@ -360,16 +360,19 @@ class ImpactMapTest extends TestCase
         $this->put($this->mapUrl($map, '/tracker'), ['track_start' => 'abc', 'track_target' => '9'])->assertSessionHasErrors('track_start');
 
         $this->put($this->mapUrl($map, '/tracker'), ['track_start' => '20', 'track_start_label' => '% retention rate', 'track_target' => '45', 'track_target_label' => '% retention rate'])
-            ->assertRedirect($this->mapUrl($map).'#track');
+            ->assertRedirect($this->mapUrl($map));
         $map->refresh();
         $this->assertSame(20.0, $map->track_start);
         $this->assertSame('% retention rate', $map->track_target_label);
 
         $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => 'x', 'checkin_date' => '2026-11-03'])->assertSessionHasErrors('checkin_value');
-        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '25', 'checkin_date' => '2026-10-01', 'checkin_note' => 'Onboarding emails'])->assertRedirect($this->mapUrl($map).'#track');
+        $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '25', 'checkin_date' => '2026-10-01', 'checkin_note' => 'Onboarding emails'])->assertRedirect($this->mapUrl($map));
         $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '30', 'checkin_date' => '2026-11-01']);
         $this->assertSame(2, $map->checkins()->count());
 
+        $this->get($this->mapUrl($map))->assertSee('data-force="1"', false); // right after an action
+        $this->get($this->mapUrl($map))->assertOk()->assertSee('data-force="0"', false); // fresh open: closed
+        $this->withSession(['track_open' => true])->get($this->mapUrl($map))->assertSee('data-force="1"', false);
         $this->get($this->mapUrl($map))->assertOk()
             ->assertSee('40% of the way')
             ->assertSee('--fill: 40%', false)
@@ -378,7 +381,7 @@ class ImpactMapTest extends TestCase
             ->assertSee('class="ck-del"', false);
 
         $first = $map->checkins()->first();
-        $this->delete($this->mapUrl($map, '/checkins/'.$first->id))->assertRedirect($this->mapUrl($map).'#track');
+        $this->delete($this->mapUrl($map, '/checkins/'.$first->id))->assertRedirect($this->mapUrl($map));
         $this->assertSame(1, $map->checkins()->count());
 
         $other = $this->makeMap('Other');
@@ -388,7 +391,7 @@ class ImpactMapTest extends TestCase
         $this->post($this->mapUrl($map, '/checkins'), ['checkin_value' => '60', 'checkin_date' => '2026-11-03']);
         $this->get($this->mapUrl($map))->assertSee('Goal reached! (160%)')->assertSee('--fill: 100%', false);
 
-        $this->delete($this->mapUrl($map, '/tracker'))->assertRedirect($this->mapUrl($map).'#track');
+        $this->delete($this->mapUrl($map, '/tracker'))->assertRedirect($this->mapUrl($map));
         $map->refresh();
         $this->assertFalse($map->hasTracker());
         $this->assertSame(0, $map->checkins()->count());

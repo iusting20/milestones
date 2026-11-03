@@ -40,7 +40,7 @@ Route::get('/links/{hub}/{slug?}', LinkHub::class)
 // Impact Mapping tool. List + all edits need the normal login; a map page is public (read-only) via its secret slug.
 Route::redirect('/impact-maps-{old}', '/impact-maps')->where('old', '[A-Za-z0-9-]+');
 Route::prefix('impact-maps')
-    ->where(['map' => '[A-Za-z0-9]{24,64}', 'node' => '[0-9]+', 'checkin' => '[0-9]+'])
+    ->where(['map' => '[A-Za-z0-9]{24,64}', 'node' => '[0-9]+', 'checkin' => '[0-9]+', 'secret' => '[A-Za-z0-9]{24,64}'])
     ->name('impact-maps.')
     ->controller(ImpactMapController::class)
     ->group(function () {
@@ -54,6 +54,7 @@ Route::prefix('impact-maps')
         Route::patch('/{map}/nodes/{node}', 'updateNode')->name('nodes.update');
         Route::delete('/{map}/nodes/{node}', 'destroyNode')->name('nodes.destroy');
         Route::post('/{map}/nodes/{node}/reorder', 'reorderChildren')->name('nodes.reorder');
+        Route::get('/client/{secret}', 'clientPage')->name('client');
         Route::put('/{map}/tracker', 'updateTracker')->name('tracker.update');
         Route::delete('/{map}/tracker', 'destroyTracker')->name('tracker.destroy');
         Route::post('/{map}/checkins', 'storeCheckin')->name('checkins.store');

@@ -21,6 +21,10 @@
         .maps { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-width: 640px; }
         .maps li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 2px solid #f0e4c6; border-radius: 10px; padding: 8px 12px; font-size: 20px; }
         .group { color: #8a5a12; font-size: 22px; text-transform: uppercase; margin: 18px 0 8px; }
+        .group-link { color: inherit; text-decoration: none; cursor: pointer; }
+        .group-link:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+        .back-link { color: #8a5a12; font-size: 17px; text-decoration: none; opacity: .7; }
+        .back-link:hover { opacity: 1; text-decoration: underline; }
         .client { color: #8b8270; font-size: 24px; }
         .muted { color: #8b8270; font-size: 15px; }
         .err { color: #b52b27; }

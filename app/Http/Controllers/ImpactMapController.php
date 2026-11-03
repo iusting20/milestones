@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -20,8 +21,11 @@ class ImpactMapController extends Controller
 
     public function index(): View
     {
+        $groups = $this->orderedGroups();
+
         return view('impact-maps.index', [
-            'maps' => $this->orderedGroups(),
+            'maps' => $groups,
+            'clientSlugs' => $this->clientSlugs($groups),
             'clients' => ImpactMap::query()->whereNotNull('client')->where('client', '!=', '')
                 ->distinct()->orderBy('client')->pluck('client'),
         ]);
@@ -186,6 +190,51 @@ class ImpactMapController extends Controller
     }
 
     /** Groups in saved order (unsaved clients after, alphabetically; "No client" last by default); maps by position. */
+    /** Public, read-only page listing one client's maps (addressed by the client's secret slug). */
+    public function clientPage(Request $request): View
+    {
+        $group = DB::table('impact_map_groups')->where('slug', (string) $request->route('secret'))->first();
+        abort_if(! $group, 404);
+
+        return view('impact-maps.client', [
+            'client' => $group->client,
+            'maps' => ImpactMap::query()->where('client', $group->client)->orderBy('position')->orderByDesc('updated_at')->get(),
+            'loggedIn' => $request->session()->get(EnsureAuthenticated::SESSION_KEY) === true,
+        ]);
+    }
+
+    /**
+     * Secret slug per (non-empty) client, created on demand. Missing group rows are appended
+     * in current display order, so ordering is unchanged.
+     *
+     * @return array<string, string>
+     */
+    private function clientSlugs(Collection $groups): array
+    {
+        $rows = DB::table('impact_map_groups')->get()->keyBy('client');
+        $max = (int) $rows->max('position');
+        $out = [];
+        foreach ($groups->keys() as $client) {
+            $client = (string) $client;
+            if ($client === '') {
+                continue;
+            }
+            $row = $rows->get($client);
+            if (! $row) {
+                $slug = Str::random(32);
+                DB::table('impact_map_groups')->insert(['client' => $client, 'position' => ++$max, 'slug' => $slug, 'created_at' => now(), 'updated_at' => now()]);
+            } elseif (! $row->slug) {
+                $slug = Str::random(32);
+                DB::table('impact_map_groups')->where('id', $row->id)->update(['slug' => $slug]);
+            } else {
+                $slug = $row->slug;
+            }
+            $out[$client] = $slug;
+        }
+
+        return $out;
+    }
+
     private function orderedGroups(): Collection
     {
         $order = DB::table('impact_map_groups')->pluck('position', 'client');

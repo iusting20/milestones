@@ -65,7 +65,7 @@
             <div id="im-groups">
             @foreach ($maps as $client => $group)
             <section class="grp" data-client="{{ $client }}">
-            <h2 class="group" title="Drag to reorder">{{ $client !== '' ? $client : 'No client / project' }}</h2>
+            <h2 class="group" title="Drag to reorder">@if ($client !== '' && isset($clientSlugs[$client]))<a class="group-link" href="{{ route('impact-maps.client', ['secret' => $clientSlugs[$client]]) }}" title="Open shareable client page">{{ $client }}</a>@else{{ $client !== '' ? $client : 'No client / project' }}@endif</h2>
             <ul class="maps">
                 @foreach ($group as $map)
                     <li data-slug="{{ $map->slug }}" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">

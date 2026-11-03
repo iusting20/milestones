@@ -20,8 +20,8 @@ class EnsureAuthenticated
             $request->session()->put(self::SESSION_KEY, true);
         }
 
-        // Public, read-only Impact Map page (addressed by its secret slug).
-        if ($request->isMethod('GET') && $request->routeIs('impact-maps.show')) {
+        // Public, read-only Impact Map + client pages (addressed by secret slugs).
+        if ($request->isMethod('GET') && $request->routeIs('impact-maps.show', 'impact-maps.client')) {
             return $next($request);
         }
 

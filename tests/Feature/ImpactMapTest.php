@@ -437,4 +437,33 @@ class ImpactMapTest extends TestCase
         }
         $this->assertSame(7, substr_count($res->getContent(), 'class="tpl-card"'));
     }
+
+    public function test_public_client_page_by_secret(): void
+    {
+        $a1 = $this->makeMap('Alpha one'); $a1->update(['client' => 'Acme']);
+        $a2 = $this->makeMap('Alpha two'); $a2->update(['client' => 'Acme']);
+        $b = $this->makeMap('Beta map'); $b->update(['client' => 'Bolt']);
+        $n = $this->makeMap('Loose map');
+
+        $index = $this->get('/impact-maps')->assertOk()->getContent();
+        $secret = \Illuminate\Support\Facades\DB::table('impact_map_groups')->where('client', 'Acme')->value('slug');
+        $this->assertSame(32, strlen($secret));
+        $url = route('impact-maps.client', ['secret' => $secret]);
+        $this->assertStringContainsString('href="'.$url.'"', $index);
+        $this->assertNull(\Illuminate\Support\Facades\DB::table('impact_map_groups')->where('client', '')->value('slug'));
+
+        $this->get($url)->assertOk()->assertSee('back to all maps');
+
+        $this->flushSession();
+        $res = $this->get($url)->assertOk()
+            ->assertSee('Acme')->assertSee('Alpha one')->assertSee('Alpha two')
+            ->assertSee(route('impact-maps.show', ['map' => $a1->slug]), false)
+            ->assertDontSee('Beta map')->assertDontSee('Bolt')->assertDontSee('Loose map')->assertDontSee('No client')
+            ->assertDontSee('class="wrench"', false)->assertDontSee('+ New map')->assertDontSee("class=\"cog-menu", false)
+            ->assertDontSee("id=\"im-groups", false)->assertDontSee('back to all maps')
+            ->assertSee('noindex', false);
+
+        $this->get(route('impact-maps.client', ['secret' => str_repeat('x', 32)]))->assertNotFound();
+        $this->get('/impact-maps')->assertRedirect(route('login'));
+    }
 }

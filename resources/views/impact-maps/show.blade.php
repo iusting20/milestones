@@ -110,10 +110,15 @@
                             <span class="lbl"><small>Goal</small><b>{{ $fmt($map->track_target) }}</b> {{ $map->track_target_label }}</span>
                         </div>
                         @foreach ($checkins as $c)
-                            @php $cp = $map->progressPct($c->value); $isLatest = $c->is($latest); @endphp
-                            <div class="track-pt{{ $isLatest ? ' latest' : '' }}{{ $cp >= 100 ? ' done' : '' }}" style="left: {{ $clamp($c->value) }}%"
-                                 title="{{ $fmt($c->value) }} {{ $unit }} · {{ $c->date->format('j M Y') }}{{ $c->note ? ' · '.$c->note : '' }}">
+                            @php $cp = $map->progressPct($c->value); $isLatest = $c->is($latest); $at = $clamp($c->value); @endphp
+                            <div class="track-pt{{ $isLatest ? ' latest' : '' }}{{ $cp >= 100 ? ' done' : '' }}{{ $at < 15 ? ' edge-l' : ($at > 85 ? ' edge-r' : '') }}" style="left: {{ $at }}%"
+                                 tabindex="0" onclick="" aria-label="{{ $fmt($c->value) }} {{ $unit }}, {{ $c->date->format('j M Y') }}, {{ round($cp) }}%{{ $c->note ? ', '.$c->note : '' }}">
                                 <span class="dot"></span>
+                                <span class="tip" aria-hidden="true">
+                                    <b>{{ $fmt($c->value) }}</b> {{ $unit }}
+                                    <span class="tip-meta">{{ $c->date->format('j M Y') }} · {{ round($cp) }}%</span>
+                                    @if ($c->note) <span class="tip-note">{{ $c->note }}</span> @endif
+                                </span>
                                 @if ($isLatest)
                                     <span class="badge">{{ $cp >= 100 ? '🎉 Goal reached! ('.round($cp).'%)' : round(max(0, $cp)).'% of the way' }}</span>
                                     <span class="lbl"><b>{{ $fmt($c->value) }}</b> · {{ $c->date->format('j M') }}</span>

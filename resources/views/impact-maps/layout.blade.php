@@ -149,6 +149,24 @@
         .track-pt .badge::after { content: ''; position: absolute; left: 50%; bottom: -9px; width: 12px; height: 12px; background: #fbd75b;
             border-right: 3px solid #2b2b2b; border-bottom: 3px solid #2b2b2b; transform: translateX(-50%) rotate(45deg); }
         .track-pt.done .badge { background: #9fbf3b; } .track-pt.done .badge::after { background: #9fbf3b; }
+        .track-pt { outline: none; -webkit-tap-highlight-color: transparent; }
+        .track-pt:hover, .track-pt:focus { z-index: 6; }
+        .track-pt:focus-visible .dot { box-shadow: 0 0 0 3px #f9b11b; }
+        .track-pt .lbl { transition: opacity .15s; }
+        .track-pt:hover .lbl, .track-pt:focus .lbl { opacity: 0; }
+        .tip { position: absolute; top: 30px; left: 50%; transform: translate(-50%, -5px); opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity .15s ease, transform .15s ease, visibility .15s; background: #fffdf7; border: 3px solid #2b2b2b; border-radius: 12px;
+            box-shadow: 3px 3px 0 #2b2b2b; padding: 4px 12px 5px; font-size: 17px; line-height: 1.2; white-space: nowrap; text-align: center; z-index: 10; }
+        .tip::before { content: ''; position: absolute; top: -9px; left: 50%; width: 12px; height: 12px; background: #fffdf7;
+            border-left: 3px solid #2b2b2b; border-top: 3px solid #2b2b2b; transform: translateX(-50%) rotate(45deg); }
+        .tip-meta { display: block; font-size: 14px; color: #8a5a12; }
+        .tip-note { display: block; max-width: 240px; white-space: normal; font-size: 14px; color: #555; margin-top: 2px; }
+        .track-pt:hover .tip, .track-pt:focus .tip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+        .track-pt.edge-l .tip { left: -14px; transform: translateY(-5px); text-align: left; }
+        .track-pt.edge-r .tip { left: auto; right: -14px; transform: translateY(-5px); text-align: right; }
+        .track-pt.edge-l:hover .tip, .track-pt.edge-l:focus .tip, .track-pt.edge-r:hover .tip, .track-pt.edge-r:focus .tip { transform: none; }
+        .track-pt.edge-l .tip::before { left: 22px; }
+        .track-pt.edge-r .tip::before { left: auto; right: 10px; transform: rotate(45deg); }
         @keyframes imPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
         .checkins { list-style: none; padding: 0; margin: 4px 0 14px; display: grid; gap: 6px; max-width: 720px; }
         .checkins li { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #2b2b2b; border-radius: 10px; padding: 4px 10px; font-size: 17px; }
@@ -167,6 +185,7 @@
         @media (prefers-reduced-motion: reduce) {
             .track-panel, .track-card, .track-fill { transition: none; }
             .track-pt.latest .dot { animation: none; }
+            .tip, .track-pt .lbl { transition: none; }
         }
         [x-cloak] { display: none !important; }
     </style>

@@ -377,6 +377,8 @@ class ImpactMapTest extends TestCase
             ->assertSee('40% of the way')
             ->assertSee('--fill: 40%', false)
             ->assertSee('Onboarding emails')
+            ->assertSee('<span class="tip"', false)
+            ->assertDontSee('title="25', false)
             ->assertSee('Edit start &amp; goal', false)
             ->assertSee('class="ck-del"', false);
 

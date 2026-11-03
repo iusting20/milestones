@@ -79,8 +79,11 @@ class ImpactMapTest extends TestCase
         $this->patch($this->url('/'.$map->id.'/nodes/'.$actor->id), ['title' => 'Actor B'])->assertRedirect();
         $this->assertSame('Actor B', $actor->fresh()->title);
 
-        $this->patch($this->url('/'.$map->id), ['name' => 'Renamed'])->assertRedirect();
-        $this->assertSame('Renamed', $map->fresh()->name);
+        $this->patch($this->url('/'.$map->id.'/nodes/'.$goal->id), ['title' => 'Renamed goal'])->assertRedirect();
+        $this->assertSame('Renamed goal', $map->fresh()->name);
+        $this->patch($this->url('/'.$map->id), ['name' => 'Ignored', 'client' => 'X'])->assertRedirect();
+        $this->assertSame('Renamed goal', $map->fresh()->name);
+        $this->get($this->url('/'.$map->id))->assertOk()->assertDontSee('name="name"', false)->assertDontSee('>Rename<', false);
 
         $this->delete($this->url('/'.$map->id.'/nodes/'.$goal->id))->assertStatus(422);
         $this->delete($this->url('/'.$map->id.'/nodes/'.$actor->id))->assertRedirect();
@@ -103,9 +106,9 @@ class ImpactMapTest extends TestCase
             ->assertSeeInOrder(['Acme', 'Map A', 'No client / project', 'Map B']);
         $this->get($this->url('/'.$a->id))->assertOk()->assertSee('· Acme')->assertSee('name="client" value="Acme"', false);
 
-        $this->patch($this->url('/'.$b->id), ['name' => 'Map B', 'client' => 'Globex'])->assertRedirect();
+        $this->patch($this->url('/'.$b->id), ['client' => 'Globex'])->assertRedirect();
         $this->assertSame('Globex', $b->fresh()->client);
-        $this->patch($this->url('/'.$a->id), ['name' => 'Map A', 'client' => ''])->assertRedirect();
+        $this->patch($this->url('/'.$a->id), ['client' => ''])->assertRedirect();
         $this->assertNull($a->fresh()->client);
     }
 

@@ -10,9 +10,8 @@
         <form method="POST" action="{{ route('impact-maps.update', $p) }}" class="bar" style="margin:0">
             @csrf
             @method('PATCH')
-            <input type="text" name="name" value="{{ $map->name }}" maxlength="255" required aria-label="Map name">
             <input type="text" name="client" value="{{ $map->client }}" maxlength="255" placeholder="Client / project (optional)" aria-label="Client / project">
-            <button type="submit" class="btn">Save</button>
+            <button type="submit" class="btn">Save client</button>
         </form>
         <form method="POST" action="{{ route('impact-maps.destroy', $p) }}" style="margin:0"
               onsubmit="return confirm('Delete this impact map and all its nodes?')">

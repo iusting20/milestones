@@ -48,12 +48,12 @@ class ImpactMapController extends Controller
         ]);
     }
 
+    /** Map name follows the goal node; only the client/project is edited here. */
     public function update(Request $request): RedirectResponse
     {
         $map = $this->map($request);
-        $data = $request->validate(['name' => 'required|string|max:255', 'client' => 'nullable|string|max:255']);
-        $client = trim((string) ($data['client'] ?? '')) ?: null;
-        $map->update(['name' => trim($data['name']), 'client' => $client]);
+        $data = $request->validate(['client' => 'nullable|string|max:255']);
+        $map->update(['client' => trim((string) ($data['client'] ?? '')) ?: null]);
 
         return redirect()->route('impact-maps.show', $this->params($map));
     }
@@ -89,6 +89,9 @@ class ImpactMapController extends Controller
         $node = $this->node($request, $map);
         $data = $request->validate(['title' => 'required|string|max:255']);
         $node->update(['title' => trim($data['title'])]);
+        if ($node->parent_id === null) {
+            $map->update(['name' => $node->title]);
+        }
         $map->touch();
 
         return redirect()->route('impact-maps.show', $this->params($map));

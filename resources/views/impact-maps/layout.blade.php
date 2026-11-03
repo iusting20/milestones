@@ -77,11 +77,21 @@
         #im-groups .group, #im-groups .maps li { cursor: grab; }
         #im-groups .maps li .cog-menu { cursor: default; }
         .im-chosen, body.im-dragging, body.im-dragging * { cursor: grabbing !important; }
-        .im-ghost { opacity: .4; border-style: dashed !important; }
+        .im-ghost { opacity: .55; background: #fbf1da !important; border: 2px dashed #b8862b !important; }
+        .im-chosen { box-shadow: 4px 4px 0 #2b2b2b; transform: rotate(-1deg); }
         #im-groups .maps { min-height: 12px; }
         .node[data-reorder] { cursor: grab; touch-action: none; user-select: none; }
         .node[data-reorder] .t { cursor: grab; }
-        .node.dragging { z-index: 20; opacity: .85; box-shadow: 4px 4px 0 #2b2b2b; }
+        .canvas .node { transition: top .2s ease, transform .2s ease, box-shadow .2s ease; }
+        .canvas .node.lifted { transition: transform .2s ease, box-shadow .2s ease; z-index: 20;
+            transform: translateY(-50%) scale(1.04) rotate(-1.5deg); box-shadow: 6px 8px 0 rgba(43,43,43,.35); }
+        .canvas .node.lift-root { z-index: 21; }
+        .canvas svg path { transition: none; }
+        @media (prefers-reduced-motion: reduce) {
+            .canvas .node, .canvas .node.lifted { transition: none; }
+            .canvas .node.lifted { transform: translateY(-50%); }
+            .im-ghost, .im-chosen { transition: none !important; }
+        }
         .sub-label { position: absolute; left: 0; right: 0; text-align: center; bottom: 100%; margin-bottom: 8px; font-size: 15px; font-weight: 400; line-height: 1;
             text-transform: none; letter-spacing: .02em; pointer-events: none; user-select: none; white-space: nowrap; }
         .sub-3 { color: #d95c5c; }

@@ -94,7 +94,7 @@
                   .catch(() => { alert('Could not save the new order.'); location.reload(); });
             };
             const common = {
-                animation: 150, ghostClass: 'im-ghost', chosenClass: 'im-chosen',
+                animation: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 200, easing: 'cubic-bezier(.2, .8, .2, 1)', ghostClass: 'im-ghost', chosenClass: 'im-chosen',
                 onStart: () => document.body.classList.add('im-dragging'),
             };
             Sortable.create(root, { ...common, draggable: '.grp', handle: '.group', onEnd: (e) => e.oldIndex !== e.newIndex ? save(false) : document.body.classList.remove('im-dragging') });

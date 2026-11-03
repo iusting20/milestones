@@ -11,7 +11,7 @@
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif
 
     <div class="board">
-        <div class="canvas" style="width: {{ $layout['width'] }}px; height: {{ $layout['height'] }}px;">
+        <div class="canvas" data-row="{{ \App\Support\ImpactMapLayout::ROW }}" data-top="{{ \App\Support\ImpactMapLayout::TOP }}" style="width: {{ $layout['width'] }}px; height: {{ $layout['height'] }}px;">
             <svg width="{{ $layout['width'] }}" height="{{ $layout['height'] }}" aria-hidden="true">
                 @foreach ($layout['links'] as $l)
                     @php $mx = ($l['x1'] + $l['x2']) / 2; @endphp
@@ -93,44 +93,123 @@
             node.querySelector('.f-add input').focus();
         }
 
-        // Drag a node up/down to reorder it among its siblings (same parent only).
+        // Drag a node (with its whole subtree) up/down among its siblings; live re-layout, no reload.
         (() => {
+            const canvas = document.querySelector('.canvas');
+            if (!canvas || !document.querySelector('.node[data-reorder]')) return;
             const token = @js(csrf_token());
-            let drag = null, swallowClick = false;
-            const siblings = (n) => [...document.querySelectorAll('.node[data-reorder]')].filter((s) => s.dataset.parent === n.dataset.parent);
-            const mid = (n) => { const r = n.getBoundingClientRect(); return r.top + r.height / 2; };
+            const ROW = +canvas.dataset.row, TOP = +canvas.dataset.top;
+            const svg = canvas.querySelector('svg');
+            const NS = 'http://www.w3.org/2000/svg';
+            const all = [...canvas.querySelectorAll('.node[data-node]')];
+            const byId = new Map(all.map((n) => [n.dataset.node, n]));
+            const kids = new Map();
+            let root = null;
+            all.slice().sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top)).forEach((n) => {
+                const p = n.dataset.parent;
+                if (!p) { root = n; return; }
+                if (!kids.has(p)) kids.set(p, []);
+                kids.get(p).push(n);
+            });
+            if (!root) return;
 
+            // Same algorithm as App\Support\ImpactMapLayout: each leaf one row, parents centred on children.
+            const layout = () => {
+                const ys = new Map(); let row = 0;
+                const place = (n) => {
+                    const ch = kids.get(n.dataset.node) || [];
+                    let y;
+                    if (!ch.length) { y = TOP + row * ROW + ROW / 2; row++; }
+                    else { const c = ch.map(place); y = (Math.min(...c) + Math.max(...c)) / 2; }
+                    ys.set(n, y); return y;
+                };
+                place(root); return ys;
+            };
+            const subtree = (n, out = []) => { out.push(n); (kids.get(n.dataset.node) || []).forEach((c) => subtree(c, out)); return out; };
+
+            // Connector curves, redrawn from the boxes' live (possibly animating) positions.
+            svg.innerHTML = '';
+            const paths = all.filter((n) => n.dataset.parent).map((n) => {
+                const p = document.createElementNS(NS, 'path');
+                for (const [k, v] of Object.entries({ fill: 'none', stroke: '#2b2b2b', 'stroke-width': '2.5', 'stroke-linecap': 'round' })) p.setAttribute(k, v);
+                svg.appendChild(p); return [p, byId.get(n.dataset.parent), n];
+            });
+            const top = (n) => parseFloat(getComputedStyle(n).top);
+            const draw = () => paths.forEach(([p, a, b]) => {
+                const x1 = a.offsetLeft + a.offsetWidth, y1 = top(a), x2 = b.offsetLeft, y2 = top(b), mx = (x1 + x2) / 2;
+                p.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+            });
+            let animUntil = 0, raf = 0;
+            const tick = () => { draw(); raf = (drag || performance.now() < animUntil) ? requestAnimationFrame(tick) : 0; };
+            const animate = (ms = 260) => { animUntil = performance.now() + ms; if (!raf) raf = requestAnimationFrame(tick); };
+            draw();
+
+            const apply = (ys, skip) => ys.forEach((y, n) => { if (!skip || !skip.has(n)) n.style.top = y + 'px'; });
+            const relabel = () => {
+                const ys = layout();
+                canvas.querySelectorAll('.sub-label').forEach((label) => {
+                    const lvl = label.classList.contains('sub-3') ? 'lvl-3' : 'lvl-4';
+                    const topmost = all.filter((n) => n.classList.contains(lvl)).sort((a, b) => ys.get(a) - ys.get(b))[0];
+                    if (topmost && label.parentElement !== topmost) topmost.prepend(label);
+                });
+            };
+
+            let drag = null, swallowClick = false;
             document.addEventListener('pointerdown', (e) => {
                 const n = e.target.closest('.node[data-reorder]');
                 if (!n || e.button !== 0 || n.matches('.editing, .adding') || e.target.closest('.tools, form, input, button')) return;
-                if (siblings(n).length < 2) return;
-                drag = { n, y0: e.clientY, dy: 0, on: false, id: e.pointerId };
+                const sibs = kids.get(n.dataset.parent) || [];
+                if (sibs.length < 2) return;
+                drag = { n, sibs, y0: e.clientY, on: false, id: e.pointerId, before: sibs.slice() };
             });
             document.addEventListener('pointermove', (e) => {
                 if (!drag || e.pointerId !== drag.id) return;
-                drag.dy = e.clientY - drag.y0;
-                if (!drag.on && Math.abs(drag.dy) < 6) return;
-                if (!drag.on) { drag.on = true; drag.n.classList.add('dragging'); document.body.classList.add('im-dragging'); }
-                drag.n.style.transform = `translateY(calc(-50% + ${drag.dy}px))`;
+                const dy = e.clientY - drag.y0;
+                if (!drag.on) {
+                    if (Math.abs(dy) < 6) return;
+                    drag.on = true;
+                    drag.tree = new Set(subtree(drag.n));
+                    drag.start = new Map([...drag.tree].map((m) => [m, parseFloat(m.style.top)]));
+                    // Fixed reference points: each other sibling's centre at drag start.
+                    drag.ref = drag.before.filter((s) => s !== drag.n).map((s) => [s, parseFloat(s.style.top)]);
+                    drag.tree.forEach((m) => m.classList.add('lifted'));
+                    drag.n.classList.add('lift-root');
+                    document.body.classList.add('im-dragging');
+                    animate();
+                }
                 e.preventDefault();
+                const centre = drag.start.get(drag.n) + dy;
+                const others = drag.ref.filter(([, y]) => y < centre).length;
+                const order = drag.ref.map(([s]) => s); order.splice(others, 0, drag.n);
+                kids.set(drag.n.dataset.parent, order);
+                const ys = layout();
+                apply(ys, drag.tree);                                   // siblings slide (CSS transition)
+                drag.tree.forEach((m) => m.style.top = (drag.start.get(m) + dy) + 'px'); // subtree follows pointer
+                drag.ys = ys;
+                if (!raf) raf = requestAnimationFrame(tick);
             });
-            document.addEventListener('pointerup', (e) => {
+            const end = (e) => {
                 if (!drag || e.pointerId !== drag.id) return;
-                const { n, on } = drag; drag = null;
-                if (!on) return;
+                const d = drag; drag = null;
+                if (!d.on) return;
                 swallowClick = true; setTimeout(() => swallowClick = false, 0);
                 document.body.classList.remove('im-dragging');
-                const sibs = siblings(n);
-                const before = sibs.map((s) => s.dataset.node);
-                const order = sibs.map((s) => [mid(s), s.dataset.node]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
-                if (order.join() === before.join()) { n.style.transform = ''; n.classList.remove('dragging'); return; }
-                fetch(n.dataset.reorder, {
+                d.tree.forEach((m) => m.classList.remove('lifted'));
+                d.n.classList.remove('lift-root');
+                const order = kids.get(d.n.dataset.parent);
+                apply(layout());                                        // settle into place
+                relabel();
+                animate(320);
+                if (order.every((s, i) => s === d.before[i])) return;
+                fetch(d.n.dataset.reorder, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
-                    body: JSON.stringify({ children: order.map(Number) }),
-                }).then((r) => { if (!r.ok) throw r; location.reload(); })
+                    body: JSON.stringify({ children: order.map((s) => Number(s.dataset.node)) }),
+                }).then((r) => { if (!r.ok) throw r; })
                   .catch(() => { alert('Could not save the new order.'); location.reload(); });
-            });
+            };
+            document.addEventListener('pointerup', end);
+            document.addEventListener('pointercancel', end);
             document.addEventListener('click', (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); } }, true);
         })();
     </script>

@@ -168,4 +168,45 @@ class ImpactMapTest extends TestCase
             ->assertOk()->assertSee('x-data="{ create: true }"', false);
         $this->assertSame(0, ImpactMap::query()->count());
     }
+
+    public function test_client_dropdown_lists_existing_and_supports_none_and_new(): void
+    {
+        $this->makeMap('Map Z', 'Zeta');
+        $this->makeMap('Map A', 'Acme');
+        $this->makeMap('Map A2', 'Acme');
+
+        $html = $this->get('/impact-maps')->assertOk()
+            ->assertSee('<select name="client" id="map-client"', false)
+            ->assertSeeInOrder(['id="map-client"', '— None —', '>Acme</option>', '>Zeta</option>', '+ New client…'], false)
+            ->getContent();
+        $modal = substr($html, strpos($html, 'id="map-client"'), strpos($html, '+ New client') - strpos($html, 'id="map-client"'));
+        $this->assertSame(1, substr_count($modal, '>Acme</option>'));
+
+        $this->post('/impact-maps', ['name' => 'No client', 'client' => ''])->assertRedirect();
+        $this->assertNull(ImpactMap::query()->where('name', 'No client')->sole()->client);
+
+        $this->post('/impact-maps', ['name' => 'Existing', 'client' => 'Zeta'])->assertRedirect();
+        $this->assertSame('Zeta', ImpactMap::query()->where('name', 'Existing')->sole()->client);
+
+        $this->post('/impact-maps', ['name' => 'Brand new', 'client' => '__new__', 'client_new' => '  Globex  '])->assertRedirect();
+        $this->assertSame('Globex', ImpactMap::query()->where('name', 'Brand new')->sole()->client);
+
+        $map = ImpactMap::query()->where('name', 'Existing')->sole();
+        $this->patch($this->mapUrl($map), ['client' => '__new__', 'client_new' => 'Initech'])->assertRedirect('/impact-maps');
+        $this->assertSame('Initech', $map->fresh()->client);
+        $this->patch($this->mapUrl($map), ['client' => ''])->assertRedirect('/impact-maps');
+        $this->assertNull($map->fresh()->client);
+    }
+
+    public function test_new_client_validation_reopens_modal_with_selection(): void
+    {
+        $this->followingRedirects()->from('/impact-maps')
+            ->post('/impact-maps', ['name' => 'Keep me', 'client' => '__new__', 'client_new' => ''])
+            ->assertOk()
+            ->assertSee('x-data="{ create: true }"', false)
+            ->assertSee('Type the new client / project name.')
+            ->assertSee('value="Keep me"', false)
+            ->assertSee('<option value="__new__" selected', false);
+        $this->assertSame(0, ImpactMap::query()->count());
+    }
 }

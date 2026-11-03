@@ -1,7 +1,7 @@
 @extends('impact-maps.layout')
 
 @section('content')
-    <div x-data="{ create: {{ $errors->has('name') || $errors->has('client') ? 'true' : 'false' }} }"
+    <div x-data="{ create: {{ $errors->hasAny(['name', 'client', 'client_new']) ? 'true' : 'false' }} }"
          x-init="$watch('create', v => v && $nextTick(() => $refs.mapName.focus()))"
          @keydown.escape.window="create = false">
         <h1>Impact Maps</h1>
@@ -19,8 +19,9 @@
                     <input id="map-name" x-ref="mapName" type="text" name="name" maxlength="255" required value="{{ old('name') }}">
                     @error('name') <p class="err" style="margin: -8px 0 10px">{{ $message }}</p> @enderror
                     <label for="map-client">Client / project <span class="muted">(optional)</span></label>
-                    <input id="map-client" type="text" name="client" maxlength="255" value="{{ old('client') }}">
+                    @include('impact-maps._client-picker', ['id' => 'map-client', 'selected' => old('client', ''), 'newValue' => old('client_new')])
                     @error('client') <p class="err" style="margin: -8px 0 10px">{{ $message }}</p> @enderror
+                    @error('client_new') <p class="err" style="margin: -8px 0 10px">{{ $message }}</p> @enderror
                     <div class="actions">
                         <button type="button" class="toon-btn plain" @click="create = false">Cancel</button>
                         <button type="submit" class="toon-btn">Create</button>
@@ -53,7 +54,7 @@
                             <form method="POST" action="{{ route('impact-maps.update', ['map' => $map->slug]) }}">
                                 @csrf
                                 @method('PATCH')
-                                <input type="text" name="client" value="{{ $map->client }}" maxlength="255" placeholder="Client / project (optional)" aria-label="Client / project">
+                                @include('impact-maps._client-picker', ['id' => 'client-'.$map->slug, 'selected' => (string) $map->client, 'newValue' => ''])
                                 <button type="submit" class="toon-btn">Save</button>
                             </form>
                             <form method="POST" action="{{ route('impact-maps.destroy', ['map' => $map->slug]) }}"

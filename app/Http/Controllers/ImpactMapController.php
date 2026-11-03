@@ -13,19 +13,23 @@ use Illuminate\View\View;
 
 class ImpactMapController extends Controller
 {
+    public const NEW_CLIENT = '__new__';
+
     public function index(): View
     {
         return view('impact-maps.index', [
             'maps' => ImpactMap::query()->withCount('nodes')
                 ->orderByRaw("COALESCE(client, '') = ''")->orderBy('client')->orderByDesc('updated_at')->get()
                 ->groupBy(fn (ImpactMap $m) => (string) $m->client),
+            'clients' => ImpactMap::query()->whereNotNull('client')->where('client', '!=', '')
+                ->distinct()->orderBy('client')->pluck('client'),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:255', 'client' => 'nullable|string|max:255']);
-        $client = trim((string) ($data['client'] ?? '')) ?: null;
+        $data = $request->validate(['name' => 'required|string|max:255']);
+        $client = $this->client($request);
 
         $map = DB::transaction(function () use ($data, $client) {
             $map = ImpactMap::query()->create(['name' => trim($data['name']), 'client' => $client]);
@@ -55,8 +59,7 @@ class ImpactMapController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $map = $this->map($request);
-        $data = $request->validate(['client' => 'nullable|string|max:255']);
-        $map->update(['client' => trim((string) ($data['client'] ?? '')) ?: null]);
+        $map->update(['client' => $this->client($request)]);
 
         return redirect()->route('impact-maps.index');
     }
@@ -134,5 +137,17 @@ class ImpactMapController extends Controller
     private function params(ImpactMap $map): array
     {
         return ['map' => $map->slug];
+    }
+
+    /** Client picker: an existing value, empty (none), or NEW_CLIENT plus a typed client_new. */
+    private function client(Request $request): ?string
+    {
+        $data = $request->validate([
+            'client' => 'nullable|string|max:255',
+            'client_new' => 'nullable|string|max:255|required_if:client,'.self::NEW_CLIENT,
+        ], ['client_new.required_if' => 'Type the new client / project name.']);
+        $client = ($data['client'] ?? null) === self::NEW_CLIENT ? ($data['client_new'] ?? '') : ($data['client'] ?? '');
+
+        return trim((string) $client) ?: null;
     }
 }

@@ -65,6 +65,15 @@
         .modal input[type=text] { width: 100%; border: 3px solid #2b2b2b; border-radius: 12px; padding: 6px 10px; font-size: 19px; margin-bottom: 12px; }
         .modal input[type=text]:focus { outline: none; box-shadow: 3px 3px 0 #f9b11b; }
         .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+        .picker { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+        .toon-select { font: inherit; font-size: 19px; width: 100%; padding: 6px 36px 6px 10px; border: 3px solid #2b2b2b; border-radius: 12px; cursor: pointer;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='12' viewBox='0 0 16 12'%3E%3Cpath d='M2 2.5 8 9.5 14 2.5' fill='none' stroke='%232b2b2b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+            appearance: none; -webkit-appearance: none; color: #2b2b2b; box-shadow: 3px 3px 0 #f9b11b; }
+        .toon-select:focus { outline: none; box-shadow: 3px 3px 0 #b8862b; }
+        .modal .picker { margin-bottom: 12px; }
+        .modal .picker input[type=text] { margin-bottom: 0; }
+        .cog-menu form:first-child { flex-direction: column; align-items: stretch; }
+        .cog-menu input[type=text] { border: 3px solid #2b2b2b; border-radius: 12px; }
         [x-cloak] { display: none !important; }
     </style>
 </head>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ImpactMapController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
@@ -35,3 +36,19 @@ Route::redirect('/links', '/links/partners');
 Route::get('/links/{hub}/{slug?}', LinkHub::class)
     ->whereIn('hub', ['partners', 'assets'])
     ->name('links.hub');
+
+// Secret Impact Mapping tool: /impact-maps-{token}. Token is checked in EnsureAuthenticated (404 when wrong).
+Route::prefix('impact-maps-{token}')
+    ->where(['token' => '[A-Za-z0-9-]{16,}', 'map' => '[0-9]+', 'node' => '[0-9]+'])
+    ->name('impact-maps.')
+    ->controller(ImpactMapController::class)
+    ->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{map}', 'show')->name('show');
+        Route::patch('/{map}', 'update')->name('update');
+        Route::delete('/{map}', 'destroy')->name('destroy');
+        Route::post('/{map}/nodes/{node}', 'storeNode')->name('nodes.store');
+        Route::patch('/{map}/nodes/{node}', 'updateNode')->name('nodes.update');
+        Route::delete('/{map}/nodes/{node}', 'destroyNode')->name('nodes.destroy');
+    });

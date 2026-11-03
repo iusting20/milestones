@@ -20,6 +20,17 @@ class EnsureAuthenticated
             $request->session()->put(self::SESSION_KEY, true);
         }
 
+        // Secret Impact Maps pages: the unguessable token replaces the login.
+        if ($request->routeIs('impact-maps.*')) {
+            $secret = (string) config('impact_maps.token');
+            if ($secret === '' || ! hash_equals($secret, (string) $request->route('token'))) {
+                abort(404);
+            }
+            \Illuminate\Support\Facades\View::share('token', $secret);
+
+            return $next($request);
+        }
+
         if ($request->routeIs('login', 'login.store')) {
             return $next($request);
         }

@@ -16,7 +16,7 @@
     @if ($errors->any()) <p class="err">{{ $errors->first() }}</p> @endif
 
     <div class="board">
-        <div class="canvas" data-row="{{ \App\Support\ImpactMapLayout::ROW }}" data-top="{{ \App\Support\ImpactMapLayout::TOP }}" style="width: {{ $layout['width'] }}px; height: {{ $layout['height'] }}px;">
+        <div class="canvas" data-row="{{ \App\Support\ImpactMapLayout::ROW }}" data-gap="{{ \App\Support\ImpactMapLayout::GAP }}" data-group-gap="{{ \App\Support\ImpactMapLayout::GROUP_GAP }}" data-top="{{ \App\Support\ImpactMapLayout::TOP }}" style="width: {{ $layout['width'] }}px; height: {{ $layout['height'] }}px;">
             <svg width="{{ $layout['width'] }}" height="{{ $layout['height'] }}" aria-hidden="true">
                 @foreach ($layout['links'] as $l)
                     @php $mx = ($l['x1'] + $l['x2']) / 2; @endphp
@@ -221,9 +221,9 @@
         // Drag a node (with its whole subtree) up/down among its siblings; live re-layout, no reload.
         (() => {
             const canvas = document.querySelector('.canvas');
-            if (!canvas || !document.querySelector('.node[data-reorder]')) return;
+            if (!canvas) return; // read-only maps still get the measured re-layout; drag only binds to [data-reorder]
             const token = @js(csrf_token());
-            const ROW = +canvas.dataset.row, TOP = +canvas.dataset.top;
+            const ROW = +canvas.dataset.row, TOP = +canvas.dataset.top, GAP = +canvas.dataset.gap, GROUP_GAP = +canvas.dataset.groupGap;
             const svg = canvas.querySelector('svg');
             const NS = 'http://www.w3.org/2000/svg';
             const all = [...canvas.querySelectorAll('.node[data-node]')];
@@ -238,17 +238,30 @@
             });
             if (!root) return;
 
-            // Same algorithm as App\Support\ImpactMapLayout: each leaf one row, parents centred on children.
+            // Same rule as App\Support\ImpactMapLayout, but with the boxes' measured heights:
+            // leaf slot = max(ROW, height + GAP); parents centred on children; extra gap between non-story siblings.
+            let bottom = TOP;
+            const isStory = (n) => n.classList.contains('lvl-4');
             const layout = () => {
-                const ys = new Map(); let row = 0;
+                const ys = new Map(); let cur = TOP;
+                const shift = (n, dy) => { ys.set(n, ys.get(n) + dy); (kids.get(n.dataset.node) || []).forEach((c) => shift(c, dy)); };
                 const place = (n) => {
                     const ch = kids.get(n.dataset.node) || [];
+                    const need = n.offsetHeight + GAP, start = cur;
                     let y;
-                    if (!ch.length) { y = TOP + row * ROW + ROW / 2; row++; }
-                    else { const c = ch.map(place); y = (Math.min(...c) + Math.max(...c)) / 2; }
+                    if (!ch.length) { const span = Math.max(ROW, need); y = cur + span / 2; cur += span; }
+                    else {
+                        const c = ch.map((k, i) => { if (i > 0 && !isStory(k)) cur += GROUP_GAP; return place(k); });
+                        y = (Math.min(...c) + Math.max(...c)) / 2;
+                        if (cur - start < need) { const pad = (need - (cur - start)) / 2; ch.forEach((k) => shift(k, pad)); y += pad; cur = start + need; }
+                    }
                     ys.set(n, y); return y;
                 };
-                place(root); return ys;
+                place(root); bottom = cur; return ys;
+            };
+            const fitCanvas = () => {
+                const h = Math.ceil(Math.max(bottom, TOP + ROW) + 40) + 'px';
+                canvas.style.height = h; svg.setAttribute('height', parseInt(h));
             };
             const subtree = (n, out = []) => { out.push(n); (kids.get(n.dataset.node) || []).forEach((c) => subtree(c, out)); return out; };
 
@@ -267,9 +280,17 @@
             let animUntil = 0, raf = 0;
             const tick = () => { draw(); raf = (drag || performance.now() < animUntil) ? requestAnimationFrame(tick) : 0; };
             const animate = (ms = 260) => { animUntil = performance.now() + ms; if (!raf) raf = requestAnimationFrame(tick); };
-            draw();
+            const apply = (ys, skip) => { ys.forEach((y, n) => { if (!skip || !skip.has(n)) n.style.top = y + 'px'; }); fitCanvas(); };
 
-            const apply = (ys, skip) => ys.forEach((y, n) => { if (!skip || !skip.has(n)) n.style.top = y + 'px'; });
+            // Correct the server's height estimate with real measurements (no animation on first paint).
+            const settle = () => {
+                canvas.classList.add('no-anim');
+                apply(layout()); draw();
+                canvas.offsetHeight; // flush
+                canvas.classList.remove('no-anim');
+            };
+            settle();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
             const relabel = () => {
                 const ys = layout();
                 canvas.querySelectorAll('.sub-label').forEach((label) => {
@@ -278,6 +299,9 @@
                     if (topmost && label.parentElement !== topmost) topmost.prepend(label);
                 });
             };
+
+            relabel();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(relabel);
 
             let drag = null, swallowClick = false;
             document.addEventListener('pointerdown', (e) => {

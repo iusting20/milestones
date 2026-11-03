@@ -100,6 +100,7 @@
         .node[data-reorder] { cursor: grab; touch-action: none; user-select: none; }
         .node[data-reorder] .t { cursor: grab; }
         .canvas .node { transition: top .2s ease, transform .2s ease, box-shadow .2s ease; }
+        .canvas.no-anim .node { transition: none !important; }
         .canvas .node.lifted { transition: transform .2s ease, box-shadow .2s ease; z-index: 20;
             transform: translateY(-50%) scale(1.04) rotate(-1.5deg); box-shadow: 6px 8px 0 rgba(43,43,43,.35); }
         .canvas .node.lift-root { z-index: 21; }

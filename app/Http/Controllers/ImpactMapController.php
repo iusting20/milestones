@@ -34,9 +34,27 @@ class ImpactMapController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate(['name' => 'required|string|max:255']);
-        $client = $this->client($request);
+        $map = $this->createMap($data['name'], $this->client($request));
 
-        $map = DB::transaction(function () use ($data, $client) {
+        return redirect()->route('impact-maps.show', $this->params($map));
+    }
+
+    /** Create a map from a client page: always allocated to that client (any posted client is ignored). */
+    public function storeForClient(Request $request): RedirectResponse
+    {
+        $secret = (string) $request->route('secret');
+        $group = DB::table('impact_map_groups')->where('slug', $secret)->first();
+        abort_if(! $group, 404);
+        $data = $request->validate(['name' => 'required|string|max:255']);
+        $this->createMap($data['name'], $group->client);
+
+        return redirect()->route('impact-maps.client', ['secret' => $secret]);
+    }
+
+    private function createMap(string $name, ?string $client): ImpactMap
+    {
+        return DB::transaction(function () use ($name, $client) {
+            $data = ['name' => $name];
             // New maps go to the top of their group.
             $top = ImpactMap::query()->where(fn ($q) => $client === null ? $q->whereNull('client')->orWhere('client', '') : $q->where('client', $client))->min('position');
             $map = ImpactMap::query()->create(['name' => trim($data['name']), 'client' => $client]);
@@ -45,8 +63,6 @@ class ImpactMapController extends Controller
 
             return $map;
         });
-
-        return redirect()->route('impact-maps.show', $this->params($map));
     }
 
     public function show(Request $request): View
@@ -198,6 +214,7 @@ class ImpactMapController extends Controller
 
         return view('impact-maps.client', [
             'client' => $group->client,
+            'secret' => $group->slug,
             'maps' => ImpactMap::query()->where('client', $group->client)->orderBy('position')->orderByDesc('updated_at')->get(),
             'loggedIn' => $request->session()->get(EnsureAuthenticated::SESSION_KEY) === true,
         ]);

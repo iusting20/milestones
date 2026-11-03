@@ -452,7 +452,7 @@ class ImpactMapTest extends TestCase
         $this->assertStringContainsString('href="'.$url.'"', $index);
         $this->assertNull(\Illuminate\Support\Facades\DB::table('impact_map_groups')->where('client', '')->value('slug'));
 
-        $this->get($url)->assertOk()->assertSee('back to all maps');
+        $this->get($url)->assertOk()->assertDontSee('back to all maps')->assertSee('+ New map')->assertSee('view templates')->assertDontSee('name="client"', false);
 
         $this->flushSession();
         $res = $this->get($url)->assertOk()
@@ -460,10 +460,31 @@ class ImpactMapTest extends TestCase
             ->assertSee(route('impact-maps.show', ['map' => $a1->slug]), false)
             ->assertDontSee('Beta map')->assertDontSee('Bolt')->assertDontSee('Loose map')->assertDontSee('No client')
             ->assertDontSee('class="wrench"', false)->assertDontSee('+ New map')->assertDontSee("class=\"cog-menu", false)
-            ->assertDontSee("id=\"im-groups", false)->assertDontSee('back to all maps')
+            ->assertDontSee("id=\"im-groups", false)->assertDontSee('back to all maps')->assertDontSee('view templates')
             ->assertSee('noindex', false);
 
         $this->get(route('impact-maps.client', ['secret' => str_repeat('x', 32)]))->assertNotFound();
         $this->get('/impact-maps')->assertRedirect(route('login'));
+    }
+
+    public function test_create_map_from_client_page_is_locked_to_that_client(): void
+    {
+        $a = $this->makeMap('Alpha'); $a->update(['client' => 'Acme']);
+        $this->get('/impact-maps');
+        $secret = \Illuminate\Support\Facades\DB::table('impact_map_groups')->where('client', 'Acme')->value('slug');
+        $url = route('impact-maps.client.store', ['secret' => $secret]);
+
+        $this->post($url, ['name' => 'Increase revenue', 'client' => 'Bolt', 'client_new' => 'Evil'])
+            ->assertRedirect(route('impact-maps.client', ['secret' => $secret]));
+        $new = ImpactMap::query()->where('name', 'Increase revenue')->firstOrFail();
+        $this->assertSame('Acme', $new->client);
+        $this->assertSame(1, $new->nodes()->count());
+
+        $this->post($url, ['name' => ''])->assertSessionHasErrors('name');
+        $this->post(route('impact-maps.client.store', ['secret' => str_repeat('y', 32)]), ['name' => 'X'])->assertNotFound();
+
+        $this->flushSession();
+        $this->post($url, ['name' => 'Sneaky'])->assertRedirect(route('login'));
+        $this->assertFalse(ImpactMap::query()->where('name', 'Sneaky')->exists());
     }
 }

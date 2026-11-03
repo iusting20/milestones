@@ -55,6 +55,7 @@ Route::prefix('impact-maps')
         Route::delete('/{map}/nodes/{node}', 'destroyNode')->name('nodes.destroy');
         Route::post('/{map}/nodes/{node}/reorder', 'reorderChildren')->name('nodes.reorder');
         Route::get('/client/{secret}', 'clientPage')->name('client');
+        Route::post('/client/{secret}/maps', 'storeForClient')->name('client.store');
         Route::put('/{map}/tracker', 'updateTracker')->name('tracker.update');
         Route::delete('/{map}/tracker', 'destroyTracker')->name('tracker.destroy');
         Route::post('/{map}/checkins', 'storeCheckin')->name('checkins.store');

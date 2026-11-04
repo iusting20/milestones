@@ -126,18 +126,48 @@ class ClientWeekBoardTest extends TestCase
         $this->assertSame($todo->id, $item->fresh()->todo_item_id);
     }
 
-    public function test_started_link_shows_only_when_linked_timer_is_not_running(): void
+    public function test_wip_card_with_finished_session_shows_continue_and_starts_new_session(): void
     {
         $this->travelTo('2026-11-02 10:00:00');
         $client = $this->client('Acme');
         $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'Ship landing page']);
 
         $component = Livewire::test(ClientWeekBoard::class)->call('startCard', $item->id)
+            ->assertDontSeeHtml('>Continue</button>')
             ->assertDontSeeHtml('>Started</a>');
 
-        \App\Models\TodoItem::query()->sole()->update(['logging_started_at' => null]);
+        $todo = \App\Models\TodoItem::query()->sole();
+        $todo->update(['logging_started_at' => null]);
 
-        $component->call('$refresh')->assertSeeHtml('>Started</a>');
+        $component->call('$refresh')
+            ->assertSeeHtml('>Continue</button>')
+            ->assertDontSeeHtml('>Started</a>');
+
+        $this->travelTo('2026-11-02 11:30:00');
+        $component->call('continueCard', $item->id)
+            ->assertDontSeeHtml('>Continue</button>');
+
+        $todo->refresh();
+        $this->assertTrue($todo->isLogging());
+        $this->assertSame('2026-11-02 11:30:00', $todo->logging_started_at->format('Y-m-d H:i:s'));
+        $this->assertSame(1, \App\Models\TodoItem::query()->count());
+        $this->assertSame(WeekBoardStatus::Wip, $item->fresh()->status);
+
+        // Already running: continue is a no-op.
+        $this->travelTo('2026-11-02 12:00:00');
+        $component->call('continueCard', $item->id);
+        $this->assertSame('2026-11-02 11:30:00', $todo->fresh()->logging_started_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_continue_ignores_cards_outside_wip(): void
+    {
+        $client = $this->client('Acme');
+        $todo = \App\Models\TodoItem::query()->create(['date' => '2026-11-02', 'title' => 'x', 'is_completed' => false, 'is_separator' => false, 'position' => 1]);
+        $item = WeekBoardItem::factory()->create(['project_id' => $client->id, 'title' => 'x', 'status' => WeekBoardStatus::Planned, 'todo_item_id' => $todo->id]);
+
+        Livewire::test(ClientWeekBoard::class)->call('continueCard', $item->id);
+
+        $this->assertFalse($todo->fresh()->isLogging());
     }
 
     public function test_running_card_shows_start_time_and_elapsed_element(): void

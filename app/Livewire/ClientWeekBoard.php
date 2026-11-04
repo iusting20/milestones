@@ -148,6 +148,21 @@ class ClientWeekBoard extends Component
         });
     }
 
+    /**
+     * WIP card whose milestone session was finished: start a new session on that milestone,
+     * exactly like "Start" on the milestones page (TodoItem::startLogging).
+     */
+    public function continueCard(int $id): void
+    {
+        $item = WeekBoardItem::query()->with('todoItem')->findOrFail($id);
+
+        if ($item->status !== WeekBoardStatus::Wip || $item->todoItem === null) {
+            return;
+        }
+
+        $item->todoItem->startLogging();
+    }
+
     public function startEditingCard(int $id): void
     {
         $item = $this->cardInView($id);

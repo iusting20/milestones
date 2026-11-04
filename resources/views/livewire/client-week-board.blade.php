@@ -124,6 +124,11 @@
                                                             wire:click="startCard({{ $item->id }})"
                                                             class="px-1 text-[10px] uppercase text-muted hover:text-link"
                                                             title="Create a milestone for today and start its timer">Start</button>
+                                                @elseif (! $item->todoItem->isLogging() && $status === \App\Enums\WeekBoardStatus::Wip)
+                                                    <button type="button"
+                                                            wire:click="continueCard({{ $item->id }})"
+                                                            class="px-1 text-[10px] uppercase text-link hover:text-body"
+                                                            title="Start a new session on this milestone">Continue</button>
                                                 @elseif (! $item->todoItem->isLogging())
                                                     <a href="{{ route('milestones') }}"
                                                        class="px-1 text-[10px] uppercase text-link no-underline"

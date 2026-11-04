@@ -54,6 +54,18 @@ class TodoItem extends Model
         return $this->hasMany(TaskLog::class);
     }
 
+    /** Start a new timer session (the milestones page "Start" action). Returns false when not startable. */
+    public function startLogging(): bool
+    {
+        if ($this->is_separator || $this->isLogging()) {
+            return false;
+        }
+
+        $this->update(['logging_started_at' => now()]);
+
+        return true;
+    }
+
     public function isLogging(): bool
     {
         return $this->logging_started_at !== null;

@@ -357,13 +357,7 @@ class DayList extends Component
 
     public function startLogging(int $id): void
     {
-        $item = $this->todoItem($id);
-
-        if ($item->is_separator || $item->isLogging()) {
-            return;
-        }
-
-        $item->update(['logging_started_at' => now()]);
+        $this->todoItem($id)->startLogging();
     }
 
     public function finishLogging(int $id): void

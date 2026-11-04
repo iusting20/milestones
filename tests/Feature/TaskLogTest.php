@@ -288,10 +288,10 @@ class TaskLogTest extends TestCase
 
         $this->assertCount(2, $wed['clockArcs']);
         $this->assertSame(['09:00', '11:00'], [$wed['clockArcs'][0]['started'], $wed['clockArcs'][0]['finished']]);
-        // 09:00 → 30° past top, 11:00 → 90°: ends exactly at 3 o'clock (86, 50).
-        $this->assertStringEndsWith('86 50', $wed['clockArcs'][0]['path']);
-        // Clipped at 20:00 = back at the top (50, 14).
-        $this->assertStringEndsWith('50 14', $wed['clockArcs'][1]['path']);
+        // Normal clock face: 11:00 ends at 11 o'clock (32, 18.823).
+        $this->assertStringEndsWith('32 18.823', $wed['clockArcs'][0]['path']);
+        // Clipped at 20:00 = 8 o'clock (18.823, 68).
+        $this->assertStringEndsWith('18.823 68', $wed['clockArcs'][1]['path']);
         $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
 
         $component->assertSeeHtml('data-clock="2026-03-18"')

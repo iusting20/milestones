@@ -862,7 +862,7 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * Sessions of one day on a 12h dial: 08:00 (and 20:00) at the top, clockwise, Europe/Bucharest.
+     * Sessions of one day on a 12h dial: normal clock face (12 top, 3 right), 08:00/20:00 at 8 o'clock, clockwise, Europe/Bucharest.
      * Each session is clipped to 08:00-20:00 of that day; chronological, so later ones draw on top.
      *
      * Uses the same merged groups as the list (touching same-title sessions = one arc).
@@ -887,8 +887,8 @@ class TaskLogBoard extends Component
             if ($e->lte($s)) {
                 continue;
             }
-            $a = $from->diffInSeconds($s) / 43200 * 360 - 90;
-            $b = $from->diffInSeconds($e) / 43200 * 360 - 90;
+            $a = $from->diffInSeconds($s) / 43200 * 360 + 150; // 08:00 sits at 8 o'clock (240deg from top)
+            $b = $from->diffInSeconds($e) / 43200 * 360 + 150; // 08:00 sits at 8 o'clock (240deg from top)
             $full = $b - $a >= 359.9;
             $p1 = $this->polarToCartesian(50, 50, 36, $a);
             $p2 = $this->polarToCartesian(50, 50, 36, $b);
@@ -912,8 +912,8 @@ class TaskLogBoard extends Component
     {
         $ticks = [];
         for ($i = 0; $i < 12; $i++) {
-            $rad = deg2rad($i * 30 - 90);
-            $h = (8 + $i - 1) % 12 + 1;
+            $rad = deg2rad($i * 30 - 90); // normal clock face: 12 top, 3 right
+            $h = $i === 0 ? 12 : $i;
             $ticks[] = [
                 'label' => (string) $h,
                 'x' => round(50 + 47 * cos($rad), 2), 'y' => round(50 + 47 * sin($rad), 2),

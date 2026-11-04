@@ -93,8 +93,41 @@
         </div>
     </div>
 
-    <div class="mt-3 border-t border-white/10 pt-3">
-        <div class="mx-auto flex h-48 w-48 items-center justify-center sm:h-52 sm:w-52">
+    <div class="mt-3 border-t border-white/10 pt-3" x-data="{ pieMode: 'total', clockHover: null }">
+        <div class="mb-2 flex justify-center">
+            <div class="inline-flex rounded-full border border-white/10 bg-canvas/60 p-0.5 text-[10px] font-semibold uppercase tracking-wider" role="group" aria-label="Chart mode">
+                <button type="button" class="rounded-full px-2.5 py-0.5 transition" @click="pieMode = 'total'"
+                        :class="pieMode === 'total' ? 'bg-link/20 text-link' : 'text-muted hover:text-body'" :aria-pressed="pieMode === 'total'">Total</button>
+                <button type="button" class="rounded-full px-2.5 py-0.5 transition" @click="pieMode = 'clock'"
+                        :class="pieMode === 'clock' ? 'bg-link/20 text-link' : 'text-muted hover:text-body'" :aria-pressed="pieMode === 'clock'">Clock</button>
+            </div>
+        </div>
+        <div class="mx-auto flex h-48 w-48 items-center justify-center sm:h-52 sm:w-52" x-show="pieMode === 'clock'" x-cloak data-clock="{{ $day['date'] }}">
+            <svg viewBox="0 0 100 100" class="h-full w-full overflow-visible" role="img" aria-label="Sessions on the clock for {{ $day['label'] }} (8AM–8PM)">
+                <circle cx="50" cy="50" r="36" fill="none" stroke="currentColor" stroke-width="9" class="text-white/5"/>
+                @foreach (\App\Livewire\TaskLogBoard::clockTicks() as $tick)
+                    <line x1="{{ $tick['ix'] }}" y1="{{ $tick['iy'] }}" x2="{{ 50 + ($tick['ix'] - 50) * 0.93 }}" y2="{{ 50 + ($tick['iy'] - 50) * 0.93 }}" stroke="currentColor" stroke-width="0.6" class="text-white/25"/>
+                    <text x="{{ $tick['x'] }}" y="{{ $tick['y'] }}" text-anchor="middle" dominant-baseline="central" font-size="5.5" fill="currentColor" class="text-muted tabular-nums">{{ $tick['label'] }}</text>
+                @endforeach
+                @foreach ($day['clockArcs'] as $arc)
+                    @php($tip = $arc['title'].' ('.$arc['started'].'–'.$arc['finished'].')')
+                    @if ($arc['full'])
+                        <circle cx="50" cy="50" r="36" fill="none" stroke="{{ $arc['color'] }}" stroke-width="9"
+                    @else
+                        <path d="{{ $arc['path'] }}" fill="none" stroke="{{ $arc['color'] }}" stroke-width="9" stroke-linecap="butt"
+                    @endif
+                          data-clock-arc
+                          class="cursor-pointer transition-opacity duration-150"
+                          @mouseenter="hoverTitle = @js($arc['title']); clockHover = @js($tip)"
+                          @mouseleave="hoverTitle = null; clockHover = null"
+                          @click="clockHover = @js($tip); focusTitle(@js($arc['title']))"
+                          :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($arc['title']) }"><title>{{ $tip }}</title></{{ $arc['full'] ? 'circle' : 'path' }}>
+                @endforeach
+                <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="5" fill="currentColor" class="text-faint uppercase">{{ $day['clockArcs'] === [] ? 'no sessions' : '8am – 8pm' }}</text>
+            </svg>
+        </div>
+        <p class="h-4 truncate text-center text-[11px] text-muted" x-show="pieMode === 'clock'" x-cloak x-text="clockHover ?? ''"></p>
+        <div class="mx-auto flex h-48 w-48 items-center justify-center sm:h-52 sm:w-52" x-show="pieMode === 'total'">
             @if ($day['pieSlices'] === [])
                 <svg viewBox="0 0 100 100" class="h-full w-full text-faint" aria-hidden="true">
                     <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/>

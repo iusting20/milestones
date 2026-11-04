@@ -277,6 +277,29 @@ class TaskLogTest extends TestCase
         $this->assertDatabaseCount('task_logs', 0);
     }
 
+    public function test_log_page_renders_clock_arcs_for_the_day_clipped_to_8am_8pm(): void
+    {
+        // 07:00-09:00 UTC = 09:00-11:00 Bucharest; 15:30-19:00 UTC = 17:30-21:00 Bucharest (clipped at 20:00).
+        TaskLog::query()->create(['todo_item_id' => null, 'title' => 'Morning work', 'started_at' => Carbon::parse('2026-03-18 07:00:00'), 'finished_at' => Carbon::parse('2026-03-18 09:00:00')]);
+        TaskLog::query()->create(['todo_item_id' => null, 'title' => 'Evening work', 'started_at' => Carbon::parse('2026-03-18 15:30:00'), 'finished_at' => Carbon::parse('2026-03-18 19:00:00')]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
+
+        $this->assertCount(2, $wed['clockArcs']);
+        $this->assertSame(['09:00', '11:00'], [$wed['clockArcs'][0]['started'], $wed['clockArcs'][0]['finished']]);
+        // 09:00 → 30° past top, 11:00 → 90°: ends exactly at 3 o'clock (86, 50).
+        $this->assertStringEndsWith('86 50', $wed['clockArcs'][0]['path']);
+        // Clipped at 20:00 = back at the top (50, 14).
+        $this->assertStringEndsWith('50 14', $wed['clockArcs'][1]['path']);
+        $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
+
+        $component->assertSeeHtml('data-clock="2026-03-18"')
+            ->assertSeeHtml('data-clock-arc')
+            ->assertSee('Morning work (09:00–11:00)')
+            ->assertSee("pieMode: 'total'", false);
+    }
+
     public function test_log_page_lists_finished_entries_for_week(): void
     {
         $inWeek = TaskLog::query()->create([

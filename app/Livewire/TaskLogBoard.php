@@ -364,6 +364,7 @@ class TaskLogBoard extends Component
         $colorByTitle = $this->colorByTitle($titles);
 
         $dayGroups = [];
+        $dayClock = [];
 
         for ($i = 0; $i < 7; $i++) {
             $day = $start->copy()->addDays($i);
@@ -374,6 +375,7 @@ class TaskLogBoard extends Component
                 ->values();
 
             $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
+            $dayClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle);
         }
 
         $maxMinutes = max(1, (int) collect($dayGroups)
@@ -420,6 +422,7 @@ class TaskLogBoard extends Component
                 'totalDuration' => $this->formatDuration($totalMinutes),
                 'logs' => $dayLogs,
                 'pieSlices' => $this->pieSlices($timedDayLogs, $totalMinutes),
+                'clockArcs' => $dayClock[$dateKey],
                 'idle' => IdleTimeline::forDay(
                     $dateKey,
                     $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at])
@@ -856,6 +859,70 @@ class TaskLogBoard extends Component
         }
 
         return $slices;
+    }
+
+    /**
+     * Sessions of one day on a 12h dial: 08:00 (and 20:00) at the top, clockwise, Europe/Bucharest.
+     * Each session is clipped to 08:00-20:00 of that day; chronological, so later ones draw on top.
+     *
+     * Uses the same merged groups as the list (touching same-title sessions = one arc).
+     *
+     * @param  Collection<int, Collection<int, TaskLog>>  $groups
+     * @param  array<string, string>  $colorByTitle
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string|null, full: bool}>
+     */
+    private function clockArcs(Collection $groups, string $dateKey, array $colorByTitle): array
+    {
+        $tz = 'Europe/Bucharest';
+        $from = Carbon::parse($dateKey.' 08:00:00', $tz);
+        $to = $from->copy()->addHours(12);
+        $arcs = [];
+
+        foreach ($groups->sortBy(fn (Collection $g) => $g->min(fn (TaskLog $l) => $l->started_at->getTimestamp()))->values() as $group) {
+            $log = $group->first();
+            $startedAt = $group->map(fn (TaskLog $l) => $l->started_at)->sort()->first();
+            $finishedAt = $group->map(fn (TaskLog $l) => $l->finished_at)->sort()->last();
+            $s = $startedAt->copy()->timezone($tz)->max($from);
+            $e = $finishedAt->copy()->timezone($tz)->min($to);
+            if ($e->lte($s)) {
+                continue;
+            }
+            $a = $from->diffInSeconds($s) / 43200 * 360 - 90;
+            $b = $from->diffInSeconds($e) / 43200 * 360 - 90;
+            $full = $b - $a >= 359.9;
+            $p1 = $this->polarToCartesian(50, 50, 36, $a);
+            $p2 = $this->polarToCartesian(50, 50, 36, $b);
+            $large = ($b - $a) > 180 ? 1 : 0;
+
+            $arcs[] = [
+                'title' => (string) $log->title,
+                'color' => $colorByTitle[$log->title] ?? '#888888',
+                'started' => $startedAt->copy()->timezone($tz)->format('H:i'),
+                'finished' => $finishedAt->copy()->timezone($tz)->format('H:i'),
+                'path' => $full ? null : "M {$p1['x']} {$p1['y']} A 36 36 0 {$large} 1 {$p2['x']} {$p2['y']}",
+                'full' => $full,
+            ];
+        }
+
+        return $arcs;
+    }
+
+    /** @return list<array{label: string, x: float, y: float, tx: float, ty: float, ix: float, iy: float}> */
+    public static function clockTicks(): array
+    {
+        $ticks = [];
+        for ($i = 0; $i < 12; $i++) {
+            $rad = deg2rad($i * 30 - 90);
+            $h = (8 + $i - 1) % 12 + 1;
+            $ticks[] = [
+                'label' => (string) $h,
+                'x' => round(50 + 47 * cos($rad), 2), 'y' => round(50 + 47 * sin($rad), 2),
+                'tx' => round(50 + 26 * cos($rad), 2), 'ty' => round(50 + 26 * sin($rad), 2),
+                'ix' => round(50 + 43 * cos($rad), 2), 'iy' => round(50 + 43 * sin($rad), 2),
+            ];
+        }
+
+        return $ticks;
     }
 
     private function slicePath(float $cx, float $cy, float $radius, float $startAngle, float $endAngle): string

@@ -6,7 +6,7 @@
             <button type="button" wire:click="previousWeek"
                     class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
                     aria-label="Previous week">‹</button>
-            <span class="px-1 tabular-nums" data-week-label title="{{ $weekKey }}">W{{ $weekNumber }} · {{ $weekRange }}</span>
+            <span class="px-1 tabular-nums" data-week-label title="{{ $weekKey }}">{{ $weekRange }}</span>
             <button type="button" wire:click="nextWeek"
                     class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
                     aria-label="Next week">›</button>

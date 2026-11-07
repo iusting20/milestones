@@ -163,7 +163,8 @@ class TodoItem extends Model
                     ->where('status', $to)
                     ->max('position');
 
-                $card->update(['status' => $to, 'position' => $max + 1]);
+                $card->update(['status' => $to, 'position' => $max + 1]
+                    + ($to === \App\Enums\WeekBoardStatus::Done ? ['week' => \App\Support\Clock::currentWeek()] : []));
             });
     }
 }

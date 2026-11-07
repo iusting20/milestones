@@ -323,4 +323,65 @@ class ClientWeekBoardTest extends TestCase
             $this->get($url)->assertOk()->assertSee('<title>'.$title.'</title>', false);
         }
     }
+
+    public function test_week_toggle_defaults_to_current_week_and_navigates_with_url(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 12:00:00', 'Europe/Bucharest')->utc());
+
+        Livewire::test(ClientWeekBoard::class)
+            ->assertSeeHtml('data-week-toggle')
+            ->assertSee('W45 · 2-8 Nov')
+            ->assertDontSeeHtml('data-week-today')
+            ->call('nextWeek')
+            ->assertSet('week', '2026-W46')
+            ->assertSee('W46 · 9-15 Nov')
+            ->assertSeeHtml('data-week-today')
+            ->call('goToCurrentWeek')
+            ->assertSet('week', '')
+            ->call('previousWeek')
+            ->assertSet('week', '2026-W44');
+
+        Livewire::withQueryParams(['week' => 'garbage'])->test(ClientWeekBoard::class)->assertSee('W45 · 2-8 Nov');
+        Livewire::withQueryParams(['week' => '2025-W53'])->test(ClientWeekBoard::class)->assertSee('W45 · 2-8 Nov'); // 2025 has 52 weeks
+        Livewire::withQueryParams(['week' => '2026-W53'])->test(ClientWeekBoard::class)->assertSee('W53')
+            ->call('nextWeek')->assertSet('week', '2027-W01');
+        Livewire::withQueryParams(['week' => '2027-W01'])->test(ClientWeekBoard::class)
+            ->call('previousWeek')->assertSet('week', '2026-W53');
+        Livewire::withQueryParams(['week' => '2025-W52'])->test(ClientWeekBoard::class)
+            ->call('nextWeek')->assertSet('week', '2026-W01');
+
+        $this->get(route('week-board', ['week' => '2026-W40']))->assertOk()->assertSee('W40 · 28 Sep-4 Oct');
+    }
+
+    public function test_board_shows_cards_of_the_selected_week_and_carries_unfinished_ones(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 12:00:00', 'Europe/Bucharest')->utc());
+        $client = $this->client('Acme');
+
+        foreach ([['Old planned', WeekBoardStatus::Planned, '2026-W44'], ['Old done', WeekBoardStatus::Done, '2026-W44'], ['Now done', WeekBoardStatus::Done, '2026-W45'], ['Next planned', WeekBoardStatus::Planned, '2026-W46']] as $i => [$title, $status, $week]) {
+            WeekBoardItem::query()->create(['project_id' => $client->id, 'title' => $title, 'status' => $status, 'position' => $i, 'week' => $week]);
+        }
+
+        Livewire::test(ClientWeekBoard::class)
+            ->assertSee('Old planned')->assertSee('Now done')
+            ->assertDontSee('Old done')->assertDontSee('Next planned');
+
+        Livewire::withQueryParams(['week' => '2026-W44'])->test(ClientWeekBoard::class)
+            ->assertSee('Old planned')->assertSee('Old done')->assertDontSee('Now done');
+
+        $component = Livewire::withQueryParams(['week' => '2026-W46'])->test(ClientWeekBoard::class)
+            ->assertSee('Next planned')->assertSee('Old planned')->assertDontSee('Now done')
+            ->call('startAdding', $client->id, 'planned')
+            ->set('newTitles.'.$client->id.'-planned', 'Added in W46')
+            ->call('addCard', $client->id, 'planned');
+
+        $this->assertDatabaseHas('week_board_items', ['title' => 'Added in W46', 'week' => '2026-W46']);
+        Livewire::withQueryParams(['week' => '2026-W45'])->test(ClientWeekBoard::class)->assertDontSee('Added in W46');
+
+        $old = WeekBoardItem::query()->where('title', 'Old planned')->first();
+        $component->call('moveCard', $old->id, 'done');
+        $this->assertSame('2026-W46', $old->refresh()->week);
+        $this->assertNotNull(WeekBoardItem::query()->create(['project_id' => $client->id, 'title' => 'Default', 'status' => WeekBoardStatus::Planned])->week);
+        $this->assertSame('2026-W45', WeekBoardItem::query()->where('title', 'Default')->value('week'));
+    }
 }

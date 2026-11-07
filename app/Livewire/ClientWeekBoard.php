@@ -19,6 +19,10 @@ class ClientWeekBoard extends Component
     #[Url(as: 'view', history: true)]
     public string $view = 'partners';
 
+    /** ISO week shown ("2026-W45"); empty or invalid means the current week. */
+    #[Url(as: 'week', history: true, except: '')]
+    public string $week = '';
+
     /**
      * New card titles keyed by "{projectId}-{status}".
      *
@@ -31,6 +35,27 @@ class ClientWeekBoard extends Component
     public ?int $editingCardId = null;
 
     public string $editCardTitle = '';
+
+    public function previousWeek(): void
+    {
+        $this->week = WeekBoardItem::weekMonday($this->weekKey())->subWeek()->format('o-\WW');
+    }
+
+    public function nextWeek(): void
+    {
+        $this->week = WeekBoardItem::weekMonday($this->weekKey())->addWeek()->format('o-\WW');
+    }
+
+    public function goToCurrentWeek(): void
+    {
+        $this->week = '';
+    }
+
+    /** Selected ISO week, falling back to the current week for empty/invalid values. */
+    public function weekKey(): string
+    {
+        return WeekBoardItem::normalizeWeek($this->week) ?? Clock::currentWeek();
+    }
 
     public function startAdding(int $projectId, string $status): void
     {
@@ -65,6 +90,7 @@ class ClientWeekBoard extends Component
             'title' => $title,
             'status' => $statusEnum,
             'position' => $max + 1,
+            'week' => $this->weekKey(),
         ]);
 
         $this->newTitles[$lane] = '';
@@ -91,7 +117,9 @@ class ClientWeekBoard extends Component
 
         $previous = $item->status;
 
-        $item->update(['status' => $statusEnum, 'position' => $max + 1]);
+        // A card finished while viewing a week is recorded as done in that week.
+        $item->update(['status' => $statusEnum, 'position' => $max + 1]
+            + ($statusEnum === WeekBoardStatus::Done ? ['week' => $this->weekKey()] : []));
 
         $this->syncMilestone($item, $previous);
     }
@@ -283,9 +311,12 @@ class ClientWeekBoard extends Component
     {
         $clients = $this->clientsQuery()->get();
 
+        $weekKey = $this->weekKey();
+
         $items = WeekBoardItem::query()
             ->with('todoItem')
             ->whereIn('project_id', $clients->pluck('id'))
+            ->visibleInWeek($weekKey)
             ->orderBy('position')
             ->orderBy('id')
             ->get()
@@ -296,6 +327,10 @@ class ClientWeekBoard extends Component
             'hub' => $this->hub(),
             'items' => $items,
             'statuses' => WeekBoardStatus::cases(),
+            'weekKey' => $weekKey,
+            'weekNumber' => (int) substr($weekKey, -2),
+            'weekRange' => \App\Support\WeekLabel::range(WeekBoardItem::weekMonday($weekKey)),
+            'isCurrentWeek' => $weekKey === Clock::currentWeek(),
         ]);
     }
 

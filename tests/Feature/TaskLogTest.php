@@ -1118,4 +1118,78 @@ class TaskLogTest extends TestCase
 
         $this->assertDatabaseCount('activity_assignments', 0);
     }
+
+    public function test_activity_modal_groups_items_by_weekday_with_that_days_duration(): void
+    {
+        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+
+        foreach ([['SN - portal', 30, '2026-03-18'], ['SN - portal', 90, '2026-03-16'], ['SN - api', 100, '2026-03-16'], ['Emails', 15, '2026-03-17']] as [$title, $minutes, $day]) {
+            TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
+        }
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openActivity', 'partners', 'Saints Nearby');
+
+        $days = $component->viewData('activityModal')['days'];
+        $this->assertSame(['2026-03-16', '2026-03-18'], array_column($days, 'date'));
+        $this->assertSame(['SN - api' => 100, 'SN - portal' => 90], array_column($days[0]['items'], 'minutes', 'title'));
+        $this->assertSame(['SN - portal' => 30], array_column($days[1]['items'], 'minutes', 'title'));
+
+        $html = $component->html();
+        $this->assertTrue(strpos($html, 'Monday 16 Mar') < strpos($html, 'Wednesday 18 Mar'));
+        $this->assertStringNotContainsString('Tuesday 17 Mar', $html);
+        $this->assertMatchesRegularExpression('/<h3 class="[^"]*text-center[^"]*" data-activity-day-heading>/', $html);
+        $this->assertSame(2, substr_count($html, 'data-activity-item="SN - portal"'));
+    }
+
+    public function test_others_modal_client_asset_toggle_switches_items_and_dropdown(): void
+    {
+        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        $asset = \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
+
+        foreach ([['Tudia - lesson', 60, '2026-03-16'], ['Emails', 15, '2026-03-16'], ['Emails', 20, '2026-03-17'], ['Artwork', 40, '2026-03-17'], ['Artwork', 25, '2026-03-24']] as [$title, $minutes, $day]) {
+            TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
+        }
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openActivity', 'partners', 'Others')
+            ->assertSeeHtml('data-activity-side-toggle')
+            ->assertSeeHtml('data-activity-modal="partners"')
+            ->assertSeeHtml('>Tudia</option>')
+            ->assertDontSeeHtml('>Neo Wars</option>')
+            ->assertDontSeeHtml('data-activity-item="Tudia - lesson"')
+            ->call('switchActivityHub', 'assets')
+            ->assertSeeHtml('data-activity-modal="assets"')
+            ->assertSeeHtml('>Neo Wars</option>')
+            ->assertDontSeeHtml('>Tudia</option>')
+            ->assertSeeHtml('data-activity-item="Tudia - lesson"')
+            ->call('assignActivityItem', 'Artwork', $client->id) // client project on asset side: ignored
+            ->call('assignActivityItem', 'Artwork', $asset->id)
+            ->assertDontSeeHtml('data-activity-item="Artwork"')
+            ->assertSeeHtml('data-activity-item="Emails"');
+
+        $this->assertDatabaseHas('activity_assignments', ['hub' => 'assets', 'title' => 'Artwork', 'project_id' => $asset->id]);
+        $this->assertDatabaseCount('activity_assignments', 1);
+        $this->assertSame(['Neo Wars' => 40, 'Others' => 95], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
+        // Client side untouched: Artwork is still client-Others.
+        $this->assertSame(['Tudia' => 60, 'Others' => 75], collect($component->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
+
+        $component->call('switchActivityHub', 'partners')
+            ->assertSeeHtml('data-activity-item="Artwork"')
+            ->call('assignActivityItem', 'Artwork', $client->id);
+        $this->assertDatabaseHas('activity_assignments', ['hub' => 'assets', 'title' => 'Artwork', 'project_id' => $asset->id]);
+        $this->assertDatabaseHas('activity_assignments', ['hub' => 'partners', 'title' => 'Artwork', 'project_id' => $client->id]);
+
+        $next = Livewire::withQueryParams(['week' => '2026-W13'])->test(TaskLogBoard::class);
+        $this->assertSame(['Neo Wars' => 25], collect($next->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
+        $this->assertSame(['Tudia' => 25], collect($next->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
+
+        // Toggle only works in the Others modal.
+        Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class)
+            ->call('openActivity', 'partners', 'Tudia')
+            ->call('switchActivityHub', 'assets')
+            ->assertSet('activityHub', 'partners');
+    }
 }

@@ -1080,10 +1080,13 @@ class TaskLogBoard extends Component
         $itemsByName = [];
         $othersMinutes = 0;
         $othersItems = [];
+        $othersDays = [];
+        $daysByName = [];
 
         foreach ($logs as $log) {
             $minutes = $this->durationMinutes($log);
             $title = (string) $log->title;
+            $dateKey = $log->finished_at->timezone('Europe/Bucharest')->toDateString();
             $name = null;
 
             if ($log->todo_item_id !== null && $linkedProjectByTodo->has($log->todo_item_id)) {
@@ -1105,7 +1108,9 @@ class TaskLogBoard extends Component
             if ($name === null) {
                 $othersMinutes += $minutes;
                 $othersItems[$title] = ($othersItems[$title] ?? 0) + $minutes;
+                $othersDays[$dateKey][$title] = ($othersDays[$dateKey][$title] ?? 0) + $minutes;
             } else {
+                $daysByName[$name][$dateKey][$title] = ($daysByName[$name][$dateKey][$title] ?? 0) + $minutes;
                 $minutesByName[$name] = ($minutesByName[$name] ?? 0) + $minutes;
                 $itemsByName[$name][$title] = ($itemsByName[$name][$title] ?? 0) + $minutes;
             }
@@ -1116,11 +1121,11 @@ class TaskLogBoard extends Component
         $index = 0;
 
         foreach ($minutesByName as $name => $minutes) {
-            $rows[] = ['name' => (string) $name, 'minutes' => $minutes, 'color' => $this->colorAt($index++), 'others' => false, 'items' => $this->activityItems($itemsByName[$name], $minutes)];
+            $rows[] = ['name' => (string) $name, 'minutes' => $minutes, 'color' => $this->colorAt($index++), 'others' => false, 'items' => $this->activityItems($itemsByName[$name], $minutes), 'days' => $this->activityDays($daysByName[$name])];
         }
 
         if ($othersMinutes > 0) {
-            $rows[] = ['name' => 'Others', 'minutes' => $othersMinutes, 'color' => '#6e7681', 'others' => true, 'items' => $this->activityItems($othersItems, $othersMinutes)];
+            $rows[] = ['name' => 'Others', 'minutes' => $othersMinutes, 'color' => '#6e7681', 'others' => true, 'items' => $this->activityItems($othersItems, $othersMinutes), 'days' => $this->activityDays($othersDays)];
         }
 
         $total = array_sum(array_column($rows, 'minutes'));
@@ -1156,6 +1161,39 @@ class TaskLogBoard extends Component
         }
 
         return $items;
+    }
+
+    /**
+     * Items of one chart row split by the day they were logged (ISO order, Monday first,
+     * days without items omitted); each day lists that day's minutes, longest first.
+     *
+     * @param  array<string, array<string, int>>  $minutesByDateAndTitle
+     * @return list<array{date: string, heading: string, duration: string, items: list<array{title: string, minutes: int, duration: string, share: float}>}>
+     */
+    private function activityDays(array $minutesByDateAndTitle): array
+    {
+        ksort($minutesByDateAndTitle);
+        $days = [];
+
+        foreach ($minutesByDateAndTitle as $date => $minutesByTitle) {
+            $dayMinutes = array_sum($minutesByTitle);
+            $days[] = [
+                'date' => (string) $date,
+                'heading' => Carbon::parse((string) $date)->format('l j M'),
+                'duration' => $this->formatDuration($dayMinutes),
+                'items' => $this->activityItems($minutesByTitle, $dayMinutes),
+            ];
+        }
+
+        return $days;
+    }
+
+    /** Others modal: switch between client-side and asset-side Others. */
+    public function switchActivityHub(string $hub): void
+    {
+        if ($this->activityRow === 'Others' && in_array($hub, ['partners', 'assets'], true)) {
+            $this->activityHub = $hub;
+        }
     }
 
     public function openActivity(string $hub, string $row): void
@@ -1233,6 +1271,7 @@ class TaskLogBoard extends Component
             'others' => $others,
             'duration' => $row['duration'] ?? '0m',
             'items' => $row['items'] ?? [],
+            'days' => $row['days'] ?? [],
             'projects' => $others
                 ? Project::query()
                     ->where('hub', $this->activityHub)

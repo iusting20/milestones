@@ -238,42 +238,67 @@
                             class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
                 </div>
 
-                @if ($activityModal['others'] && $activityModal['items'] !== [])
-                    <p class="mb-3 text-xs text-muted">Pick a {{ $activityModal['label'] }} for an item and press Apply. The item keeps that {{ $activityModal['label'] }} in later weeks too.</p>
+                @if ($activityModal['others'])
+                    <div class="mb-3 flex justify-center">
+                        <div class="inline-flex rounded border border-white/15 p-0.5 text-xs font-semibold uppercase tracking-wide" role="group" aria-label="Assign to" data-activity-side-toggle>
+                            @foreach (['partners' => 'Client', 'assets' => 'Asset'] as $sideKey => $sideLabel)
+                                <button type="button" wire:click="switchActivityHub('{{ $sideKey }}')"
+                                        aria-pressed="{{ $activityModal['hub'] === $sideKey ? 'true' : 'false' }}"
+                                        data-activity-side="{{ $sideKey }}"
+                                        @class([
+                                            'rounded px-3 py-1 transition',
+                                            'bg-link/15 text-link' => $activityModal['hub'] === $sideKey,
+                                            'text-muted hover:text-body' => $activityModal['hub'] !== $sideKey,
+                                        ])>{{ $sideLabel }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                    @if ($activityModal['items'] !== [])
+                        <p class="mb-3 text-xs text-muted">Pick a {{ $activityModal['label'] }} for an item and press Apply. The item keeps that {{ $activityModal['label'] }} on every day and in later weeks too.</p>
+                    @endif
                 @endif
 
-                @if ($activityModal['items'] === [])
+                @if ($activityModal['days'] === [])
                     <p class="text-sm text-muted" data-activity-modal-empty>
                         {{ $activityModal['others'] ? 'Everything this week is linked to a '.$activityModal['label'].'.' : 'No items this week.' }}
                     </p>
                 @else
-                    <ul class="divide-y divide-white/10">
-                        @foreach ($activityModal['items'] as $item)
-                            <li wire:key="activity-item-{{ $activityModal['hub'] }}-{{ md5($item['title']) }}" data-activity-item="{{ $item['title'] }}"
-                                class="py-2">
-                                <div class="flex items-baseline justify-between gap-3 text-sm">
-                                    <span class="min-w-0 truncate text-body">{{ $item['title'] }}</span>
-                                    <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['duration'] }} · {{ $item['share'] }}%</span>
-                                </div>
-                                @if ($activityModal['others'])
-                                    <div class="mt-1.5 flex items-center gap-2" x-data="{ project: '' }">
-                                        <select x-model="project" aria-label="{{ ucfirst($activityModal['label']) }} for {{ $item['title'] }}"
-                                                class="min-w-0 flex-1 rounded border border-white/15 bg-panel px-2 py-1 text-sm text-body">
-                                            <option value="">Choose {{ $activityModal['label'] }}…</option>
-                                            @foreach ($activityModal['projects'] as $projectId => $projectName)
-                                                <option value="{{ $projectId }}">{{ $projectName }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="button" :disabled="project === ''"
-                                                @click="$wire.assignActivityItem(@js($item['title']), project)"
-                                                class="rounded border border-white/15 bg-panel px-3 py-1 text-sm font-medium hover:border-link/40 disabled:cursor-not-allowed disabled:opacity-40">
-                                            Apply
-                                        </button>
-                                    </div>
-                                @endif
-                            </li>
+                    <div class="space-y-4">
+                        @foreach ($activityModal['days'] as $activityDay)
+                            <section wire:key="activity-day-{{ $activityModal['hub'] }}-{{ $activityDay['date'] }}" data-activity-day="{{ $activityDay['date'] }}">
+                                <h3 class="border-b border-white/10 pb-1 text-center text-xs font-semibold uppercase tracking-[0.14em] text-muted" data-activity-day-heading>
+                                    {{ $activityDay['heading'] }} <span class="ml-1 normal-case tracking-normal tabular-nums">{{ $activityDay['duration'] }}</span>
+                                </h3>
+                                <ul class="divide-y divide-white/10">
+                                    @foreach ($activityDay['items'] as $item)
+                                        <li wire:key="activity-item-{{ $activityModal['hub'] }}-{{ $activityDay['date'] }}-{{ md5($item['title']) }}" data-activity-item="{{ $item['title'] }}"
+                                            class="py-2">
+                                            <div class="flex items-baseline justify-between gap-3 text-sm">
+                                                <span class="min-w-0 truncate text-body">{{ $item['title'] }}</span>
+                                                <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['duration'] }} · {{ $item['share'] }}%</span>
+                                            </div>
+                                            @if ($activityModal['others'])
+                                                <div class="mt-1.5 flex items-center gap-2" x-data="{ project: '' }">
+                                                    <select x-model="project" aria-label="{{ ucfirst($activityModal['label']) }} for {{ $item['title'] }}"
+                                                            class="min-w-0 flex-1 rounded border border-white/15 bg-panel px-2 py-1 text-sm text-body">
+                                                        <option value="">Choose {{ $activityModal['label'] }}…</option>
+                                                        @foreach ($activityModal['projects'] as $projectId => $projectName)
+                                                            <option value="{{ $projectId }}">{{ $projectName }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <button type="button" :disabled="project === ''"
+                                                            @click="$wire.assignActivityItem(@js($item['title']), project)"
+                                                            class="rounded border border-white/15 bg-panel px-3 py-1 text-sm font-medium hover:border-link/40 disabled:cursor-not-allowed disabled:opacity-40">
+                                                        Apply
+                                                    </button>
+                                                </div>
+                                            @endif
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </section>
                         @endforeach
-                    </ul>
+                    </div>
                 @endif
             </div>
         </div>

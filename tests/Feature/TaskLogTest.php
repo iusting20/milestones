@@ -1223,4 +1223,63 @@ class TaskLogTest extends TestCase
         $this->assertSame(['Impactful Tech' => 30, 'Others' => 20], collect($activity['assets']['rows'])->pluck('minutes', 'name')->all());
         $fromClient->call('switchActivityHub', 'assets')->assertDontSeeHtml('data-activity-item="Emails"')->assertSeeHtml('data-activity-item="Planning"');
     }
+
+    public function test_add_log_modal_can_create_a_new_task_and_log_against_it(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 15:00:00', 'Europe/Bucharest')->utc());
+        TodoItem::query()->create(['date' => '2026-03-18', 'title' => 'Existing', 'position' => 3]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->assertSeeHtml('data-new-task-button')
+            ->call('startCreatingTask')
+            ->assertSeeHtml('data-new-task-form')
+            ->set('newTaskTitle', '   ')
+            ->call('createTask')
+            ->assertHasErrors(['newTaskTitle' => 'required'])
+            ->set('newTaskTitle', '  Call with accountant ')
+            ->call('createTask')
+            ->assertHasNoErrors()
+            ->assertSet('creatingTask', false)
+            ->assertDontSeeHtml('data-new-task-form');
+
+        $task = TodoItem::query()->where('title', 'Call with accountant')->firstOrFail();
+        $this->assertSame('2026-03-18', $task->date->toDateString());
+        $this->assertFalse($task->is_completed);
+        $this->assertNull($task->parent_id);
+        $this->assertSame(4, $task->position);
+
+        $component->assertSet('todoItemId', (string) $task->id)
+            ->assertSeeHtml('<option value="'.$task->id.'"')
+            ->set('startedAt', '10:00')
+            ->set('finishedAt', '10:45')
+            ->call('addLog')
+            ->assertHasNoErrors()
+            ->assertSet('showAddModal', false);
+
+        $this->assertDatabaseHas('task_logs', ['todo_item_id' => $task->id, 'title' => 'Call with accountant']);
+    }
+
+    public function test_new_task_form_resets_when_modal_closes_or_day_changes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-18 15:00:00', 'Europe/Bucharest')->utc());
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openAddModal')
+            ->call('startCreatingTask')
+            ->set('newTaskTitle', 'Draft')
+            ->call('selectLogDate', '2026-03-17')
+            ->assertSet('creatingTask', false)
+            ->assertSet('newTaskTitle', '')
+            ->call('startCreatingTask')
+            ->set('newTaskTitle', 'On Tuesday')
+            ->call('createTask')
+            ->call('closeAddModal')
+            ->assertSet('creatingTask', false);
+
+        $this->assertSame('2026-03-17', TodoItem::query()->where('title', 'On Tuesday')->firstOrFail()->date->toDateString());
+        $this->assertDatabaseMissing('todo_items', ['title' => 'Draft']);
+    }
 }

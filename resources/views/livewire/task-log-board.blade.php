@@ -117,6 +117,30 @@
                         @error('todoItemId')
                             <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
                         @enderror
+
+                        @if ($creatingTask)
+                            <div class="mt-2 flex items-center gap-2" data-new-task-form>
+                                <input id="add-log-new-task"
+                                       type="text"
+                                       wire:model="newTaskTitle"
+                                       wire:keydown.enter.prevent="createTask"
+                                       wire:keydown.escape.stop="cancelCreatingTask"
+                                       placeholder="New task name"
+                                       aria-label="New task name"
+                                       x-init="$el.focus()"
+                                       class="min-w-0 flex-1 rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                                <button type="button" wire:click="createTask"
+                                        class="rounded border border-white/15 bg-panel px-3 py-2 text-sm font-medium hover:border-link/40">Create</button>
+                                <button type="button" wire:click="cancelCreatingTask"
+                                        class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Cancel new task">×</button>
+                            </div>
+                            @error('newTaskTitle')
+                                <p class="mt-1 text-xs text-red-400">{{ $message }}</p>
+                            @enderror
+                        @else
+                            <button type="button" wire:click="startCreatingTask" data-new-task-button
+                                    class="mt-1.5 text-xs text-link hover:underline">+ New task</button>
+                        @endif
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">

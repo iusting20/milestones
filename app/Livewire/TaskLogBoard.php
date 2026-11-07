@@ -64,6 +64,11 @@ class TaskLogBoard extends Component
 
     public string $finishedAt = '';
 
+    /** Inline "New task" form inside the Add log entry modal. */
+    public bool $creatingTask = false;
+
+    public string $newTaskTitle = '';
+
     public ?int $editingLogId = null;
 
     public ?int $editingTodoItemId = null;
@@ -110,6 +115,8 @@ class TaskLogBoard extends Component
         $this->resetValidation();
         $this->logDate = $this->defaultLogDate();
         $this->todoItemId = '';
+        $this->creatingTask = false;
+        $this->newTaskTitle = '';
         $this->startedAt = '';
         $this->finishedAt = '';
         $this->showAddModal = true;
@@ -120,6 +127,8 @@ class TaskLogBoard extends Component
         $this->showAddModal = false;
         $this->logDate = '';
         $this->todoItemId = '';
+        $this->creatingTask = false;
+        $this->newTaskTitle = '';
         $this->startedAt = '';
         $this->finishedAt = '';
         $this->resetValidation();
@@ -133,7 +142,54 @@ class TaskLogBoard extends Component
 
         $this->logDate = $date;
         $this->todoItemId = '';
+        $this->creatingTask = false;
+        $this->newTaskTitle = '';
         $this->resetValidation();
+    }
+
+    public function startCreatingTask(): void
+    {
+        $this->creatingTask = true;
+        $this->newTaskTitle = '';
+        $this->resetValidation('newTaskTitle');
+    }
+
+    public function cancelCreatingTask(): void
+    {
+        $this->creatingTask = false;
+        $this->newTaskTitle = '';
+        $this->resetValidation('newTaskTitle');
+    }
+
+    /**
+     * Create a task on the modal's selected day (same as the milestones page "Add" action:
+     * top-level, not completed, appended at the end of that day) and select it.
+     */
+    public function createTask(): void
+    {
+        $this->newTaskTitle = trim($this->newTaskTitle);
+
+        $this->validate([
+            'logDate' => ['required', 'date', Rule::in($this->selectableLogDates()->all())],
+            'newTaskTitle' => ['required', 'string', 'max:255'],
+        ], [
+            'newTaskTitle.required' => 'Enter a task name.',
+        ]);
+
+        $max = (int) TodoItem::query()->whereDate('date', $this->logDate)->max('position');
+
+        $item = TodoItem::query()->create([
+            'date' => $this->logDate,
+            'title' => $this->newTaskTitle,
+            'is_completed' => false,
+            'is_separator' => false,
+            'position' => $max + 1,
+        ]);
+
+        $this->todoItemId = (string) $item->id;
+        $this->creatingTask = false;
+        $this->newTaskTitle = '';
+        $this->resetValidation(['newTaskTitle', 'todoItemId']);
     }
 
     public function addLog(): void

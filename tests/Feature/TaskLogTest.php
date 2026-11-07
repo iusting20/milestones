@@ -1045,4 +1045,77 @@ class TaskLogTest extends TestCase
             ->assertSeeHtml('data-activity-empty')
             ->assertDontSeeHtml('data-week-totals');
     }
+
+    public function test_clicking_a_client_row_lists_its_items(): void
+    {
+        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+
+        foreach ([['SN - portal', 90], ['SN - api', 30], ['Emails', 15]] as [$title, $minutes]) {
+            TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 08:00:00')->addMinutes($minutes)]);
+        }
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertDontSeeHtml('data-activity-modal=')
+            ->call('openActivity', 'partners', 'Saints Nearby')
+            ->assertSeeHtml('data-activity-modal="partners"')
+            ->assertSeeHtml('data-activity-item="SN - portal"')
+            ->assertSeeHtml('data-activity-item="SN - api"')
+            ->assertDontSeeHtml('data-activity-item="Emails"')
+            ->assertSee('1h 30m')
+            ->assertDontSee('Apply')
+            ->call('closeActivity')
+            ->assertDontSeeHtml('data-activity-modal=');
+    }
+
+    public function test_others_items_can_be_assigned_to_a_client_and_stay_assigned(): void
+    {
+        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        $asset = \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
+
+        foreach ([['Emails', 15, '2026-03-17'], ['Planning', 45, '2026-03-17'], ['Emails', 20, '2026-03-24']] as [$title, $minutes, $day]) {
+            TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
+        }
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openActivity', 'partners', 'Others')
+            ->assertSeeHtml('data-activity-item="Emails"')
+            ->assertSeeHtml('data-activity-item="Planning"')
+            ->assertSeeHtml('>Tudia</option>')
+            ->assertDontSeeHtml('>Neo Wars</option>')
+            ->call('assignActivityItem', 'Emails', $asset->id) // wrong hub: ignored
+            ->call('assignActivityItem', 'Emails', $client->id)
+            ->assertDontSeeHtml('data-activity-item="Emails"')
+            ->assertSeeHtml('data-activity-item="Planning"');
+
+        $this->assertDatabaseHas('activity_assignments', ['hub' => 'partners', 'title' => 'Emails', 'project_id' => $client->id]);
+        $this->assertDatabaseCount('activity_assignments', 1);
+
+        $rows = collect($component->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all();
+        $this->assertSame(['Tudia' => 15, 'Others' => 45], $rows);
+        $this->assertSame(['Others' => 60], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
+
+        $component->call('assignActivityItem', 'Planning', $client->id)
+            ->assertSeeHtml('data-activity-modal-empty');
+
+        $next = Livewire::withQueryParams(['week' => '2026-W13'])->test(TaskLogBoard::class);
+        $this->assertSame(['Tudia' => 20], collect($next->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
+    }
+
+    public function test_assignment_never_overrides_a_prefix_match_and_only_applies_from_others(): void
+    {
+        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+        $tudia = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 1]);
+        TaskLog::query()->create(['todo_item_id' => null, 'title' => 'SN - portal', 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 09:00:00')]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->call('openActivity', 'partners', 'Others')
+            ->call('assignActivityItem', 'SN - portal', $tudia->id)
+            ->call('openActivity', 'partners', 'Saints Nearby')
+            ->call('assignActivityItem', 'SN - portal', $tudia->id);
+
+        $this->assertDatabaseCount('activity_assignments', 0);
+    }
 }

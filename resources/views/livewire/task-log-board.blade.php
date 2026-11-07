@@ -198,7 +198,12 @@
                 @else
                     <ul class="space-y-2.5">
                         @foreach ($activity[$hubKey]['rows'] as $row)
-                            <li wire:key="activity-{{ $hubKey }}-{{ md5($row['name']) }}" data-activity-row="{{ $row['name'] }}">
+                            <li wire:key="activity-{{ $hubKey }}-{{ md5($row['name']) }}" data-activity-row="{{ $row['name'] }}"
+                                role="button" tabindex="0"
+                                title="{{ $row['others'] ? 'Show and assign items not linked to a '.($hubKey === 'partners' ? 'client' : 'asset') : 'Show items for '.$row['name'] }}"
+                                wire:click="openActivity('{{ $hubKey }}', @js($row['name']))"
+                                wire:keydown.enter="openActivity('{{ $hubKey }}', @js($row['name']))"
+                                class="-mx-2 cursor-pointer rounded-md px-2 py-1 transition hover:bg-white/5 focus:bg-white/5 focus:outline-none">
                                 <div class="flex items-baseline justify-between gap-3 text-sm">
                                     <span class="flex min-w-0 items-center gap-2">
                                         <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background: {{ $row['color'] }}"></span>
@@ -216,6 +221,63 @@
             </section>
         @endforeach
     </section>
+
+    @if ($activityModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             wire:keydown.escape.window="closeActivity"
+             role="dialog" aria-modal="true" aria-labelledby="activity-modal-title" data-activity-modal="{{ $activityModal['hub'] }}">
+            <div class="absolute inset-0 bg-black/60" wire:click="closeActivity" aria-hidden="true"></div>
+
+            <div class="relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 id="activity-modal-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        {{ $activityModal['others'] ? 'Others — not linked to a '.$activityModal['label'] : $activityModal['row'] }}
+                        <span class="ml-2 normal-case tracking-normal tabular-nums">{{ $activityModal['duration'] }}</span>
+                    </h2>
+                    <button type="button" wire:click="closeActivity"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+
+                @if ($activityModal['others'] && $activityModal['items'] !== [])
+                    <p class="mb-3 text-xs text-muted">Pick a {{ $activityModal['label'] }} for an item and press Apply. The item keeps that {{ $activityModal['label'] }} in later weeks too.</p>
+                @endif
+
+                @if ($activityModal['items'] === [])
+                    <p class="text-sm text-muted" data-activity-modal-empty>
+                        {{ $activityModal['others'] ? 'Everything this week is linked to a '.$activityModal['label'].'.' : 'No items this week.' }}
+                    </p>
+                @else
+                    <ul class="divide-y divide-white/10">
+                        @foreach ($activityModal['items'] as $item)
+                            <li wire:key="activity-item-{{ $activityModal['hub'] }}-{{ md5($item['title']) }}" data-activity-item="{{ $item['title'] }}"
+                                class="py-2">
+                                <div class="flex items-baseline justify-between gap-3 text-sm">
+                                    <span class="min-w-0 truncate text-body">{{ $item['title'] }}</span>
+                                    <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['duration'] }} · {{ $item['share'] }}%</span>
+                                </div>
+                                @if ($activityModal['others'])
+                                    <div class="mt-1.5 flex items-center gap-2" x-data="{ project: '' }">
+                                        <select x-model="project" aria-label="{{ ucfirst($activityModal['label']) }} for {{ $item['title'] }}"
+                                                class="min-w-0 flex-1 rounded border border-white/15 bg-panel px-2 py-1 text-sm text-body">
+                                            <option value="">Choose {{ $activityModal['label'] }}…</option>
+                                            @foreach ($activityModal['projects'] as $projectId => $projectName)
+                                                <option value="{{ $projectId }}">{{ $projectName }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="button" :disabled="project === ''"
+                                                @click="$wire.assignActivityItem(@js($item['title']), project)"
+                                                class="rounded border border-white/15 bg-panel px-3 py-1 text-sm font-medium hover:border-link/40 disabled:cursor-not-allowed disabled:opacity-40">
+                                            Apply
+                                        </button>
+                                    </div>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        </div>
+    @endif
 
     @if (count($stats['days']) > 0)
         <section class="mt-8 space-y-3" data-week-totals>

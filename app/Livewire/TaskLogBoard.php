@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\ActivityAssignment;
 use App\Models\Project;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
@@ -76,6 +77,11 @@ class TaskLogBoard extends Component
     public string $editStartedAt = '';
 
     public string $editFinishedAt = '';
+
+    /** Activity chart modal: hub ('partners' | 'assets') and the clicked row name (or "Others"). */
+    public ?string $activityHub = null;
+
+    public ?string $activityRow = null;
 
     public function mount(): void
     {
@@ -453,6 +459,7 @@ class TaskLogBoard extends Component
                 'partners' => $this->hubActivity('partners', $logs),
                 'assets' => $this->hubActivity('assets', $logs),
             ],
+            'activityModal' => $this->activityModal($logs),
             'weekNumber' => $this->weekNumber(),
             'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
             'hasLogs' => $hasEntries,
@@ -1040,10 +1047,11 @@ class TaskLogBoard extends Component
      * Logged minutes of the week split by the projects of a Links hub ("partners" = clients,
      * "assets" = assets). A log belongs to a project when its milestone is linked to that
      * project's Week Board card, otherwise by the "<Name> - task" title prefix (same rule as
-     * hubCoverage, archived projects included). Everything else goes into "Others".
+     * hubCoverage, archived projects included), then by a manual assignment made from the
+     * Others modal (activity_assignments, per hub and item title). Everything else is "Others".
      *
      * @param  Collection<int, TaskLog>  $logs
-     * @return array{totalMinutes: int, totalDuration: string, rows: list<array{name: string, minutes: int, duration: string, share: float, width: float, color: string, others: bool}>}
+     * @return array{totalMinutes: int, totalDuration: string, rows: list<array{name: string, minutes: int, duration: string, share: float, width: float, color: string, others: bool, items: list<array{title: string, minutes: int, duration: string, share: float}>}>}
      */
     public function hubActivity(string $hub, Collection $logs): array
     {
@@ -1064,11 +1072,18 @@ class TaskLogBoard extends Component
             ->map(fn (Collection $items): int => (int) $items->first()->project_id);
 
         $nameById = $projects->pluck('name', 'id');
+        $assignedByTitle = ActivityAssignment::query()
+            ->where('hub', $hub)
+            ->whereIn('project_id', $projects->pluck('id'))
+            ->pluck('project_id', 'title');
         $minutesByName = [];
+        $itemsByName = [];
         $othersMinutes = 0;
+        $othersItems = [];
 
         foreach ($logs as $log) {
             $minutes = $this->durationMinutes($log);
+            $title = (string) $log->title;
             $name = null;
 
             if ($log->todo_item_id !== null && $linkedProjectByTodo->has($log->todo_item_id)) {
@@ -1076,16 +1091,23 @@ class TaskLogBoard extends Component
             }
 
             if ($name === null) {
-                $prefix = mb_strtolower(trim(explode(' - ', (string) $log->title, 2)[0]));
+                $prefix = mb_strtolower(trim(explode(' - ', $title, 2)[0]));
                 $name = $prefix === '' ? null : $projects->first(
                     fn (Project $project): bool => self::prefixMatchesProject($prefix, $project->name)
                 )?->name;
             }
 
+            // Manual assignment from the Others modal: only reached when nothing stronger matched.
+            if ($name === null && $assignedByTitle->has($title)) {
+                $name = $nameById[$assignedByTitle[$title]] ?? null;
+            }
+
             if ($name === null) {
                 $othersMinutes += $minutes;
+                $othersItems[$title] = ($othersItems[$title] ?? 0) + $minutes;
             } else {
                 $minutesByName[$name] = ($minutesByName[$name] ?? 0) + $minutes;
+                $itemsByName[$name][$title] = ($itemsByName[$name][$title] ?? 0) + $minutes;
             }
         }
 
@@ -1094,11 +1116,11 @@ class TaskLogBoard extends Component
         $index = 0;
 
         foreach ($minutesByName as $name => $minutes) {
-            $rows[] = ['name' => (string) $name, 'minutes' => $minutes, 'color' => $this->colorAt($index++), 'others' => false];
+            $rows[] = ['name' => (string) $name, 'minutes' => $minutes, 'color' => $this->colorAt($index++), 'others' => false, 'items' => $this->activityItems($itemsByName[$name], $minutes)];
         }
 
         if ($othersMinutes > 0) {
-            $rows[] = ['name' => 'Others', 'minutes' => $othersMinutes, 'color' => '#6e7681', 'others' => true];
+            $rows[] = ['name' => 'Others', 'minutes' => $othersMinutes, 'color' => '#6e7681', 'others' => true, 'items' => $this->activityItems($othersItems, $othersMinutes)];
         }
 
         $total = array_sum(array_column($rows, 'minutes'));
@@ -1112,6 +1134,115 @@ class TaskLogBoard extends Component
                 'share' => $total > 0 ? round($row['minutes'] / $total * 100, 1) : 0.0,
                 'width' => round($row['minutes'] / $max * 100, 1),
             ], $rows),
+        ];
+    }
+
+    /**
+     * @param  array<string, int>  $minutesByTitle
+     * @return list<array{title: string, minutes: int, duration: string, share: float}>
+     */
+    private function activityItems(array $minutesByTitle, int $rowMinutes): array
+    {
+        arsort($minutesByTitle);
+        $items = [];
+
+        foreach ($minutesByTitle as $title => $minutes) {
+            $items[] = [
+                'title' => (string) $title,
+                'minutes' => $minutes,
+                'duration' => $this->formatDuration($minutes),
+                'share' => $rowMinutes > 0 ? round($minutes / $rowMinutes * 100, 1) : 0.0,
+            ];
+        }
+
+        return $items;
+    }
+
+    public function openActivity(string $hub, string $row): void
+    {
+        if (! in_array($hub, ['partners', 'assets'], true)) {
+            return;
+        }
+
+        $this->activityHub = $hub;
+        $this->activityRow = $row;
+    }
+
+    public function closeActivity(): void
+    {
+        $this->activityHub = null;
+        $this->activityRow = null;
+    }
+
+    /** Assign an item currently in "Others" to a project of the open chart's hub. */
+    public function assignActivityItem(string $title, int|string $projectId): void
+    {
+        $hub = $this->activityHub;
+
+        if ($hub === null || $this->activityRow !== 'Others') {
+            return;
+        }
+
+        $project = Project::query()
+            ->where('hub', $hub)
+            ->where('is_delimiter', false)
+            ->find((int) $projectId);
+
+        $others = collect($this->hubActivity($hub, $this->weekLogs())['rows'])->firstWhere('others', true);
+        $inOthers = $others !== null && collect($others['items'])->contains('title', $title);
+
+        if ($project === null || ! $inOthers) {
+            return;
+        }
+
+        ActivityAssignment::query()->updateOrCreate(
+            ['hub' => $hub, 'title' => $title],
+            ['project_id' => $project->id],
+        );
+    }
+
+    /** @return Collection<int, TaskLog> */
+    private function weekLogs(): Collection
+    {
+        $start = $this->weekStart()->copy()->startOfDay();
+
+        return TaskLog::query()
+            ->whereBetween('finished_at', [$start, $start->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay()])
+            ->orderBy('started_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, TaskLog>  $logs
+     * @return array{hub: string, label: string, row: string, others: bool, duration: string, items: list<array<string, mixed>>, projects: array<int, string>}|null
+     */
+    private function activityModal(Collection $logs): ?array
+    {
+        if ($this->activityHub === null || $this->activityRow === null) {
+            return null;
+        }
+
+        $row = collect($this->hubActivity($this->activityHub, $logs)['rows'])->firstWhere('name', $this->activityRow);
+        $others = $this->activityRow === 'Others';
+
+        return [
+            'hub' => $this->activityHub,
+            'label' => $this->activityHub === 'partners' ? 'client' : 'asset',
+            'row' => $this->activityRow,
+            'others' => $others,
+            'duration' => $row['duration'] ?? '0m',
+            'items' => $row['items'] ?? [],
+            'projects' => $others
+                ? Project::query()
+                    ->where('hub', $this->activityHub)
+                    ->where('is_delimiter', false)
+                    ->where('is_archived', false)
+                    ->orderBy('position')
+                    ->orderBy('id')
+                    ->pluck('name', 'id')
+                    ->all()
+                : [],
         ];
     }
 

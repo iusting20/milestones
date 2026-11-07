@@ -186,6 +186,37 @@
         </div>
     </div>
 
+    <section class="mt-8 grid grid-cols-1 gap-3 lg:grid-cols-2" data-week-activity>
+        @foreach (['partners' => 'Activity by client', 'assets' => 'Activity by asset'] as $hubKey => $chartLabel)
+            <section class="rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3" data-activity-chart="{{ $hubKey }}">
+                <header class="mb-3 flex items-baseline justify-between gap-3 border-b border-white/10 pb-2">
+                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $chartLabel }}</h2>
+                    <span class="text-xs tabular-nums text-muted">{{ $activity[$hubKey]['totalDuration'] }}</span>
+                </header>
+                @if ($activity[$hubKey]['rows'] === [])
+                    <p class="text-xs text-muted" data-activity-empty>No logged time this week.</p>
+                @else
+                    <ul class="space-y-2.5">
+                        @foreach ($activity[$hubKey]['rows'] as $row)
+                            <li wire:key="activity-{{ $hubKey }}-{{ md5($row['name']) }}" data-activity-row="{{ $row['name'] }}">
+                                <div class="flex items-baseline justify-between gap-3 text-sm">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background: {{ $row['color'] }}"></span>
+                                        <span @class(['truncate', 'text-muted italic' => $row['others'], 'text-body' => ! $row['others']])>{{ $row['name'] }}</span>
+                                    </span>
+                                    <span class="shrink-0 text-xs tabular-nums text-muted">{{ $row['duration'] }} · {{ $row['share'] }}%</span>
+                                </div>
+                                <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-white/5">
+                                    <div class="h-full rounded-full" style="width: {{ max(2, $row['width']) }}%; background: {{ $row['color'] }}"></div>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </section>
+        @endforeach
+    </section>
+
     @if (count($stats['days']) > 0)
         <section class="mt-8 space-y-3" data-week-totals>
             <header class="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3">

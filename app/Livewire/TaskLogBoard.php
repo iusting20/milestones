@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Project;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
+use App\Models\WeekBoardItem;
 use App\Support\Clock;
 use App\Support\IdleTimeline;
 use Carbon\Carbon;
@@ -447,6 +448,10 @@ class TaskLogBoard extends Component
             'coverage' => [
                 'partners' => $this->hubCoverage('partners', $logs->pluck('title')),
                 'assets' => $this->hubCoverage('assets', $logs->pluck('title')),
+            ],
+            'activity' => [
+                'partners' => $this->hubActivity('partners', $logs),
+                'assets' => $this->hubActivity('assets', $logs),
             ],
             'weekNumber' => $this->weekNumber(),
             'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
@@ -1028,6 +1033,85 @@ class TaskLogBoard extends Component
             'covered' => $projects->count() - count($uncovered),
             'total' => $projects->count(),
             'uncovered' => $uncovered,
+        ];
+    }
+
+    /**
+     * Logged minutes of the week split by the projects of a Links hub ("partners" = clients,
+     * "assets" = assets). A log belongs to a project when its milestone is linked to that
+     * project's Week Board card, otherwise by the "<Name> - task" title prefix (same rule as
+     * hubCoverage, archived projects included). Everything else goes into "Others".
+     *
+     * @param  Collection<int, TaskLog>  $logs
+     * @return array{totalMinutes: int, totalDuration: string, rows: list<array{name: string, minutes: int, duration: string, share: float, width: float, color: string, others: bool}>}
+     */
+    public function hubActivity(string $hub, Collection $logs): array
+    {
+        $projects = Project::query()
+            ->where('hub', $hub)
+            ->where('is_delimiter', false)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get(['id', 'name']);
+
+        $linkedProjectByTodo = WeekBoardItem::query()
+            ->whereNotNull('todo_item_id')
+            ->whereIn('todo_item_id', $logs->pluck('todo_item_id')->filter()->unique()->values())
+            ->whereIn('project_id', $projects->pluck('id'))
+            ->orderBy('id')
+            ->get(['todo_item_id', 'project_id'])
+            ->groupBy('todo_item_id')
+            ->map(fn (Collection $items): int => (int) $items->first()->project_id);
+
+        $nameById = $projects->pluck('name', 'id');
+        $minutesByName = [];
+        $othersMinutes = 0;
+
+        foreach ($logs as $log) {
+            $minutes = $this->durationMinutes($log);
+            $name = null;
+
+            if ($log->todo_item_id !== null && $linkedProjectByTodo->has($log->todo_item_id)) {
+                $name = $nameById[$linkedProjectByTodo[$log->todo_item_id]] ?? null;
+            }
+
+            if ($name === null) {
+                $prefix = mb_strtolower(trim(explode(' - ', (string) $log->title, 2)[0]));
+                $name = $prefix === '' ? null : $projects->first(
+                    fn (Project $project): bool => self::prefixMatchesProject($prefix, $project->name)
+                )?->name;
+            }
+
+            if ($name === null) {
+                $othersMinutes += $minutes;
+            } else {
+                $minutesByName[$name] = ($minutesByName[$name] ?? 0) + $minutes;
+            }
+        }
+
+        arsort($minutesByName);
+        $rows = [];
+        $index = 0;
+
+        foreach ($minutesByName as $name => $minutes) {
+            $rows[] = ['name' => (string) $name, 'minutes' => $minutes, 'color' => $this->colorAt($index++), 'others' => false];
+        }
+
+        if ($othersMinutes > 0) {
+            $rows[] = ['name' => 'Others', 'minutes' => $othersMinutes, 'color' => '#6e7681', 'others' => true];
+        }
+
+        $total = array_sum(array_column($rows, 'minutes'));
+        $max = max(1, $rows === [] ? 0 : max(array_column($rows, 'minutes')));
+
+        return [
+            'totalMinutes' => $total,
+            'totalDuration' => $this->formatDuration($total),
+            'rows' => array_map(fn (array $row): array => $row + [
+                'duration' => $this->formatDuration($row['minutes']),
+                'share' => $total > 0 ? round($row['minutes'] / $total * 100, 1) : 0.0,
+                'width' => round($row['minutes'] / $max * 100, 1),
+            ], $rows),
         ];
     }
 

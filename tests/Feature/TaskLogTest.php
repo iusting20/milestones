@@ -998,4 +998,51 @@ class TaskLogTest extends TestCase
             ->assertSee('1 out of 2')
             ->assertSee('Not covered: Neo Wars');
     }
+
+    public function test_week_activity_charts_group_by_client_and_asset_with_others(): void
+    {
+        foreach ([['partners', 'Saints Nearby', false], ['partners', 'Old Client', true], ['partners', 'Tudia', false], ['assets', 'Neo Wars', false]] as $i => [$hub, $name, $archived]) {
+            \App\Models\Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
+        }
+
+        $tudia = \App\Models\Project::query()->where('name', 'Tudia')->first();
+        $todo = TodoItem::query()->create(['date' => '2026-03-17', 'title' => 'Untagged milestone', 'position' => 0]);
+        \App\Models\WeekBoardItem::query()->create(['project_id' => $tudia->id, 'todo_item_id' => $todo->id, 'title' => 'Card', 'status' => 'wip', 'position' => 0]);
+
+        foreach ([['SN - portal', 120, null], ['Old Client - x', 30, null], ['Neo Wars - art', 45, null], ['Emails', 15, null], ['Untagged milestone', 60, $todo->id]] as [$title, $minutes, $todoId]) {
+            TaskLog::query()->create([
+                'todo_item_id' => $todoId,
+                'title' => $title,
+                'started_at' => Carbon::parse('2026-03-17 08:00:00'),
+                'finished_at' => Carbon::parse('2026-03-17 08:00:00')->addMinutes($minutes),
+            ]);
+        }
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $activity = $component->viewData('activity');
+
+        $this->assertSame(
+            ['Saints Nearby' => 120, 'Tudia' => 60, 'Old Client' => 30, 'Others' => 60],
+            collect($activity['partners']['rows'])->pluck('minutes', 'name')->all()
+        );
+        $this->assertSame(
+            ['Neo Wars' => 45, 'Others' => 225],
+            collect($activity['assets']['rows'])->pluck('minutes', 'name')->all()
+        );
+        $this->assertSame(270, $activity['partners']['totalMinutes']);
+
+        $html = $component->html();
+        $this->assertTrue(strpos($html, 'data-week-activity') < strpos($html, 'data-week-totals'));
+        $component->assertSee('Activity by client')->assertSee('Activity by asset')->assertSeeHtml('data-activity-row="Others"');
+    }
+
+    public function test_week_activity_charts_render_empty_week(): void
+    {
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(TaskLogBoard::class)
+            ->assertSeeHtml('data-activity-chart="partners"')
+            ->assertSeeHtml('data-activity-chart="assets"')
+            ->assertSeeHtml('data-activity-empty')
+            ->assertDontSeeHtml('data-week-totals');
+    }
 }

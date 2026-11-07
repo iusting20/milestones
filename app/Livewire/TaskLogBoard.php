@@ -1044,16 +1044,13 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * Logged minutes of the week split by the projects of a Links hub ("partners" = clients,
-     * "assets" = assets). A log belongs to a project when its milestone is linked to that
-     * project's Week Board card, otherwise by the "<Name> - task" title prefix (same rule as
-     * hubCoverage, archived projects included), then by a manual assignment made from the
-     * Others modal (activity_assignments, per hub and item title). Everything else is "Others".
+     * Resolves a log to a project name of the hub: Week Board card link, then title prefix,
+     * then a manual assignment from the Others modal (only when nothing stronger matched).
      *
      * @param  Collection<int, TaskLog>  $logs
-     * @return array{totalMinutes: int, totalDuration: string, rows: list<array{name: string, minutes: int, duration: string, share: float, width: float, color: string, others: bool, items: list<array{title: string, minutes: int, duration: string, share: float}>}>}
+     * @return \Closure(TaskLog): ?string
      */
-    public function hubActivity(string $hub, Collection $logs): array
+    private function hubMatcher(string $hub, Collection $logs): \Closure
     {
         $projects = Project::query()
             ->where('hub', $hub)
@@ -1076,17 +1073,8 @@ class TaskLogBoard extends Component
             ->where('hub', $hub)
             ->whereIn('project_id', $projects->pluck('id'))
             ->pluck('project_id', 'title');
-        $minutesByName = [];
-        $itemsByName = [];
-        $othersMinutes = 0;
-        $othersItems = [];
-        $othersDays = [];
-        $daysByName = [];
-
-        foreach ($logs as $log) {
-            $minutes = $this->durationMinutes($log);
+        return function (TaskLog $log) use ($projects, $linkedProjectByTodo, $nameById, $assignedByTitle): ?string {
             $title = (string) $log->title;
-            $dateKey = $log->finished_at->timezone('Europe/Bucharest')->toDateString();
             $name = null;
 
             if ($log->todo_item_id !== null && $linkedProjectByTodo->has($log->todo_item_id)) {
@@ -1100,9 +1088,46 @@ class TaskLogBoard extends Component
                 )?->name;
             }
 
-            // Manual assignment from the Others modal: only reached when nothing stronger matched.
             if ($name === null && $assignedByTitle->has($title)) {
                 $name = $nameById[$assignedByTitle[$title]] ?? null;
+            }
+
+            return $name;
+        };
+    }
+
+    /**
+     * Logged minutes of the week split by the projects of a Links hub ("partners" = clients,
+     * "assets" = assets). A log belongs to a project when its milestone is linked to that
+     * project's Week Board card, otherwise by the "<Name> - task" title prefix (same rule as
+     * hubCoverage, archived projects included), then by a manual assignment made from the
+     * Others modal (activity_assignments, per hub and item title). Logs connected only to the
+     * other hub are left out; logs connected to neither hub are the shared "Others" (identical
+     * on both charts).
+     *
+     * @param  Collection<int, TaskLog>  $logs
+     * @return array{totalMinutes: int, totalDuration: string, rows: list<array{name: string, minutes: int, duration: string, share: float, width: float, color: string, others: bool, items: list<array{title: string, minutes: int, duration: string, share: float}>}>}
+     */
+    public function hubActivity(string $hub, Collection $logs): array
+    {
+        $match = $this->hubMatcher($hub, $logs);
+        $matchOther = $this->hubMatcher($hub === 'partners' ? 'assets' : 'partners', $logs);
+        $minutesByName = [];
+        $itemsByName = [];
+        $othersMinutes = 0;
+        $othersItems = [];
+        $othersDays = [];
+        $daysByName = [];
+
+        foreach ($logs as $log) {
+            $minutes = $this->durationMinutes($log);
+            $title = (string) $log->title;
+            $dateKey = $log->finished_at->timezone('Europe/Bucharest')->toDateString();
+            $name = $match($log);
+
+            // Connected to the other side only: belongs to the other chart, not to Others.
+            if ($name === null && $matchOther($log) !== null) {
+                continue;
             }
 
             if ($name === null) {

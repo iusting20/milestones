@@ -1022,14 +1022,22 @@ class TaskLogTest extends TestCase
         $activity = $component->viewData('activity');
 
         $this->assertSame(
-            ['Saints Nearby' => 120, 'Tudia' => 60, 'Old Client' => 30, 'Others' => 60],
+            ['Saints Nearby' => 120, 'Tudia' => 60, 'Old Client' => 30, 'Others' => 15],
             collect($activity['partners']['rows'])->pluck('minutes', 'name')->all()
         );
         $this->assertSame(
-            ['Neo Wars' => 45, 'Others' => 225],
+            ['Neo Wars' => 45, 'Others' => 15],
             collect($activity['assets']['rows'])->pluck('minutes', 'name')->all()
         );
-        $this->assertSame(270, $activity['partners']['totalMinutes']);
+        // Client chart excludes asset-only time and vice versa; Others is shared.
+        $this->assertSame(225, $activity['partners']['totalMinutes']);
+        $this->assertSame(60, $activity['assets']['totalMinutes']);
+        $partnerOthers = collect($activity['partners']['rows'])->firstWhere('others', true)['items'];
+        $assetOthers = collect($activity['assets']['rows'])->firstWhere('others', true)['items'];
+        $this->assertSame($partnerOthers, $assetOthers);
+        $this->assertSame(['Emails'], array_column($assetOthers, 'title'));
+        $this->assertNotContains('SN - portal', collect($activity['assets']['rows'])->pluck('items')->flatten(1)->pluck('title'));
+        $this->assertNotContains('Neo Wars - art', collect($activity['partners']['rows'])->pluck('items')->flatten(1)->pluck('title'));
 
         $html = $component->html();
         $this->assertTrue(strpos($html, 'data-week-activity') < strpos($html, 'data-week-totals'));
@@ -1094,7 +1102,7 @@ class TaskLogTest extends TestCase
 
         $rows = collect($component->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all();
         $this->assertSame(['Tudia' => 15, 'Others' => 45], $rows);
-        $this->assertSame(['Others' => 60], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
+        $this->assertSame(['Others' => 45], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
 
         $component->call('assignActivityItem', 'Planning', $client->id)
             ->assertSeeHtml('data-activity-modal-empty');
@@ -1165,7 +1173,8 @@ class TaskLogTest extends TestCase
             ->assertSeeHtml('data-activity-modal="assets"')
             ->assertSeeHtml('>Neo Wars</option>')
             ->assertDontSeeHtml('>Tudia</option>')
-            ->assertSeeHtml('data-activity-item="Tudia - lesson"')
+            ->assertDontSeeHtml('data-activity-item="Tudia - lesson"')
+            ->assertSeeHtml('data-activity-item="Artwork"')
             ->call('assignActivityItem', 'Artwork', $client->id) // client project on asset side: ignored
             ->call('assignActivityItem', 'Artwork', $asset->id)
             ->assertDontSeeHtml('data-activity-item="Artwork"')
@@ -1173,24 +1182,45 @@ class TaskLogTest extends TestCase
 
         $this->assertDatabaseHas('activity_assignments', ['hub' => 'assets', 'title' => 'Artwork', 'project_id' => $asset->id]);
         $this->assertDatabaseCount('activity_assignments', 1);
-        $this->assertSame(['Neo Wars' => 40, 'Others' => 95], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
-        // Client side untouched: Artwork is still client-Others.
-        $this->assertSame(['Tudia' => 60, 'Others' => 75], collect($component->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
+        $this->assertSame(['Neo Wars' => 40, 'Others' => 35], collect($component->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
+        // Artwork is now asset-connected: it leaves the shared Others and stays off the client chart.
+        $this->assertSame(['Tudia' => 60, 'Others' => 35], collect($component->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
 
         $component->call('switchActivityHub', 'partners')
-            ->assertSeeHtml('data-activity-item="Artwork"')
-            ->call('assignActivityItem', 'Artwork', $client->id);
-        $this->assertDatabaseHas('activity_assignments', ['hub' => 'assets', 'title' => 'Artwork', 'project_id' => $asset->id]);
-        $this->assertDatabaseHas('activity_assignments', ['hub' => 'partners', 'title' => 'Artwork', 'project_id' => $client->id]);
+            ->assertDontSeeHtml('data-activity-item="Artwork"')
+            ->assertSeeHtml('data-activity-item="Emails"')
+            ->call('assignActivityItem', 'Artwork', $client->id); // no longer in Others: ignored
+        $this->assertDatabaseCount('activity_assignments', 1);
 
         $next = Livewire::withQueryParams(['week' => '2026-W13'])->test(TaskLogBoard::class);
         $this->assertSame(['Neo Wars' => 25], collect($next->viewData('activity')['assets']['rows'])->pluck('minutes', 'name')->all());
-        $this->assertSame(['Tudia' => 25], collect($next->viewData('activity')['partners']['rows'])->pluck('minutes', 'name')->all());
+        $this->assertSame([], $next->viewData('activity')['partners']['rows']);
 
         // Toggle only works in the Others modal.
         Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class)
             ->call('openActivity', 'partners', 'Tudia')
             ->call('switchActivityHub', 'assets')
             ->assertSet('activityHub', 'partners');
+    }
+
+    public function test_others_is_shared_by_both_charts_and_assigning_removes_it_from_both(): void
+    {
+        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Impactful Tech', 'slug' => 'it', 'position' => 0]);
+
+        foreach ([['Tudia - lesson', 60], ['Impactful Tech - site', 30], ['Emails', 15], ['Planning', 20]] as [$title, $minutes]) {
+            TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 08:00:00')->addMinutes($minutes)]);
+        }
+
+        $fromClient = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class)->call('openActivity', 'partners', 'Others');
+        $fromAsset = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class)->call('openActivity', 'assets', 'Others');
+        $this->assertSame($fromClient->viewData('activityModal')['days'], $fromAsset->viewData('activityModal')['days']);
+        $this->assertSame(['Planning', 'Emails'], array_column($fromClient->viewData('activityModal')['items'], 'title'));
+
+        $fromClient->call('assignActivityItem', 'Emails', $client->id);
+        $activity = $fromClient->viewData('activity');
+        $this->assertSame(['Tudia' => 75, 'Others' => 20], collect($activity['partners']['rows'])->pluck('minutes', 'name')->all());
+        $this->assertSame(['Impactful Tech' => 30, 'Others' => 20], collect($activity['assets']['rows'])->pluck('minutes', 'name')->all());
+        $fromClient->call('switchActivityHub', 'assets')->assertDontSeeHtml('data-activity-item="Emails"')->assertSeeHtml('data-activity-item="Planning"');
     }
 }

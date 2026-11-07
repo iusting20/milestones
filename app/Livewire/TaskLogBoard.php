@@ -1179,7 +1179,7 @@ class TaskLogBoard extends Component
             $dayMinutes = array_sum($minutesByTitle);
             $days[] = [
                 'date' => (string) $date,
-                'heading' => Carbon::parse((string) $date)->format('l j M'),
+                'heading' => strtoupper(Carbon::parse((string) $date)->format('D')),
                 'duration' => $this->formatDuration($dayMinutes),
                 'items' => $this->activityItems($minutesByTitle, $dayMinutes),
             ];

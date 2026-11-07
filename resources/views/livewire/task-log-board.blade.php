@@ -267,7 +267,7 @@
                         @foreach ($activityModal['days'] as $activityDay)
                             <section wire:key="activity-day-{{ $activityModal['hub'] }}-{{ $activityDay['date'] }}" data-activity-day="{{ $activityDay['date'] }}">
                                 <h3 class="border-b border-white/10 pb-1 text-center text-xs font-semibold uppercase tracking-[0.14em] text-muted" data-activity-day-heading>
-                                    {{ $activityDay['heading'] }} <span class="ml-1 normal-case tracking-normal tabular-nums">{{ $activityDay['duration'] }}</span>
+                                    {{ $activityDay['heading'] }} <span class="normal-case tracking-normal tabular-nums">({{ $activityDay['duration'] }})</span>
                                 </h3>
                                 <ul class="divide-y divide-white/10">
                                     @foreach ($activityDay['items'] as $item)

@@ -1137,8 +1137,9 @@ class TaskLogTest extends TestCase
         $this->assertSame(['SN - portal' => 30], array_column($days[1]['items'], 'minutes', 'title'));
 
         $html = $component->html();
-        $this->assertTrue(strpos($html, 'Monday 16 Mar') < strpos($html, 'Wednesday 18 Mar'));
-        $this->assertStringNotContainsString('Tuesday 17 Mar', $html);
+        $this->assertMatchesRegularExpression('/data-activity-day-heading>\s*MON <span[^>]*>\(3h 10m\)<\/span>/', $html);
+        $this->assertMatchesRegularExpression('/data-activity-day-heading>\s*WED <span[^>]*>\(30m\)<\/span>/', $html);
+        $this->assertSame(['MON', 'WED'], array_column($days, 'heading'));
         $this->assertMatchesRegularExpression('/<h3 class="[^"]*text-center[^"]*" data-activity-day-heading>/', $html);
         $this->assertSame(2, substr_count($html, 'data-activity-item="SN - portal"'));
     }

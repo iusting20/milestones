@@ -353,24 +353,24 @@ class ClientWeekBoardTest extends TestCase
         $this->get(route('week-board', ['week' => '2026-W40']))->assertOk()->assertSee('28 Sep-4 Oct');
     }
 
-    public function test_board_shows_cards_of_the_selected_week_and_carries_unfinished_ones(): void
+    public function test_board_shows_cards_of_the_selected_week_and_carries_only_wip(): void
     {
         \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-04 12:00:00', 'Europe/Bucharest')->utc());
         $client = $this->client('Acme');
 
-        foreach ([['Old planned', WeekBoardStatus::Planned, '2026-W44'], ['Old done', WeekBoardStatus::Done, '2026-W44'], ['Now done', WeekBoardStatus::Done, '2026-W45'], ['Next planned', WeekBoardStatus::Planned, '2026-W46']] as $i => [$title, $status, $week]) {
+        foreach ([['Old planned', WeekBoardStatus::Planned, '2026-W44'], ['Old wip', WeekBoardStatus::Wip, '2026-W44'], ['Old done', WeekBoardStatus::Done, '2026-W44'], ['Now done', WeekBoardStatus::Done, '2026-W45'], ['Next planned', WeekBoardStatus::Planned, '2026-W46']] as $i => [$title, $status, $week]) {
             WeekBoardItem::query()->create(['project_id' => $client->id, 'title' => $title, 'status' => $status, 'position' => $i, 'week' => $week]);
         }
 
         Livewire::test(ClientWeekBoard::class)
-            ->assertSee('Old planned')->assertSee('Now done')
-            ->assertDontSee('Old done')->assertDontSee('Next planned');
+            ->assertSee('Old wip')->assertSee('Now done')
+            ->assertDontSee('Old planned')->assertDontSee('Old done')->assertDontSee('Next planned');
 
         Livewire::withQueryParams(['week' => '2026-W44'])->test(ClientWeekBoard::class)
-            ->assertSee('Old planned')->assertSee('Old done')->assertDontSee('Now done');
+            ->assertSee('Old planned')->assertSee('Old wip')->assertSee('Old done')->assertDontSee('Now done');
 
         $component = Livewire::withQueryParams(['week' => '2026-W46'])->test(ClientWeekBoard::class)
-            ->assertSee('Next planned')->assertSee('Old planned')->assertDontSee('Now done')
+            ->assertSee('Next planned')->assertSee('Old wip')->assertDontSee('Old planned')->assertDontSee('Now done')
             ->call('startAdding', $client->id, 'planned')
             ->set('newTitles.'.$client->id.'-planned', 'Added in W46')
             ->call('addCard', $client->id, 'planned');
@@ -378,7 +378,11 @@ class ClientWeekBoardTest extends TestCase
         $this->assertDatabaseHas('week_board_items', ['title' => 'Added in W46', 'week' => '2026-W46']);
         Livewire::withQueryParams(['week' => '2026-W45'])->test(ClientWeekBoard::class)->assertDontSee('Added in W46');
 
-        $old = WeekBoardItem::query()->where('title', 'Old planned')->first();
+        foreach (['2026-W46', '2026-W47', '2026-W52'] as $future) {
+            Livewire::withQueryParams(['week' => $future])->test(ClientWeekBoard::class)->assertDontSee('Old planned');
+        }
+
+        $old = WeekBoardItem::query()->where('title', 'Old wip')->first();
         $component->call('moveCard', $old->id, 'done');
         $this->assertSame('2026-W46', $old->refresh()->week);
         $this->assertNotNull(WeekBoardItem::query()->create(['project_id' => $client->id, 'title' => 'Default', 'status' => WeekBoardStatus::Planned])->week);
@@ -409,27 +413,28 @@ class ClientWeekBoardTest extends TestCase
             ->assertSet('view', 'partners');
 
         $copied = WeekBoardItem::query()->where('week', '2026-W46')->orderBy('id')->get();
-        $this->assertSame(['Older plan', 'Plan A'], $copied->pluck('title')->sort()->values()->all());
+        $this->assertSame(['Plan A'], $copied->pluck('title')->all()); // W44 Planned is not last week's stack
         $this->assertTrue($copied->every(fn ($card) => $card->status === WeekBoardStatus::Planned && $card->project_id === $acme->id && $card->todo_item_id === null));
 
-        // Originals stay in their weeks; the carried originals are hidden in W46 (no duplicates).
+        // Originals stay in their weeks; only the copy shows in W46.
         $this->assertSame(1, $this->countCards($component, 'Plan A'));
-        $this->assertSame(1, $this->countCards($component, 'Older plan'));
+        $this->assertSame(0, $this->countCards($component, 'Older plan'));
         $this->assertSame(1, $this->countCards($component, 'Doing'));
         Livewire::withQueryParams(['week' => '2026-W45'])->test(ClientWeekBoard::class)->assertSee('Plan A')->assertSee('Finished');
 
         $component->call('copyUnfinishedFromLastWeek');
-        $this->assertSame(2, WeekBoardItem::query()->where('week', '2026-W46')->count());
+        $this->assertSame(1, WeekBoardItem::query()->where('week', '2026-W46')->count());
 
-        // Later weeks also show only one of each.
+        // Planned cards (original or copy) do not pre-fill later weeks; carried WIP shows once.
         $later = Livewire::withQueryParams(['week' => '2026-W48'])->test(ClientWeekBoard::class);
-        $this->assertSame(1, $this->countCards($later, 'Plan A'));
+        $this->assertSame(0, $this->countCards($later, 'Plan A'));
+        $this->assertSame(1, $this->countCards($later, 'Doing'));
 
         // Assets view copies only asset cards.
         Livewire::withQueryParams(['week' => '2026-W46', 'view' => 'assets'])->test(ClientWeekBoard::class)
             ->call('copyUnfinishedFromLastWeek');
         $this->assertDatabaseHas('week_board_items', ['project_id' => $asset->id, 'title' => 'Asset plan', 'week' => '2026-W46']);
-        $this->assertSame(3, WeekBoardItem::query()->where('week', '2026-W46')->count());
+        $this->assertSame(2, WeekBoardItem::query()->where('week', '2026-W46')->count());
     }
 
     public function test_copy_unfinished_with_empty_previous_planned_stack_is_a_no_op(): void

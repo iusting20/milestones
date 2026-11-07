@@ -28,10 +28,11 @@ class WeekBoardItem extends Model
     }
 
     /**
-     * Cards of a week: everything created/finished in it, plus Planned/WIP cards
-     * carried over from earlier weeks (unfinished work stays on the board). A carried card
-     * is hidden once a newer card with the same client and title exists up to that week
-     * (e.g. made by "copy unfinished from last week"), so a copy never shows twice.
+     * Cards of a week: every card whose week it is (Planned, WIP or Done), plus WIP cards
+     * carried over from earlier weeks (work in progress stays on the board). Planned cards
+     * never carry: leftovers reach a later week only via "copy unfinished from last week".
+     * A carried WIP card is hidden once a newer card with the same client and title exists
+     * up to that week, so it never shows twice.
      */
     public function scopeVisibleInWeek(\Illuminate\Database\Eloquent\Builder $query, string $week): void
     {
@@ -39,7 +40,7 @@ class WeekBoardItem extends Model
             $q->where('week', $week)
                 ->orWhere(fn ($carried) => $carried
                     ->where('week', '<', $week)
-                    ->whereIn('status', [WeekBoardStatus::Planned, WeekBoardStatus::Wip])
+                    ->where('status', WeekBoardStatus::Wip)
                     ->whereNotExists(fn ($newer) => $newer
                         ->selectRaw('1')
                         ->from('week_board_items as newer')

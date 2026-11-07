@@ -59,7 +59,7 @@ class ClientWeekBoard extends Component
 
     /**
      * Like "copy unfinished milestones from previous day" on /milestones: duplicate the cards
-     * left in the previous week's Planned stack (as that week shows them) into the viewed
+     * left in the previous week's Planned stack into the viewed
      * week's Planned stack. Cards whose client already has a same-titled card this week are
      * skipped, so a second click does nothing; nothing to copy is a silent no-op.
      */

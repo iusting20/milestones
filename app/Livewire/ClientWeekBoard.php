@@ -57,6 +57,64 @@ class ClientWeekBoard extends Component
         return WeekBoardItem::normalizeWeek($this->week) ?? Clock::currentWeek();
     }
 
+    /**
+     * Like "copy unfinished milestones from previous day" on /milestones: duplicate the cards
+     * left in the previous week's Planned stack (as that week shows them) into the viewed
+     * week's Planned stack. Cards whose client already has a same-titled card this week are
+     * skipped, so a second click does nothing; nothing to copy is a silent no-op.
+     */
+    public function copyUnfinishedFromLastWeek(): void
+    {
+        $week = $this->weekKey();
+        $previousWeek = WeekBoardItem::weekMonday($week)->subWeek()->format('o-\WW');
+        $projectIds = $this->clientsQuery()->pluck('id');
+
+        $leftovers = WeekBoardItem::query()
+            ->whereIn('project_id', $projectIds)
+            ->visibleInWeek($previousWeek)
+            ->where('status', WeekBoardStatus::Planned)
+            ->orderBy('project_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+
+        if ($leftovers->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($leftovers, $week): void {
+            $existing = WeekBoardItem::query()
+                ->whereIn('project_id', $leftovers->pluck('project_id')->unique())
+                ->where('week', $week)
+                ->get(['project_id', 'title'])
+                ->map(fn (WeekBoardItem $item): string => $item->project_id."\n".$item->title)
+                ->all();
+
+            foreach ($leftovers as $card) {
+                $key = $card->project_id."\n".$card->title;
+
+                if (in_array($key, $existing, true)) {
+                    continue;
+                }
+
+                $max = (int) WeekBoardItem::query()
+                    ->where('project_id', $card->project_id)
+                    ->where('status', WeekBoardStatus::Planned)
+                    ->max('position');
+
+                WeekBoardItem::query()->create([
+                    'project_id' => $card->project_id,
+                    'title' => $card->title,
+                    'status' => WeekBoardStatus::Planned,
+                    'position' => $max + 1,
+                    'week' => $week,
+                ]);
+
+                $existing[] = $key;
+            }
+        });
+    }
+
     public function startAdding(int $projectId, string $status): void
     {
         $this->addingLane = $projectId.'-'.$status;

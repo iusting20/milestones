@@ -182,5 +182,15 @@
                 </div>
             </div>
         </div>
+
+        <div class="mt-4 flex justify-start">
+            <button type="button"
+                    wire:click="copyUnfinishedFromLastWeek"
+                    data-copy-unfinished-week
+                    class="rounded px-1 text-xs text-muted/70 transition hover:text-link focus-visible:text-link"
+                    aria-label="Copy unfinished cards from last week">
+                + copy unfinished from last week
+            </button>
+        </div>
     @endif
 </div>

@@ -384,4 +384,70 @@ class ClientWeekBoardTest extends TestCase
         $this->assertNotNull(WeekBoardItem::query()->create(['project_id' => $client->id, 'title' => 'Default', 'status' => WeekBoardStatus::Planned])->week);
         $this->assertSame('2026-W45', WeekBoardItem::query()->where('title', 'Default')->value('week'));
     }
+
+    public function test_copy_unfinished_button_sits_below_the_board(): void
+    {
+        $this->client('Acme');
+
+        $html = Livewire::test(ClientWeekBoard::class)->assertSee('+ copy unfinished from last week')->html();
+        $this->assertGreaterThan(strrpos($html, 'data-sortable'), strpos($html, 'data-copy-unfinished-week'));
+    }
+
+    public function test_copy_unfinished_copies_previous_week_planned_cards_only_once(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-11-11 12:00:00', 'Europe/Bucharest')->utc());
+        $acme = $this->client('Acme');
+        $asset = $this->client('Neo Wars', 1, 'assets');
+
+        foreach ([[$acme, 'Plan A', WeekBoardStatus::Planned, '2026-W45'], [$acme, 'Doing', WeekBoardStatus::Wip, '2026-W45'], [$acme, 'Finished', WeekBoardStatus::Done, '2026-W45'], [$acme, 'Older plan', WeekBoardStatus::Planned, '2026-W44'], [$acme, 'Too old done', WeekBoardStatus::Done, '2026-W44'], [$asset, 'Asset plan', WeekBoardStatus::Planned, '2026-W45']] as $i => [$project, $title, $status, $week]) {
+            WeekBoardItem::query()->create(['project_id' => $project->id, 'title' => $title, 'status' => $status, 'position' => $i, 'week' => $week]);
+        }
+
+        $component = Livewire::withQueryParams(['week' => '2026-W46', 'view' => 'partners'])->test(ClientWeekBoard::class)
+            ->call('copyUnfinishedFromLastWeek')
+            ->assertSet('week', '2026-W46')
+            ->assertSet('view', 'partners');
+
+        $copied = WeekBoardItem::query()->where('week', '2026-W46')->orderBy('id')->get();
+        $this->assertSame(['Older plan', 'Plan A'], $copied->pluck('title')->sort()->values()->all());
+        $this->assertTrue($copied->every(fn ($card) => $card->status === WeekBoardStatus::Planned && $card->project_id === $acme->id && $card->todo_item_id === null));
+
+        // Originals stay in their weeks; the carried originals are hidden in W46 (no duplicates).
+        $this->assertSame(1, $this->countCards($component, 'Plan A'));
+        $this->assertSame(1, $this->countCards($component, 'Older plan'));
+        $this->assertSame(1, $this->countCards($component, 'Doing'));
+        Livewire::withQueryParams(['week' => '2026-W45'])->test(ClientWeekBoard::class)->assertSee('Plan A')->assertSee('Finished');
+
+        $component->call('copyUnfinishedFromLastWeek');
+        $this->assertSame(2, WeekBoardItem::query()->where('week', '2026-W46')->count());
+
+        // Later weeks also show only one of each.
+        $later = Livewire::withQueryParams(['week' => '2026-W48'])->test(ClientWeekBoard::class);
+        $this->assertSame(1, $this->countCards($later, 'Plan A'));
+
+        // Assets view copies only asset cards.
+        Livewire::withQueryParams(['week' => '2026-W46', 'view' => 'assets'])->test(ClientWeekBoard::class)
+            ->call('copyUnfinishedFromLastWeek');
+        $this->assertDatabaseHas('week_board_items', ['project_id' => $asset->id, 'title' => 'Asset plan', 'week' => '2026-W46']);
+        $this->assertSame(3, WeekBoardItem::query()->where('week', '2026-W46')->count());
+    }
+
+    public function test_copy_unfinished_with_empty_previous_planned_stack_is_a_no_op(): void
+    {
+        $acme = $this->client('Acme');
+        WeekBoardItem::query()->create(['project_id' => $acme->id, 'title' => 'Done one', 'status' => WeekBoardStatus::Done, 'position' => 1, 'week' => '2026-W45']);
+
+        Livewire::withQueryParams(['week' => '2026-W46'])->test(ClientWeekBoard::class)
+            ->call('copyUnfinishedFromLastWeek')
+            ->assertHasNoErrors();
+
+        $this->assertSame(1, WeekBoardItem::query()->count());
+    }
+
+    private function countCards($component, string $title): int
+    {
+        return WeekBoardItem::query()->where('title', $title)->get()
+            ->filter(fn ($card) => str_contains($component->html(), 'wire:key="card-'.$card->id.'"'))
+            ->count();
+    }
 }

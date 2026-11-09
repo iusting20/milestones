@@ -24,10 +24,14 @@ class ReadTest extends TestCase
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
-    public function test_nav_includes_read(): void
+    public function test_read_is_hidden_from_nav(): void
     {
-        $this->get(route('milestones'))
-            ->assertSeeInOrder(['Comms', 'Read', 'Links']);
+        $html = $this->get(route('milestones'))->assertOk()->getContent();
+
+        $this->assertDoesNotMatchRegularExpression(
+            '#<a[^>]+href="[^"]*/read"[^>]*>\s*Read\s*</a>#',
+            $html,
+        );
     }
 
     public function test_unauthenticated_read_redirects_to_login(): void
@@ -109,8 +113,8 @@ class ReadTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->call('startSessionNow')
-            ->assertSee('Stop session')
-            ->assertSee('running');
+            ->assertSee('stop')
+            ->assertSee('live');
 
         $session = ReadingSession::query()->first();
         $this->assertNotNull($session);
@@ -120,7 +124,7 @@ class ReadTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->call('stopSession', $session->id)
-            ->assertDontSee('running');
+            ->assertDontSee('live');
 
         $session->refresh();
         $this->assertNotNull($session->finished_at);
@@ -178,7 +182,7 @@ class ReadTest extends TestCase
         $this->assertDatabaseMissing('books', ['id' => $book->id]);
     }
 
-    public function test_week_and_month_totals_count_completed_sessions(): void
+    public function test_today_and_week_totals_count_completed_sessions(): void
     {
         $this->travelTo(Carbon::parse('2026-11-09 12:00:00', Clock::timezone()));
 
@@ -195,13 +199,14 @@ class ReadTest extends TestCase
         ]);
         ReadingSession::query()->create([
             'book_id' => $book->id,
-            'started_at' => Carbon::parse('2026-10-15 09:00:00', Clock::timezone())->utc(),
-            'finished_at' => Carbon::parse('2026-10-15 09:30:00', Clock::timezone())->utc(),
+            'started_at' => Carbon::parse('2026-11-08 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-08 09:30:00', Clock::timezone())->utc(),
         ]);
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
-            ->assertSee('1h') // week + book total at least
-            ->assertSee('This week')
-            ->assertSee('This month');
+            ->assertSee('today')
+            ->assertSee('week')
+            ->assertSee('1h')
+            ->assertDontSee('This month');
     }
 }

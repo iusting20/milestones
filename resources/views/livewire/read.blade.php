@@ -1,303 +1,240 @@
-<div class="mx-auto flex max-w-6xl flex-col gap-6 px-3 py-6 sm:px-4 lg:flex-row">
-    {{-- Books sidebar --}}
-    <aside class="w-full shrink-0 lg:w-72">
-        <div class="mb-3 flex items-center justify-between gap-2">
-            <h1 class="text-xl font-bold text-body">Read</h1>
+<div class="mx-auto flex max-w-5xl flex-col gap-8 px-3 py-6 sm:px-4 lg:flex-row lg:gap-10">
+    {{-- Books list --}}
+    <aside class="w-full shrink-0 lg:w-56">
+        <div class="mb-4 flex items-baseline justify-between gap-2">
+            <h1 class="text-lg font-bold text-body">Read</h1>
             <button type="button" wire:click="startAddBook"
-                    class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
-                + Book
-            </button>
+                    class="text-xs text-muted transition hover:text-link">+ book</button>
         </div>
 
-        <div class="mb-4 grid grid-cols-2 gap-2 text-xs text-muted">
-            <div class="rounded border border-white/10 bg-sidebar px-2 py-1.5">
-                <div class="uppercase tracking-wide text-[10px] text-faint">This week</div>
-                <div class="font-semibold text-body tabular-nums">{{ $pageTotals['weekDuration'] }}</div>
+        <div class="mb-4 flex gap-4 text-xs text-muted">
+            <div>
+                <span class="text-faint">today</span>
+                <span class="ml-1 tabular-nums text-body">{{ $pageTotals['todayDuration'] }}</span>
             </div>
-            <div class="rounded border border-white/10 bg-sidebar px-2 py-1.5">
-                <div class="uppercase tracking-wide text-[10px] text-faint">This month</div>
-                <div class="font-semibold text-body tabular-nums">{{ $pageTotals['monthDuration'] }}</div>
+            <div>
+                <span class="text-faint">week</span>
+                <span class="ml-1 tabular-nums text-body">{{ $pageTotals['weekDuration'] }}</span>
             </div>
         </div>
 
         @if ($addingBook)
-            <form wire:submit="addBook" class="mb-3 space-y-2 rounded border border-white/10 bg-panel p-3">
+            <form wire:submit="addBook" class="mb-4 space-y-2">
                 <input type="text" wire:model="newBookTitle" placeholder="Title" required
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                       class="w-full border-b border-white/15 bg-transparent px-0 py-1.5 text-sm focus:border-link focus:outline-none" />
                 @error('newBookTitle') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                <input type="text" wire:model="newBookAuthor" placeholder="Author (optional)"
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                <input type="number" min="0" wire:model="newBookTotalPages" placeholder="Total pages (optional)"
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                <input type="text" wire:model="newBookAuthor" placeholder="Author"
+                       class="w-full border-b border-white/10 bg-transparent px-0 py-1.5 text-sm text-muted focus:border-link focus:outline-none" />
+                <input type="number" min="0" wire:model="newBookTotalPages" placeholder="Pages"
+                       class="w-full border-b border-white/10 bg-transparent px-0 py-1.5 text-sm text-muted focus:border-link focus:outline-none" />
                 @error('newBookTotalPages') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                <div class="flex gap-2">
-                    <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Add</button>
-                    <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+                <div class="flex gap-3 pt-1">
+                    <button type="submit" class="text-xs text-link hover:underline">Add</button>
+                    <button type="button" wire:click="cancelForms" class="text-xs text-muted">Cancel</button>
                 </div>
             </form>
         @endif
 
-        <ul class="space-y-1">
+        <ul class="space-y-0.5">
             @forelse ($books as $book)
                 <li wire:key="book-{{ $book->id }}">
                     <button type="button" wire:click="selectBook({{ $book->id }})"
                             @class([
-                                'flex w-full flex-col rounded border px-3 py-2 text-left text-sm transition',
-                                'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
-                                'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
+                                'w-full rounded px-2 py-1.5 text-left text-sm transition',
+                                'bg-white/5 text-body' => $selected?->id === $book->id,
+                                'text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
-                        <span class="font-medium text-body">{{ $book->title }}</span>
-                        <span class="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
+                        <span class="block truncate font-medium">{{ $book->title }}</span>
+                        <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-faint">
                             @if ($book->author)
-                                <span>{{ $book->author }}</span>
+                                <span class="truncate">{{ $book->author }}</span>
                             @endif
-                            <span class="uppercase tracking-wide {{ $book->isFinished() ? 'text-check' : 'text-link' }}">
-                                {{ $book->status }}
-                            </span>
-                            @if ($book->reading_sessions_count)
-                                <span>{{ $book->reading_sessions_count }} sess</span>
+                            @if ($book->isFinished())
+                                <span>finished</span>
                             @endif
                             @if ($book->readingSessions->isNotEmpty())
-                                <span class="text-mark">● live</span>
+                                <span class="text-mark">●</span>
                             @endif
                         </span>
                     </button>
                 </li>
             @empty
-                <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-sm text-muted">
-                    No books yet. Add one to start tracking.
-                </li>
+                <li class="px-2 py-6 text-sm text-muted">No books yet.</li>
             @endforelse
         </ul>
     </aside>
 
-    {{-- Book detail --}}
+    {{-- Book detail — minimal --}}
     <div class="min-w-0 flex-1">
         @if (! $selected)
-            <div class="rounded border border-dashed border-white/15 px-4 py-16 text-center text-muted">
-                Select or add a book to log reading sessions.
-            </div>
+            <p class="py-12 text-sm text-muted">Select or add a book.</p>
         @else
-            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 class="text-2xl font-bold text-body">{{ $selected->title }}</h2>
-                    <p class="mt-1 text-sm text-muted">
-                        @if ($selected->author)
-                            {{ $selected->author }}
-                            <span class="text-faint">·</span>
-                        @endif
-                        @if ($selected->total_pages)
-                            {{ $selected->total_pages }} pages
-                            <span class="text-faint">·</span>
-                        @endif
-                        <span class="uppercase tracking-wide {{ $selected->isFinished() ? 'text-check' : 'text-link' }}">
-                            {{ $selected->status }}
-                        </span>
-                    </p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    @if ($selected->isReading())
-                        <button type="button" wire:click="markBookFinished({{ $selected->id }})"
-                                class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Mark finished</button>
-                    @else
-                        <button type="button" wire:click="markBookReading({{ $selected->id }})"
-                                class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Mark reading</button>
-                    @endif
-                    <button type="button" wire:click="startEditBook({{ $selected->id }})"
-                            class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Edit</button>
-                    <button type="button"
-                            wire:click="deleteBook({{ $selected->id }})"
-                            wire:confirm="Delete this book and all its sessions?"
-                            class="rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">Delete</button>
-                </div>
-            </div>
-
             @if ($editingBookId === $selected->id)
-                <form wire:submit="saveEditBook" class="mb-4 flex flex-col gap-2 rounded border border-white/10 bg-panel p-3 sm:flex-row sm:flex-wrap sm:items-end">
-                    <div class="sm:w-48">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Title</label>
-                        <input type="text" wire:model="editBookTitle"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                    </div>
-                    <div class="sm:w-40">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Author</label>
-                        <input type="text" wire:model="editBookAuthor"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                    </div>
-                    <div class="sm:w-28">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
-                        <input type="number" min="0" wire:model="editBookTotalPages"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                    </div>
-                    <div class="sm:w-32">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Status</label>
+                <form wire:submit="saveEditBook" class="mb-6 space-y-2">
+                    <input type="text" wire:model="editBookTitle"
+                           class="w-full border-b border-white/15 bg-transparent px-0 py-1.5 text-lg font-semibold focus:border-link focus:outline-none" />
+                    <div class="flex flex-wrap gap-4">
+                        <input type="text" wire:model="editBookAuthor" placeholder="Author"
+                               class="border-b border-white/10 bg-transparent px-0 py-1 text-sm text-muted focus:border-link focus:outline-none sm:w-40" />
+                        <input type="number" min="0" wire:model="editBookTotalPages" placeholder="Pages"
+                               class="w-24 border-b border-white/10 bg-transparent px-0 py-1 text-sm text-muted focus:border-link focus:outline-none" />
                         <select wire:model="editBookStatus"
-                                class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none">
+                                class="border-b border-white/10 bg-transparent px-0 py-1 text-sm text-muted focus:border-link focus:outline-none">
                             <option value="reading">reading</option>
                             <option value="finished">finished</option>
                         </select>
                     </div>
-                    <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save</button>
-                    <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+                    <div class="flex gap-3 pt-1">
+                        <button type="submit" class="text-xs text-link hover:underline">Save</button>
+                        <button type="button" wire:click="cancelForms" class="text-xs text-muted">Cancel</button>
+                    </div>
                 </form>
+            @else
+                <div class="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h2 class="text-xl font-semibold text-body">{{ $selected->title }}</h2>
+                    @if ($selected->author)
+                        <span class="text-sm text-muted">{{ $selected->author }}</span>
+                    @endif
+                    @if ($selected->isFinished())
+                        <span class="text-[11px] uppercase tracking-wide text-faint">finished</span>
+                    @endif
+                </div>
+
+                <div class="mb-2 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                    <span class="tabular-nums">{{ $bookTotals['totalDuration'] }}</span>
+                    <span class="text-faint">·</span>
+                    <span>{{ $bookTotals['sessionCount'] }} {{ $bookTotals['sessionCount'] === 1 ? 'session' : 'sessions' }}</span>
+                    @if ($bookTotals['pagesRead'])
+                        <span class="text-faint">·</span>
+                        <span>{{ $bookTotals['pagesRead'] }} pages</span>
+                    @endif
+                    @if ($bookTotals['lastRead'])
+                        <span class="text-faint">·</span>
+                        <span>last {{ $bookTotals['lastRead']->timezone($timezone)->format('j M') }}</span>
+                    @endif
+                    @if ($selected->total_pages)
+                        <span class="text-faint">·</span>
+                        <span>{{ $selected->total_pages }} pp</span>
+                    @endif
+                </div>
+
+                <div class="mb-5 flex flex-wrap items-center gap-x-3 text-[11px] text-faint">
+                    @if ($runningSession)
+                        <button type="button" wire:click="stopSession({{ $runningSession->id }})"
+                                class="text-mark hover:underline">stop</button>
+                        <span>since {{ $runningSession->started_at->timezone($timezone)->format('H:i') }}</span>
+                    @else
+                        <button type="button" wire:click="startSessionNow"
+                                class="hover:text-link">start</button>
+                    @endif
+                    <button type="button" wire:click="startAddSession" class="hover:text-link">+ session</button>
+                    <button type="button" wire:click="startEditBook({{ $selected->id }})" class="hover:text-body">edit</button>
+                    @if ($selected->isReading())
+                        <button type="button" wire:click="markBookFinished({{ $selected->id }})" class="hover:text-body">finish</button>
+                    @else
+                        <button type="button" wire:click="markBookReading({{ $selected->id }})" class="hover:text-body">reopen</button>
+                    @endif
+                    <button type="button"
+                            wire:click="deleteBook({{ $selected->id }})"
+                            wire:confirm="Delete this book and all its sessions?"
+                            class="hover:text-red-400">delete</button>
+                </div>
             @endif
 
-            <div class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Sessions</div>
-                    <div class="text-lg font-semibold tabular-nums">{{ $bookTotals['sessionCount'] }}</div>
-                </div>
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Time read</div>
-                    <div class="text-lg font-semibold tabular-nums">{{ $bookTotals['totalDuration'] }}</div>
-                </div>
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Pages logged</div>
-                    <div class="text-lg font-semibold tabular-nums">{{ $bookTotals['pagesRead'] }}</div>
-                </div>
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Last read</div>
-                    <div class="text-sm font-semibold">
-                        @if ($bookTotals['lastRead'])
-                            {{ $bookTotals['lastRead']->timezone($timezone)->format('j M Y, H:i') }}
-                        @else
-                            —
-                        @endif
-                    </div>
-                </div>
-            </div>
-
-            <div class="mb-4 flex flex-wrap items-center gap-2">
-                @if ($runningSession)
-                    <button type="button" wire:click="stopSession({{ $runningSession->id }})"
-                            class="rounded bg-mark px-3 py-1.5 text-sm font-medium text-black">
-                        Stop session
-                    </button>
-                    <span class="text-xs text-muted">
-                        Started {{ $runningSession->started_at->timezone($timezone)->format('j M H:i') }}
-                    </span>
-                @else
-                    <button type="button" wire:click="startSessionNow"
-                            class="rounded bg-check px-3 py-1.5 text-sm font-medium text-white">
-                        Start session now
-                    </button>
-                @endif
-                <button type="button" wire:click="startAddSession"
-                        class="rounded border border-white/10 px-3 py-1.5 text-sm text-link hover:bg-panel">
-                    + Log session
-                </button>
-            </div>
-
             @if ($addingSession)
-                <form wire:submit="addSession" class="mb-4 space-y-2 rounded border border-white/10 bg-panel p-3">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <form wire:submit="addSession" class="mb-5 space-y-2 border-l border-white/10 pl-3">
+                    <div class="flex flex-wrap gap-3">
                         <div>
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Start</label>
+                            <label class="mb-0.5 block text-[10px] text-faint">Start</label>
                             <input type="datetime-local" wire:model="newSessionStartedAt" required
-                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                                   class="border-b border-white/15 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
                             @error('newSessionStartedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                         </div>
                         <div>
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Finish</label>
+                            <label class="mb-0.5 block text-[10px] text-faint">Finish</label>
                             <input type="datetime-local" wire:model="newSessionFinishedAt" required
-                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                                   class="border-b border-white/15 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
                             @error('newSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                         </div>
-                        <div class="sm:w-28">
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
+                        <div>
+                            <label class="mb-0.5 block text-[10px] text-faint">Pages</label>
                             <input type="number" min="0" wire:model="newSessionPagesRead" placeholder="—"
-                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                            @error('newSessionPagesRead') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                                   class="w-20 border-b border-white/10 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
                         </div>
-                        <div class="sm:flex-1">
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
+                        <div class="min-w-[8rem] flex-1">
+                            <label class="mb-0.5 block text-[10px] text-faint">Note</label>
                             <input type="text" wire:model="newSessionNote" placeholder="Optional"
-                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                                   class="w-full border-b border-white/10 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save session</button>
-                        <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+                    <div class="flex gap-3">
+                        <button type="submit" class="text-xs text-link hover:underline">Save</button>
+                        <button type="button" wire:click="cancelForms" class="text-xs text-muted">Cancel</button>
                     </div>
                 </form>
             @endif
 
-            <h3 class="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Sessions</h3>
-            <ul class="space-y-2">
+            <ul class="divide-y divide-white/5">
                 @forelse ($sessions as $session)
-                    <li wire:key="session-{{ $session->id }}"
-                        class="rounded border border-white/10 bg-sidebar px-3 py-2">
+                    <li wire:key="session-{{ $session->id }}" class="py-2">
                         @if ($editingSessionId === $session->id)
                             <form wire:submit="saveEditSession" class="space-y-2">
-                                <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                                    <div>
-                                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Start</label>
-                                        <input type="datetime-local" wire:model="editSessionStartedAt" required
-                                               class="rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                                        @error('editSessionStartedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                                    </div>
-                                    <div>
-                                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Finish (empty = running)</label>
-                                        <input type="datetime-local" wire:model="editSessionFinishedAt"
-                                               class="rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                                        @error('editSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                                    </div>
-                                    <div class="sm:w-28">
-                                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
-                                        <input type="number" min="0" wire:model="editSessionPagesRead"
-                                               class="w-full rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                                    </div>
-                                    <div class="sm:flex-1">
-                                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
-                                        <input type="text" wire:model="editSessionNote"
-                                               class="w-full rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                                    </div>
+                                <div class="flex flex-wrap gap-3">
+                                    <input type="datetime-local" wire:model="editSessionStartedAt" required
+                                           class="border-b border-white/15 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
+                                    <input type="datetime-local" wire:model="editSessionFinishedAt"
+                                           class="border-b border-white/15 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
+                                    <input type="number" min="0" wire:model="editSessionPagesRead" placeholder="Pages"
+                                           class="w-20 border-b border-white/10 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
+                                    <input type="text" wire:model="editSessionNote" placeholder="Note"
+                                           class="min-w-[8rem] flex-1 border-b border-white/10 bg-transparent px-0 py-1 text-sm focus:border-link focus:outline-none" />
                                 </div>
-                                <div class="flex gap-2">
-                                    <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save</button>
-                                    <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+                                @error('editSessionStartedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                                @error('editSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                                <div class="flex gap-3">
+                                    <button type="submit" class="text-xs text-link hover:underline">Save</button>
+                                    <button type="button" wire:click="cancelForms" class="text-xs text-muted">Cancel</button>
                                 </div>
                             </form>
                         @else
-                            <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                <div class="min-w-0">
-                                    <div class="text-sm text-body">
-                                        {{ $session->started_at->timezone($timezone)->format('D j M Y, H:i') }}
+                            <div class="group flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                <div class="min-w-0 text-sm">
+                                    <span class="text-body">{{ $session->started_at->timezone($timezone)->format('j M') }}</span>
+                                    <span class="ml-2 tabular-nums text-muted">
+                                        {{ $session->started_at->timezone($timezone)->format('H:i') }}
                                         @if ($session->isRunning())
-                                            <span class="ml-1 rounded bg-mark/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mark">running</span>
+                                            <span class="text-mark">→ …</span>
                                         @else
-                                            <span class="text-muted">→ {{ $session->finished_at->timezone($timezone)->format('H:i') }}</span>
-                                            <span class="ml-2 font-semibold tabular-nums text-link">{{ $this->formatDuration($session->durationMinutes()) }}</span>
+                                            – {{ $session->finished_at->timezone($timezone)->format('H:i') }}
                                         @endif
-                                    </div>
-                                    <div class="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted">
-                                        @if ($session->pages_read)
-                                            <span>{{ $session->pages_read }} pages</span>
-                                        @endif
-                                        @if ($session->note)
-                                            <span>{{ $session->note }}</span>
-                                        @endif
-                                    </div>
-                                </div>
-                                <div class="flex gap-2">
+                                    </span>
                                     @if ($session->isRunning())
-                                        <button type="button" wire:click="stopSession({{ $session->id }})"
-                                                class="text-xs text-mark hover:underline">stop</button>
+                                        <span class="ml-2 text-[10px] uppercase tracking-wide text-mark">live</span>
+                                    @else
+                                        <span class="ml-2 tabular-nums text-link">{{ $this->formatDuration($session->durationMinutes()) }}</span>
                                     @endif
-                                    <button type="button" wire:click="startEditSession({{ $session->id }})"
-                                            class="text-xs text-muted hover:text-body">edit</button>
+                                    @if ($session->pages_read)
+                                        <span class="ml-2 text-xs text-faint">{{ $session->pages_read }}p</span>
+                                    @endif
+                                    @if ($session->note)
+                                        <span class="ml-2 text-xs text-faint">{{ $session->note }}</span>
+                                    @endif
+                                </div>
+                                <div class="flex gap-2 text-[11px] text-faint opacity-60 transition group-hover:opacity-100">
+                                    @if ($session->isRunning())
+                                        <button type="button" wire:click="stopSession({{ $session->id }})" class="hover:text-mark">stop</button>
+                                    @endif
+                                    <button type="button" wire:click="startEditSession({{ $session->id }})" class="hover:text-body">edit</button>
                                     <button type="button"
                                             wire:click="deleteSession({{ $session->id }})"
                                             wire:confirm="Delete this session?"
-                                            class="text-xs text-red-400/80 hover:text-red-400">delete</button>
+                                            class="hover:text-red-400">×</button>
                                 </div>
                             </div>
                         @endif
                     </li>
                 @empty
-                    <li class="rounded border border-dashed border-white/15 px-3 py-8 text-center text-sm text-muted">
-                        No sessions yet. Start one now or log a past session.
-                    </li>
+                    <li class="py-6 text-sm text-muted">No sessions yet.</li>
                 @endforelse
             </ul>
         @endif

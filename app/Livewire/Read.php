@@ -379,15 +379,15 @@ class Read extends Component
         }
 
         $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
-        $monthStart = Clock::now()->startOfMonth()->utc();
+        $todayStart = Clock::now()->startOfDay()->utc();
         $nowUtc = Clock::now()->utc();
 
         $pageTotals = [
             'weekMinutes' => $this->sumMinutesBetween($weekStart, $nowUtc),
-            'monthMinutes' => $this->sumMinutesBetween($monthStart, $nowUtc),
+            'todayMinutes' => $this->sumMinutesBetween($todayStart, $nowUtc),
         ];
         $pageTotals['weekDuration'] = $this->formatDuration($pageTotals['weekMinutes']);
-        $pageTotals['monthDuration'] = $this->formatDuration($pageTotals['monthMinutes']);
+        $pageTotals['todayDuration'] = $this->formatDuration($pageTotals['todayMinutes']);
 
         return view('livewire.read', [
             'books' => $books,

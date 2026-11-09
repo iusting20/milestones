@@ -14,6 +14,8 @@ class Read extends Component
 {
     public ?int $selectedBookId = null;
 
+    public bool $editMode = false;
+
     public bool $addingBook = false;
 
     public string $newBookTitle = '';

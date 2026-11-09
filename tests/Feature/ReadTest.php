@@ -247,5 +247,37 @@ class ReadTest extends TestCase
         // Book total includes full running span (11h) + 30m = 11h 30m
         $this->assertStringContainsString('11h 30m', $html);
     }
-}
+    public function test_edit_controls_hidden_until_cog_toggled(): void
+    {
+        $book = Book::query()->create([
+            'title' => 'Cog Book',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-09 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-09 09:20:00', Clock::timezone())->utc(),
+        ]);
 
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->assertSet('editMode', false)
+            ->assertDontSee('Mark finished')
+            ->assertDontSeeHtml('wire:click="startEditBook')
+            ->assertDontSeeHtml('wire:click="deleteBook')
+            ->assertDontSeeHtml('wire:click="startEditSession')
+            ->assertDontSeeHtml('wire:click="deleteSession')
+            ->assertSeeHtml('Show edit controls')
+            ->assertSee('Start session now')
+            ->assertSee('+ Log session')
+            ->set('editMode', true)
+            ->assertSee('Mark finished')
+            ->assertSeeHtml('wire:click="startEditBook')
+            ->assertSeeHtml('wire:click="deleteBook')
+            ->assertSeeHtml('wire:click="startEditSession')
+            ->assertSeeHtml('wire:click="deleteSession')
+            ->assertSeeHtml('Hide edit controls')
+            ->assertSee('Start session now')
+            ->assertSee('+ Log session');
+    }
+}

@@ -39,12 +39,17 @@
             </form>
         @endif
 
-        <ul class="space-y-1" x-data="bookSortList()" x-init="init()">
+        <ul class="space-y-1" x-data="bookSortList()">
             @forelse ($books as $book)
-                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}">
+                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" class="relative">
+                    <span data-drag-handle aria-label="Drag to reorder"
+                          class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-center text-faint hover:text-muted"
+                          style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
+                        @include('livewire.partials.drag-handle')
+                    </span>
                     <button type="button" wire:click="selectBook({{ $book->id }})"
                             @class([
-                                'flex w-full flex-col rounded border px-3 py-2 text-left text-sm transition',
+                                'flex w-full flex-col rounded border py-2 pl-3 pr-10 text-left text-sm transition',
                                 'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
                                 'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
@@ -72,22 +77,30 @@
             function bookSortList() {
                 return {
                     init() {
-                        if (this.$el._bookSortable || ! window.Sortable) {
-                            return;
-                        }
-                        this.$el._bookSortable = window.Sortable.create(this.$el, {
-                            draggable: '[data-sort-item]',
-                            animation: 150,
-                            ghostClass: 'opacity-40',
-                            delay: 200,
-                            delayOnTouchOnly: true,
-                            touchStartThreshold: 5,
-                            onEnd: () => {
-                                const ids = [...this.$el.querySelectorAll(':scope > [data-sort-item]')]
-                                    .map((el) => Number(el.dataset.sortItem));
-                                this.$wire.reorderBooks(ids);
-                            },
-                        });
+                        const boot = () => {
+                            if (this.$el._bookSortable) {
+                                return;
+                            }
+                            if (! window.Sortable) {
+                                setTimeout(boot, 100);
+                                return;
+                            }
+                            this.$el._bookSortable = window.Sortable.create(this.$el, {
+                                draggable: '[data-sort-item]',
+                                handle: '[data-drag-handle]',
+                                animation: 150,
+                                ghostClass: 'opacity-40',
+                                forceFallback: true,
+                                fallbackOnBody: true,
+                                fallbackTolerance: 3,
+                                onEnd: () => {
+                                    const ids = [...this.$el.querySelectorAll(':scope > [data-sort-item]')]
+                                        .map((el) => Number(el.dataset.sortItem));
+                                    this.$wire.reorderBooks(ids);
+                                },
+                            });
+                        };
+                        boot();
                     },
                 };
             }

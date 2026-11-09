@@ -191,8 +191,6 @@
                         Stop session
                     </button>
                     <span class="text-xs text-muted">
-                        Started {{ $runningSession->started_at->timezone($timezone)->format('j M H:i') }}
-                        ·
                         <span class="font-semibold tabular-nums text-mark"
                               x-data="elapsedClock(@js($runningSession->started_at->utc()->toIso8601String()))"
                               x-init="start()"

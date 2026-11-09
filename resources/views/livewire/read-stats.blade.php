@@ -31,9 +31,6 @@
                                                 'right-0' => $dayIndex > 4,
                                                 'left-1/2 -translate-x-1/2' => $dayIndex >= 2 && $dayIndex <= 4,
                                             ])>
-                                            <div class="mb-1 font-semibold text-body">
-                                                {{ $day['label'] }} {{ $day['date'] }} · {{ $t === '—' ? 'No type' : 'Type '.$t }} · {{ \App\Livewire\ReadStats::formatMinutes($m) }}
-                                            </div>
                                             <ul class="list-disc space-y-0.5 pl-4 text-muted">
                                                 @foreach ($day['books'][$t] as $b)
                                                     <li><span class="text-body">{{ $b['title'] }}</span> · {{ \App\Livewire\ReadStats::formatMinutes($b['minutes']) }}</li>

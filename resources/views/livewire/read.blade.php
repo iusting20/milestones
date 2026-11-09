@@ -39,9 +39,9 @@
             </form>
         @endif
 
-        <ul class="space-y-1" x-data="bookSortList()" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)">
+        <ul class="space-y-1" x-data="bookSortList()" x-init="init()">
             @forelse ($books as $book)
-                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" draggable="true" x-on:dragstart="start($event)" x-on:dragend="end()" style="cursor:grab">
+                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}">
                     <button type="button" wire:click="selectBook({{ $book->id }})"
                             @class([
                                 'flex w-full flex-col rounded border px-3 py-2 text-left text-sm transition',
@@ -74,36 +74,23 @@
         <script>
             function bookSortList() {
                 return {
-                    dragEl: null,
-                    start(event) {
-                        this.dragEl = event.target.closest('[data-sort-item]');
-                        event.dataTransfer.effectAllowed = 'move';
-                        event.dataTransfer.setData('text/plain', this.dragEl.dataset.sortItem);
-                        this.dragEl.classList.add('opacity-40');
-                    },
-                    over(event) {
-                        const item = event.target.closest('[data-sort-item]');
-                        if (! this.dragEl || ! item || item === this.dragEl || item.parentElement !== this.dragEl.parentElement) {
+                    init() {
+                        if (this.$el._bookSortable || ! window.Sortable) {
                             return;
                         }
-                        const rect = item.getBoundingClientRect();
-                        const after = event.clientY > rect.top + rect.height / 2;
-                        item.parentElement.insertBefore(this.dragEl, after ? item.nextSibling : item);
-                    },
-                    end() {
-                        if (this.dragEl) {
-                            this.dragEl.classList.remove('opacity-40');
-                        }
-                    },
-                    drop(event) {
-                        if (! this.dragEl) {
-                            return;
-                        }
-                        this.dragEl.classList.remove('opacity-40');
-                        const ids = [...event.currentTarget.querySelectorAll(':scope > [data-sort-item]')]
-                            .map((el) => Number(el.dataset.sortItem));
-                        this.dragEl = null;
-                        this.$wire.reorderBooks(ids);
+                        this.$el._bookSortable = window.Sortable.create(this.$el, {
+                            draggable: '[data-sort-item]',
+                            animation: 150,
+                            ghostClass: 'opacity-40',
+                            delay: 200,
+                            delayOnTouchOnly: true,
+                            touchStartThreshold: 5,
+                            onEnd: () => {
+                                const ids = [...this.$el.querySelectorAll(':scope > [data-sort-item]')]
+                                    .map((el) => Number(el.dataset.sortItem));
+                                this.$wire.reorderBooks(ids);
+                            },
+                        });
                     },
                 };
             }

@@ -54,10 +54,10 @@ class Read extends Component
 
     public string $editSessionPagesRead = '';
 
-    public function mount(): void
+    public function mount(?int $selectedBookId = null): void
     {
-        $first = Book::query()->orderBy('position')->orderBy('id')->value('id');
-        $this->selectedBookId = $first ? (int) $first : null;
+        // No book is selected on first load / refresh.
+        $this->selectedBookId = $selectedBookId;
     }
 
     public function selectBook(int $id): void

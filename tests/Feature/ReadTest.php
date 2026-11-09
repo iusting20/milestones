@@ -302,4 +302,10 @@ class ReadTest extends TestCase
         $c->call('setBookType', $book->id, null);
         $this->assertNull($book->fresh()->type);
     }
+
+    public function test_no_book_is_selected_on_first_load(): void
+    {
+        \App\Models\Book::query()->create(['title' => 'First', 'status' => 'reading', 'position' => 1]);
+        \Livewire\Livewire::test(\App\Livewire\Read::class)->assertSet('selectedBookId', null);
+    }
 }

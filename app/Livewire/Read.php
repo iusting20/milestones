@@ -56,7 +56,7 @@ class Read extends Component
 
     public function mount(): void
     {
-        $first = Book::query()->orderBy('status')->orderBy('position')->orderBy('id')->value('id');
+        $first = Book::query()->orderBy('position')->orderBy('id')->value('id');
         $this->selectedBookId = $first ? (int) $first : null;
     }
 
@@ -170,7 +170,7 @@ class Read extends Component
         $book->delete();
 
         if ($wasSelected) {
-            $this->selectedBookId = Book::query()->orderBy('status')->orderBy('position')->orderBy('id')->value('id');
+            $this->selectedBookId = Book::query()->orderBy('position')->orderBy('id')->value('id');
             $this->selectedBookId = $this->selectedBookId ? (int) $this->selectedBookId : null;
         }
 
@@ -346,7 +346,6 @@ class Read extends Component
         $books = Book::query()
             ->withCount('readingSessions')
             ->with(['latestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
-            ->orderByRaw("case when status = 'reading' then 0 else 1 end")
             ->orderBy('position')
             ->orderBy('id')
             ->get();
@@ -460,6 +459,17 @@ class Read extends Component
         }
 
         return intdiv($days, 7).' weeks ago';
+    }
+
+    public function reorderBooks(array $ids): void
+    {
+        $ids = array_values(array_unique(array_map(intval(...), $ids)));
+        if ($ids === [] || Book::query()->whereIn('id', $ids)->count() !== count($ids)) {
+            return;
+        }
+        foreach ($ids as $i => $id) {
+            Book::query()->whereKey($id)->update(['position' => $i + 1]);
+        }
     }
 
     private function findBook(int $id): Book

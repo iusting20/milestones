@@ -280,4 +280,14 @@ class ReadTest extends TestCase
             ->assertSee('Start session now')
             ->assertSee('+ Log session');
     }
+
+    public function test_books_can_be_reordered(): void
+    {
+        $this->actingAs(\App\Models\User::factory()->create());
+        $a = \App\Models\Book::query()->create(['title' => 'A', 'status' => 'reading', 'position' => 1]);
+        $b = \App\Models\Book::query()->create(['title' => 'B', 'status' => 'finished', 'position' => 2]);
+        \Livewire\Livewire::test(\App\Livewire\Read::class)->call('reorderBooks', [$b->id, $a->id]);
+        $this->assertSame(1, $b->fresh()->position);
+        $this->assertSame(2, $a->fresh()->position);
+    }
 }

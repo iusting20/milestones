@@ -39,9 +39,9 @@
             </form>
         @endif
 
-        <ul class="space-y-1">
+        <ul class="space-y-1" x-data="bookSortList()" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)">
             @forelse ($books as $book)
-                <li wire:key="book-{{ $book->id }}">
+                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" draggable="true" x-on:dragstart="start($event)" x-on:dragend="end()" style="cursor:grab">
                     <button type="button" wire:click="selectBook({{ $book->id }})"
                             @class([
                                 'flex w-full flex-col rounded border px-3 py-2 text-left text-sm transition',
@@ -53,9 +53,9 @@
                             @if ($book->author)
                                 <span>{{ $book->author }}</span>
                             @endif
-                            <span class="uppercase tracking-wide {{ $book->isFinished() ? 'text-check' : 'text-link' }}">
-                                {{ $book->status }}
-                            </span>
+                            @if ($book->isFinished())
+                                <span class="uppercase tracking-wide text-check">{{ $book->status }}</span>
+                            @endif
                             @if ($book->reading_sessions_count)
                                 <span>{{ $book->reading_sessions_count }} sess</span>
                             @endif
@@ -71,6 +71,43 @@
                 </li>
             @endforelse
         </ul>
+        <script>
+            function bookSortList() {
+                return {
+                    dragEl: null,
+                    start(event) {
+                        this.dragEl = event.target.closest('[data-sort-item]');
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', this.dragEl.dataset.sortItem);
+                        this.dragEl.classList.add('opacity-40');
+                    },
+                    over(event) {
+                        const item = event.target.closest('[data-sort-item]');
+                        if (! this.dragEl || ! item || item === this.dragEl || item.parentElement !== this.dragEl.parentElement) {
+                            return;
+                        }
+                        const rect = item.getBoundingClientRect();
+                        const after = event.clientY > rect.top + rect.height / 2;
+                        item.parentElement.insertBefore(this.dragEl, after ? item.nextSibling : item);
+                    },
+                    end() {
+                        if (this.dragEl) {
+                            this.dragEl.classList.remove('opacity-40');
+                        }
+                    },
+                    drop(event) {
+                        if (! this.dragEl) {
+                            return;
+                        }
+                        this.dragEl.classList.remove('opacity-40');
+                        const ids = [...event.currentTarget.querySelectorAll(':scope > [data-sort-item]')]
+                            .map((el) => Number(el.dataset.sortItem));
+                        this.dragEl = null;
+                        this.$wire.reorderBooks(ids);
+                    },
+                };
+            }
+        </script>
     </aside>
 
     {{-- Book detail --}}
@@ -84,17 +121,14 @@
                 <div>
                     <h2 class="text-2xl font-bold text-body">{{ $selected->title }}</h2>
                     <p class="mt-1 text-sm text-muted">
-                        @if ($selected->author)
-                            {{ $selected->author }}
-                            <span class="text-faint">·</span>
-                        @endif
-                        @if ($selected->total_pages)
-                            {{ $selected->total_pages }} pages
-                            <span class="text-faint">·</span>
-                        @endif
-                        <span class="uppercase tracking-wide {{ $selected->isFinished() ? 'text-check' : 'text-link' }}">
-                            {{ $selected->status }}
-                        </span>
+                        @php
+                            $metaParts = array_values(array_filter([
+                                $selected->author ? e($selected->author) : null,
+                                $selected->total_pages ? e($selected->total_pages).' pages' : null,
+                                $selected->isFinished() ? '<span class="uppercase tracking-wide text-check">'.e($selected->status).'</span>' : null,
+                            ]));
+                        @endphp
+                        {!! implode(' <span class="text-faint">·</span> ', $metaParts) !!}
                     </p>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-2">

@@ -12,9 +12,9 @@ use Livewire\Component;
 class ReadStats extends Component
 {
     public const TYPE_COLORS = [
-        'A' => '#58a6ff',
+        'A' => '#3fb950',
         'B' => '#ffe600',
-        'C' => '#3fb950',
+        'C' => '#58a6ff',
         '—' => '#8b8b8b',
     ];
 

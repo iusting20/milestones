@@ -48,16 +48,13 @@
                                 'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
                                 'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
-                        <span class="font-medium text-body">{{ $book->title }}</span>
-                        <span class="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
+                        <span class="text-base font-semibold leading-snug text-body">{{ $book->title }}</span>
+                        <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
                             @if ($book->author)
                                 <span>{{ $book->author }}</span>
                             @endif
                             @if ($book->isFinished())
                                 <span class="uppercase tracking-wide text-check">{{ $book->status }}</span>
-                            @endif
-                            @if ($book->reading_sessions_count)
-                                <span>{{ $book->reading_sessions_count }} sess</span>
                             @endif
                             @if ($book->readingSessions->isNotEmpty())
                                 <span class="text-mark">● live</span>

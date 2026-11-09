@@ -113,8 +113,8 @@ class ReadTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->call('startSessionNow')
-            ->assertSee('stop')
-            ->assertSee('live');
+            ->assertSee('Stop session')
+            ->assertSee('running');
 
         $session = ReadingSession::query()->first();
         $this->assertNotNull($session);
@@ -124,7 +124,7 @@ class ReadTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->call('stopSession', $session->id)
-            ->assertDontSee('live');
+            ->assertDontSee('running');
 
         $session->refresh();
         $this->assertNotNull($session->finished_at);
@@ -204,9 +204,48 @@ class ReadTest extends TestCase
         ]);
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
-            ->assertSee('today')
-            ->assertSee('week')
+            ->assertSee('Today')
+            ->assertSee('This week')
             ->assertSee('1h')
             ->assertDontSee('This month');
     }
+
+    public function test_running_session_counts_in_totals_with_day_clipping(): void
+    {
+        // Monday 09 Nov 2026 10:00 Bucharest — week started Mon 09 Nov 00:00
+        $this->travelTo(Carbon::parse('2026-11-09 10:00:00', Clock::timezone()));
+
+        $book = Book::query()->create([
+            'title' => 'Live Book',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+
+        // Finished 30m today
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-09 08:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-09 08:30:00', Clock::timezone())->utc(),
+        ]);
+
+        // Running since yesterday 23:00 — today should only count 00:00→10:00 = 10h
+        // Book total should count yesterday 23:00→10:00 = 11h, plus finished 30m = 11h 30m
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-08 23:00:00', Clock::timezone())->utc(),
+            'finished_at' => null,
+        ]);
+
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])->html();
+
+        // Today: 30m finished + 10h running = 10h 30m
+        $this->assertStringContainsString('10h 30m', $html);
+        // Live timer markup present
+        $this->assertStringContainsString('elapsedClock', $html);
+        $this->assertStringContainsString('running', $html);
+
+        // Book total includes full running span (11h) + 30m = 11h 30m
+        $this->assertStringContainsString('11h 30m', $html);
+    }
 }
+

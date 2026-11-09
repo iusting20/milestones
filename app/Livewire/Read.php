@@ -360,6 +360,11 @@ class Read extends Component
             'pagesRead' => 0,
         ];
 
+        $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
+        $todayStart = Clock::now()->startOfDay()->utc();
+        $nowUtc = Clock::now()->utc();
+        $epochStart = Carbon::createFromTimestampUTC(0);
+
         if ($selected) {
             $sessions = ReadingSession::query()
                 ->where('book_id', $selected->id)
@@ -368,7 +373,7 @@ class Read extends Component
                 ->get();
 
             $completed = $sessions->filter(fn (ReadingSession $s) => ! $s->isRunning());
-            $totalMinutes = (int) $completed->sum(fn (ReadingSession $s) => $s->durationMinutes());
+            $totalMinutes = $this->overlapMinutes($epochStart, $nowUtc, $selected->id);
             $bookTotals = [
                 'sessionCount' => $sessions->count(),
                 'totalMinutes' => $totalMinutes,
@@ -378,16 +383,25 @@ class Read extends Component
             ];
         }
 
-        $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
-        $todayStart = Clock::now()->startOfDay()->utc();
-        $nowUtc = Clock::now()->utc();
-
         $pageTotals = [
-            'weekMinutes' => $this->sumMinutesBetween($weekStart, $nowUtc),
-            'todayMinutes' => $this->sumMinutesBetween($todayStart, $nowUtc),
+            'weekMinutes' => $this->overlapMinutes($weekStart, $nowUtc),
+            'todayMinutes' => $this->overlapMinutes($todayStart, $nowUtc),
         ];
         $pageTotals['weekDuration'] = $this->formatDuration($pageTotals['weekMinutes']);
         $pageTotals['todayDuration'] = $this->formatDuration($pageTotals['todayMinutes']);
+
+        $liveTotals = [
+            'todayBase' => $this->overlapMinutes($todayStart, $nowUtc, finishedOnly: true),
+            'weekBase' => $this->overlapMinutes($weekStart, $nowUtc, finishedOnly: true),
+            'bookBase' => $selected
+                ? $this->overlapMinutes($epochStart, $nowUtc, $selected->id, finishedOnly: true)
+                : 0,
+            'todayRuns' => $this->runningClipStartsMs($todayStart),
+            'weekRuns' => $this->runningClipStartsMs($weekStart),
+            'bookRuns' => $selected
+                ? $this->runningClipStartsMs($epochStart, $selected->id)
+                : [],
+        ];
 
         return view('livewire.read', [
             'books' => $books,
@@ -395,6 +409,7 @@ class Read extends Component
             'sessions' => $sessions,
             'bookTotals' => $bookTotals,
             'pageTotals' => $pageTotals,
+            'liveTotals' => $liveTotals,
             'runningSession' => $selected ? $this->runningSessionFor($selected->id) : null,
             'timezone' => Clock::timezone(),
         ])->layout('layouts.app');
@@ -465,14 +480,73 @@ class Read extends Component
         $this->editSessionPagesRead = '';
     }
 
-    private function sumMinutesBetween(Carbon $fromUtc, Carbon $toUtc): int
+    /**
+     * Minutes of reading overlapping [fromUtc, toUtc], optionally for one book.
+     * Running sessions count through $toUtc. Finished-only skips open sessions.
+     */
+    private function overlapMinutes(
+        Carbon $fromUtc,
+        Carbon $toUtc,
+        ?int $bookId = null,
+        bool $finishedOnly = false,
+    ): int {
+        if ($toUtc->lte($fromUtc)) {
+            return 0;
+        }
+
+        $query = ReadingSession::query()
+            ->where('started_at', '<', $toUtc)
+            ->where(function ($q) use ($fromUtc) {
+                $q->whereNull('finished_at')->orWhere('finished_at', '>', $fromUtc);
+            });
+
+        if ($bookId !== null) {
+            $query->where('book_id', $bookId);
+        }
+
+        if ($finishedOnly) {
+            $query->whereNotNull('finished_at');
+        }
+
+        $total = 0;
+
+        foreach ($query->get() as $session) {
+            $start = $session->started_at->greaterThan($fromUtc) ? $session->started_at->copy() : $fromUtc->copy();
+            $end = $session->finished_at?->copy() ?? $toUtc->copy();
+            if ($end->greaterThan($toUtc)) {
+                $end = $toUtc->copy();
+            }
+
+            if ($end->greaterThan($start)) {
+                $total += (int) $start->diffInMinutes($end);
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function runningClipStartsMs(Carbon $windowStartUtc, ?int $bookId = null): array
     {
-        return (int) ReadingSession::query()
-            ->whereNotNull('finished_at')
-            ->where('finished_at', '>=', $fromUtc)
-            ->where('finished_at', '<=', $toUtc)
-            ->get()
-            ->sum(fn (ReadingSession $s) => $s->durationMinutes());
+        $query = ReadingSession::query()->whereNull('finished_at');
+
+        if ($bookId !== null) {
+            $query->where('book_id', $bookId);
+        }
+
+        $starts = [];
+
+        foreach ($query->get() as $session) {
+            $clipStart = $session->started_at->greaterThan($windowStartUtc)
+                ? $session->started_at
+                : $windowStartUtc;
+
+            $starts[] = (int) ($clipStart->getTimestampMs());
+        }
+
+        return $starts;
     }
 
     public function formatDuration(int $minutes): string

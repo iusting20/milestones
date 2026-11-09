@@ -360,6 +360,7 @@ class Read extends Component
             'totalDuration' => '0m',
             'lastRead' => null,
             'pagesRead' => 0,
+            'weekDays' => '',
         ];
 
         $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
@@ -382,6 +383,7 @@ class Read extends Component
                 'totalDuration' => $this->formatDuration($totalMinutes),
                 'lastRead' => $sessions->first()?->started_at,
                 'pagesRead' => (int) $completed->sum(fn (ReadingSession $s) => (int) ($s->pages_read ?? 0)),
+                'weekDays' => $this->weekDaysRead($sessions, $weekStart),
             ];
         }
 
@@ -415,6 +417,22 @@ class Read extends Component
             'runningSession' => $selected ? $this->runningSessionFor($selected->id) : null,
             'timezone' => Clock::timezone(),
         ])->layout('layouts.app');
+    }
+
+    /**
+     * Weekdays (Mon..Sun order) of this week on which a session was logged, e.g. "Mon, Wed, Sat".
+     */
+    private function weekDaysRead($sessions, Carbon $weekStart): string
+    {
+        $tz = Clock::timezone();
+
+        return $sessions
+            ->filter(fn (ReadingSession $s) => $s->started_at->greaterThanOrEqualTo($weekStart))
+            ->map(fn (ReadingSession $s) => $s->started_at->copy()->timezone($tz))
+            ->sortBy(fn (Carbon $d) => $d->dayOfWeekIso)
+            ->map(fn (Carbon $d) => $d->format('D'))
+            ->unique()
+            ->implode(', ');
     }
 
     private function findBook(int $id): Book

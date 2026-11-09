@@ -169,8 +169,8 @@
                     <div class="text-lg font-semibold tabular-nums" x-text="formatMinutes(bookMinutes())">{{ $bookTotals['totalDuration'] }}</div>
                 </div>
                 <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Pages logged</div>
-                    <div class="text-lg font-semibold tabular-nums">{{ $bookTotals['pagesRead'] }}</div>
+                    <div class="text-[10px] uppercase tracking-wide text-muted">Read this week</div>
+                    <div class="text-sm font-semibold">{{ $bookTotals['weekDays'] !== '' ? $bookTotals['weekDays'] : '—' }}</div>
                 </div>
                 <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Last read</div>

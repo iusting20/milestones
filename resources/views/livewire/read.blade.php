@@ -16,6 +16,7 @@
 
         <div class="mb-3 flex items-center justify-between gap-2">
             <h1 class="text-xl font-bold text-body">Books</h1>
+            <a href="{{ route('read.stats') }}" class="ml-auto text-sm font-semibold text-mark no-underline hover:opacity-80">Stats</a>
             <button type="button" wire:click="startAddBook"
                     class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
                 + Book

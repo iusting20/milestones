@@ -6,6 +6,7 @@ use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\LinkHub;
 use App\Livewire\Read;
+use App\Livewire\ReadStats;
 use App\Livewire\TaskLogBoard;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,8 @@ Route::view('/week-board', 'week-board')->name('week-board');
 Route::view('/comms', 'comms')->name('comms');
 
 Route::get('/read', Read::class)->name('read');
+
+Route::get('/read/stats', ReadStats::class)->name('read.stats');
 
 Route::redirect('/links', '/links/partners');
 

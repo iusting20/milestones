@@ -49,10 +49,11 @@
                     </span>
                     <button type="button" wire:click="selectBook({{ $book->id }})"
                             @class([
-                                'flex w-full flex-col rounded border py-2 pl-3 pr-10 text-left text-sm transition',
+                                'flex w-full items-center gap-3 rounded border py-2 pl-3 pr-10 text-left text-sm transition',
                                 'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
                                 'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
+                        <span class="flex min-w-0 flex-1 flex-col">
                         <span class="text-base font-semibold leading-snug text-body">{{ $book->title }}</span>
                         <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
                             @if ($book->author)
@@ -65,6 +66,10 @@
                                 <span class="text-mark">● live</span>
                             @endif
                         </span>
+                        </span>
+                        @if ($book->type)
+                            <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
+                        @endif
                     </button>
                 </li>
             @empty

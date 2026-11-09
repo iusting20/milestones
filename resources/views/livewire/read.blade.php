@@ -190,12 +190,6 @@
                             class="rounded bg-mark px-3 py-1.5 text-sm font-medium text-black">
                         Stop session
                     </button>
-                    <span class="text-xs text-muted">
-                        <span class="font-semibold tabular-nums text-mark"
-                              x-data="elapsedClock(@js($runningSession->started_at->utc()->toIso8601String()))"
-                              x-init="start()"
-                              x-text="display">00:00:00</span>
-                    </span>
                 @else
                     <button type="button" wire:click="startSessionNow"
                             class="rounded bg-check px-3 py-1.5 text-sm font-medium text-white">

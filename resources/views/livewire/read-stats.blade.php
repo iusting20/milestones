@@ -55,4 +55,18 @@
             <li class="border-t border-white/10 pt-2 text-muted">Total {{ \App\Livewire\ReadStats::formatMinutes($weekTotal) }}</li>
         </ul>
     </div>
+
+    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Books read this week</h2>
+
+    <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
+        @forelse ($books as $book)
+            <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors[$book['type'] && isset($colors[$book['type']]) ? $book['type'] : '—'] }}"></span>
+                <span class="min-w-0 flex-1 truncate text-body">{{ $book['title'] }}</span>
+                <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($book['minutes']) }}</span>
+            </li>
+        @empty
+            <li class="px-4 py-4 text-sm text-muted">No books read yet this week.</li>
+        @endforelse
+    </ul>
 </div>

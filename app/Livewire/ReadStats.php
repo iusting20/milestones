@@ -44,13 +44,15 @@ class ReadStats extends Component
         }
 
         $sessions = ReadingSession::query()
-            ->with('book:id,type')
+            ->with('book:id,title,type')
             ->where('started_at', '<', $weekEnd->copy()->utc())
             ->where(function ($q) use ($weekStart) {
                 $q->whereNull('finished_at')->orWhere('finished_at', '>', $weekStart->copy()->utc());
             })
             ->get();
 
+        $bookSeconds = [];
+        $bookInfo = [];
         foreach ($sessions as $session) {
             $type = $session->book?->type && isset(self::TYPE_COLORS[$session->book->type]) ? $session->book->type : '—';
             $start = $session->started_at->copy()->timezone($tz);
@@ -64,7 +66,10 @@ class ReadStats extends Component
                 $from = $start->gt($dayStart) ? $start : $dayStart;
                 $to = $end->lt($dayEnd) ? $end : $dayEnd;
                 if ($to->gt($from)) {
-                    $days[$i]['seconds'][$type] += $from->diffInSeconds($to);
+                    $secs = $from->diffInSeconds($to);
+                    $days[$i]['seconds'][$type] += $secs;
+                    $bookSeconds[$session->book_id] = ($bookSeconds[$session->book_id] ?? 0) + $secs;
+                    $bookInfo[$session->book_id] = $session->book;
                 }
             }
         }
@@ -79,7 +84,22 @@ class ReadStats extends Component
             unset($days[$i]['seconds']);
         }
 
-        return ['days' => $days, 'totals' => $totals];
+        $books = [];
+        foreach ($bookSeconds as $id => $secs) {
+            $minutes = intdiv((int) $secs, 60);
+            if ($minutes <= 0) {
+                continue;
+            }
+            $books[] = [
+                'id' => $id,
+                'title' => $bookInfo[$id]?->title ?? 'Deleted book',
+                'type' => $bookInfo[$id]?->type,
+                'minutes' => $minutes,
+            ];
+        }
+        usort($books, fn ($a, $b) => $b['minutes'] <=> $a['minutes'] ?: strcasecmp($a['title'], $b['title']));
+
+        return ['days' => $days, 'totals' => $totals, 'books' => $books];
     }
 
     public static function formatMinutes(int $minutes): string
@@ -127,6 +147,7 @@ class ReadStats extends Component
         return view('livewire.read-stats', [
             'days' => $data['days'],
             'totals' => $data['totals'],
+            'books' => $data['books'],
             'types' => $types,
             'colors' => self::TYPE_COLORS,
             'maxDay' => max(1, $maxDay),

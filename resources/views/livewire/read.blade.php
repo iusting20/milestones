@@ -115,9 +115,7 @@
     {{-- Book detail --}}
     <div class="min-w-0 flex-1">
         @if (! $selected)
-            <div class="rounded border border-dashed border-white/15 px-4 py-16 text-center text-muted">
-                Select or add a book to log reading sessions.
-            </div>
+            {{-- Nothing shown until a book is selected. --}}
         @else
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>

@@ -17,13 +17,31 @@
 
     <div class="mb-10 rounded border border-white/10 bg-sidebar p-4">
         <div class="grid grid-cols-7 gap-2 sm:gap-4">
-            @foreach ($days as $day)
+            @foreach ($days as $dayIndex => $day)
                 <div class="flex flex-col items-center">
                     <div class="flex h-48 w-full items-end justify-center gap-0.5 sm:gap-1">
                         @foreach ($types as $t)
                             @php $m = $day['minutes'][$t]; @endphp
-                            <div class="flex h-full flex-1 flex-col justify-end" title="{{ $day['label'] }} · {{ $t === '—' ? 'No type' : 'Type '.$t }}: {{ \App\Livewire\ReadStats::formatMinutes($m) }}">
-                                <div class="w-full rounded-t-sm" style="height: {{ $m > 0 ? max(2, round($m / $maxDay * 100, 2)) : 0 }}%; background: {{ $colors[$t] }}"></div>
+                            <div class="flex h-full flex-1 flex-col justify-end">
+                                <div class="group relative w-full rounded-t-sm" style="height: {{ $m > 0 ? max(2, round($m / $maxDay * 100, 2)) : 0 }}%; background: {{ $colors[$t] }}" @if ($m > 0) tabindex="0" @endif>
+                                    @if ($m > 0)
+                                        <div @class([
+                                                'pointer-events-none absolute bottom-full z-30 mb-2 hidden w-max max-w-[16rem] rounded border border-white/15 bg-panel px-3 py-2 text-left text-xs shadow-xl group-hover:block group-focus:block',
+                                                'left-0' => $dayIndex < 2,
+                                                'right-0' => $dayIndex > 4,
+                                                'left-1/2 -translate-x-1/2' => $dayIndex >= 2 && $dayIndex <= 4,
+                                            ])>
+                                            <div class="mb-1 font-semibold text-body">
+                                                {{ $day['label'] }} {{ $day['date'] }} · {{ $t === '—' ? 'No type' : 'Type '.$t }} · {{ \App\Livewire\ReadStats::formatMinutes($m) }}
+                                            </div>
+                                            <ul class="list-disc space-y-0.5 pl-4 text-muted">
+                                                @foreach ($day['books'][$t] as $b)
+                                                    <li><span class="text-body">{{ $b['title'] }}</span> · {{ \App\Livewire\ReadStats::formatMinutes($b['minutes']) }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                </div>
                             </div>
                         @endforeach
                     </div>

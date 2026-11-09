@@ -40,6 +40,7 @@ class ReadStats extends Component
                 'date' => $d->format('j M'),
                 'minutes' => array_fill_keys($types, 0),
                 'seconds' => array_fill_keys($types, 0),
+                'bookSeconds' => array_fill_keys($types, []),
             ];
         }
 
@@ -68,6 +69,7 @@ class ReadStats extends Component
                 if ($to->gt($from)) {
                     $secs = $from->diffInSeconds($to);
                     $days[$i]['seconds'][$type] += $secs;
+                    $days[$i]['bookSeconds'][$type][$session->book_id] = ($days[$i]['bookSeconds'][$type][$session->book_id] ?? 0) + $secs;
                     $bookSeconds[$session->book_id] = ($bookSeconds[$session->book_id] ?? 0) + $secs;
                     $bookInfo[$session->book_id] = $session->book;
                 }
@@ -81,7 +83,19 @@ class ReadStats extends Component
                 $days[$i]['minutes'][$t] = $m;
                 $totals[$t] += $m;
             }
-            unset($days[$i]['seconds']);
+            $days[$i]['books'] = [];
+            foreach ($types as $t) {
+                $list = [];
+                foreach ($day['bookSeconds'][$t] as $bookId => $secs) {
+                    $m = intdiv((int) $secs, 60);
+                    if ($m > 0) {
+                        $list[] = ['title' => $bookInfo[$bookId]?->title ?? 'Deleted book', 'minutes' => $m];
+                    }
+                }
+                usort($list, fn ($a, $b) => $b['minutes'] <=> $a['minutes']);
+                $days[$i]['books'][$t] = $list;
+            }
+            unset($days[$i]['seconds'], $days[$i]['bookSeconds']);
         }
 
         $books = [];

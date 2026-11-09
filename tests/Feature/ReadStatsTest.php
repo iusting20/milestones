@@ -43,5 +43,7 @@ class ReadStatsTest extends TestCase
         $this->assertSame(0, $data['totals']['C']);
         $this->assertSame(['A book', 'B book'], array_column($data['books'], 'title'));
         $this->assertSame([90, 45], array_column($data['books'], 'minutes'));
+        $this->assertSame([['title' => 'A book', 'minutes' => 90]], $data['days'][0]['books']['A']);
+        $this->assertSame([], $data['days'][0]['books']['C']);
     }
 }

@@ -40,6 +40,10 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Links
             </a>
+            <a href="{{ route('read') }}"
+               class="ml-auto shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('read') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Read
+            </a>
             {{-- Log out button hidden (not needed)
             <form method="POST" action="{{ route('logout') }}" class="ml-auto shrink-0">
                 @csrf

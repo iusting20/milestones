@@ -252,7 +252,7 @@
                 </div>
             </div>
 
-            <div class="mb-4 flex flex-wrap items-center gap-2">
+            <div class="mb-4 flex flex-wrap items-center justify-center gap-2">
                 @if ($runningSession)
                     <button type="button" wire:click="stopSession({{ $runningSession->id }})"
                             class="rounded bg-mark px-3 py-1.5 text-sm font-medium text-black">

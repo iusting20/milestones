@@ -28,6 +28,8 @@ class LinkHub extends Component
 
     public string $newLinkNote = '';
 
+    public string $newLinkIcon = '';
+
     public ?int $addingLinkToGroupId = null;
 
     public ?int $editingLinkId = null;
@@ -37,6 +39,8 @@ class LinkHub extends Component
     public string $editLinkUrl = '';
 
     public string $editLinkNote = '';
+
+    public string $editLinkIcon = '';
 
     public ?int $renamingProjectId = null;
 
@@ -386,6 +390,7 @@ class LinkHub extends Component
         $this->newLinkTitle = '';
         $this->newLinkUrl = '';
         $this->newLinkNote = '';
+        $this->newLinkIcon = '';
         $this->editingLinkId = null;
     }
 
@@ -414,6 +419,7 @@ class LinkHub extends Component
             'title' => $title,
             'url' => $url,
             'note' => trim($this->newLinkNote) !== '' ? trim($this->newLinkNote) : null,
+            'icon' => $this->normalizedIcon($this->newLinkIcon),
             'position' => $max + 1,
         ]);
 
@@ -445,6 +451,7 @@ class LinkHub extends Component
         $this->editLinkTitle = $link->title;
         $this->editLinkUrl = $link->url;
         $this->editLinkNote = $link->note ?? '';
+        $this->editLinkIcon = $link->icon ?? '';
         $this->addingLinkToGroupId = null;
     }
 
@@ -470,6 +477,7 @@ class LinkHub extends Component
             'title' => $title,
             'url' => $url,
             'note' => trim($this->editLinkNote) !== '' ? trim($this->editLinkNote) : null,
+            'icon' => $this->normalizedIcon($this->editLinkIcon),
         ]);
 
         $this->resetLinkForms();
@@ -558,9 +566,26 @@ class LinkHub extends Component
         $this->newLinkTitle = '';
         $this->newLinkUrl = '';
         $this->newLinkNote = '';
+        $this->newLinkIcon = '';
         $this->editingLinkId = null;
         $this->editLinkTitle = '';
         $this->editLinkUrl = '';
         $this->editLinkNote = '';
+        $this->editLinkIcon = '';
+    }
+
+    private function normalizedIcon(string $icon): ?string
+    {
+        $icon = trim($icon);
+
+        if ($icon === '') {
+            return null;
+        }
+
+        if (mb_strlen($icon) > 16) {
+            $icon = mb_substr($icon, 0, 16);
+        }
+
+        return $icon;
     }
 }

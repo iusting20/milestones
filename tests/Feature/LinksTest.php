@@ -84,12 +84,14 @@ class LinksTest extends TestCase
             ->set('newLinkTitle', 'Staging')
             ->set('newLinkUrl', 'https://staging.example.com')
             ->set('newLinkNote', 'outdated')
+            ->set('newLinkIcon', '🚀')
             ->call('addLink');
 
         $this->assertDatabaseHas('links', [
             'title' => 'Staging',
             'url' => 'https://staging.example.com',
             'note' => 'outdated',
+            'icon' => '🚀',
             'link_group_id' => $group->id,
         ]);
     }
@@ -119,12 +121,14 @@ class LinksTest extends TestCase
             ->set('editLinkTitle', 'Docs Wiki')
             ->set('editLinkUrl', 'https://docs.example.com')
             ->set('editLinkNote', 'ask before remove')
+            ->set('editLinkIcon', '📚')
             ->call('saveEditLink');
 
         $link->refresh();
         $this->assertSame('Docs Wiki', $link->title);
         $this->assertSame('https://docs.example.com', $link->url);
         $this->assertSame('ask before remove', $link->note);
+        $this->assertSame('📚', $link->icon);
 
         Livewire::test(LinkHub::class, ['hub' => 'assets', 'slug' => 'radiologie'])
             ->call('deleteLink', $link->id);
@@ -308,5 +312,148 @@ class LinksTest extends TestCase
 
         $this->assertSame('assets', $project->hub);
         $this->assertSame('alpha', $project->slug);
+    }
+    public function test_link_icon_is_rendered_instead_of_diamond(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Vibrant',
+            'slug' => 'vibrant',
+            'position' => 1,
+        ]);
+        $group = LinkGroup::query()->create([
+            'project_id' => $project->id,
+            'name' => 'Docs',
+            'position' => 1,
+        ]);
+        Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => 'Info / Credentials',
+            'url' => 'https://example.com/info',
+            'icon' => '🗝️',
+            'position' => 1,
+        ]);
+        Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => 'Plain Link',
+            'url' => 'https://example.com/plain',
+            'position' => 2,
+        ]);
+
+        $this->get(route('links.hub', ['hub' => 'partners', 'slug' => 'vibrant']))
+            ->assertOk()
+            ->assertSee('🗝️', false)
+            ->assertSee('Info / Credentials')
+            ->assertSee('◆', false)
+            ->assertSee('Plain Link');
+    }
+
+    public function test_empty_icon_is_trimmed_to_null_and_long_icons_are_capped(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Neo',
+            'slug' => 'neo',
+            'position' => 1,
+        ]);
+        $group = LinkGroup::query()->create([
+            'project_id' => $project->id,
+            'name' => 'Apps',
+            'position' => 1,
+        ]);
+        $link = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => 'App',
+            'url' => 'https://app.example.com',
+            'icon' => '🔥',
+            'position' => 1,
+        ]);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'neo'])
+            ->call('startEditLink', $link->id)
+            ->set('editLinkTitle', 'App')
+            ->set('editLinkUrl', 'https://app.example.com')
+            ->set('editLinkIcon', '   ')
+            ->call('saveEditLink');
+
+        $this->assertNull($link->fresh()->icon);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'neo'])
+            ->call('startEditLink', $link->id)
+            ->set('editLinkTitle', 'App')
+            ->set('editLinkUrl', 'https://app.example.com')
+            ->set('editLinkIcon', str_repeat('😀', 20))
+            ->call('saveEditLink');
+
+        $this->assertSame(16, mb_strlen($link->fresh()->icon));
+    }
+
+    public function test_backfill_leading_emoji_icons_from_titles(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'VHE',
+            'slug' => 'vhe',
+            'position' => 1,
+        ]);
+        $group = LinkGroup::query()->create([
+            'project_id' => $project->id,
+            'name' => 'Docs',
+            'position' => 1,
+        ]);
+
+        $withEmoji = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => '🗝️ Info / Credentials',
+            'url' => 'https://example.com/info',
+            'position' => 1,
+        ]);
+        $alreadyHasIcon = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => '🚀 Launch',
+            'url' => 'https://example.com/launch',
+            'icon' => '⭐',
+            'position' => 2,
+        ]);
+        $diamondPrefix = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => '◆ Not emoji',
+            'url' => 'https://example.com/diamond',
+            'position' => 3,
+        ]);
+        $plain = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => 'Plain title',
+            'url' => 'https://example.com/plain',
+            'position' => 4,
+        ]);
+        $family = Link::query()->create([
+            'link_group_id' => $group->id,
+            'title' => "👨‍👩‍👧‍👦 Family",
+            'url' => 'https://example.com/family',
+            'position' => 5,
+        ]);
+
+        $this->artisan('links:backfill-icons-from-titles')
+            ->assertSuccessful();
+
+        $withEmoji->refresh();
+        $this->assertSame('🗝️', $withEmoji->icon);
+        $this->assertSame('Info / Credentials', $withEmoji->title);
+
+        $alreadyHasIcon->refresh();
+        $this->assertSame('⭐', $alreadyHasIcon->icon);
+        $this->assertSame('🚀 Launch', $alreadyHasIcon->title);
+
+        $diamondPrefix->refresh();
+        $this->assertNull($diamondPrefix->icon);
+        $this->assertSame('◆ Not emoji', $diamondPrefix->title);
+
+        $plain->refresh();
+        $this->assertNull($plain->icon);
+
+        $family->refresh();
+        $this->assertSame('👨‍👩‍👧‍👦', $family->icon);
+        $this->assertSame('Family', $family->title);
     }
 }

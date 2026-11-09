@@ -131,6 +131,8 @@
                                                class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:flex-1" />
                                         <input type="text" wire:model="editLinkNote" placeholder="Note (optional)"
                                                class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:w-40" />
+                                        <input type="text" wire:model="editLinkIcon" placeholder="Icon (e.g. 🗝️)" maxlength="16"
+                                               class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:w-28" />
                                         <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save</button>
                                         <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
                                     </form>
@@ -142,7 +144,7 @@
                                             @include('livewire.partials.drag-handle')
                                         </button>
                                     @endif
-                                    <span class="text-link" aria-hidden="true">◆</span>
+                                    <span class="text-link" aria-hidden="true">{{ filled($link->icon) ? $link->icon : '◆' }}</span>
                                     <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer"
                                        class="font-medium text-link no-underline hover:underline">{{ $link->title }}</a>
                                     @if ($link->note)
@@ -172,6 +174,8 @@
                                        class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:flex-1" />
                                 <input type="text" wire:model="newLinkNote" placeholder="Note (optional)"
                                        class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:w-40" />
+                                <input type="text" wire:model="newLinkIcon" placeholder="Icon (e.g. 🗝️)" maxlength="16"
+                                       class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none sm:w-28" />
                                 <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Add link</button>
                                 <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
                             </form>

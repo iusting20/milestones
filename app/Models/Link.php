@@ -12,6 +12,7 @@ class Link extends Model
         'title',
         'url',
         'note',
+        'icon',
         'position',
         'is_delimiter',
     ];

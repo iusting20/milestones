@@ -3,14 +3,6 @@
      x-init="start()">
     {{-- Books sidebar --}}
     <aside class="w-full shrink-0 lg:w-72">
-        <div class="mb-3 flex items-center justify-between gap-2">
-            <h1 class="text-xl font-bold text-body">Books</h1>
-            <button type="button" wire:click="startAddBook"
-                    class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
-                + Book
-            </button>
-        </div>
-
         <div class="mb-4 grid grid-cols-2 gap-2 text-xs text-muted">
             <div class="rounded border border-white/10 bg-sidebar px-2 py-1.5">
                 <div class="uppercase tracking-wide text-[10px] text-faint">This week</div>
@@ -20,6 +12,14 @@
                 <div class="uppercase tracking-wide text-[10px] text-faint">Today</div>
                 <div class="font-semibold text-body tabular-nums" x-text="formatMinutes(todayMinutes())">{{ $pageTotals['todayDuration'] }}</div>
             </div>
+        </div>
+
+        <div class="mb-3 flex items-center justify-between gap-2">
+            <h1 class="text-xl font-bold text-body">Books</h1>
+            <button type="button" wire:click="startAddBook"
+                    class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
+                + Book
+            </button>
         </div>
 
         @if ($addingBook)

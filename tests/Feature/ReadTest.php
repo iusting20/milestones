@@ -24,11 +24,11 @@ class ReadTest extends TestCase
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
-    public function test_read_is_hidden_from_nav(): void
+    public function test_read_link_is_in_nav(): void
     {
         $html = $this->get(route('milestones'))->assertOk()->getContent();
 
-        $this->assertDoesNotMatchRegularExpression(
+        $this->assertMatchesRegularExpression(
             '#<a[^>]+href="[^"]*/read"[^>]*>\s*Read\s*</a>#',
             $html,
         );

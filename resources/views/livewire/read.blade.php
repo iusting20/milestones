@@ -4,7 +4,7 @@
     {{-- Books sidebar --}}
     <aside class="w-full shrink-0 lg:w-72">
         <div class="mb-3 flex items-center justify-between gap-2">
-            <h1 class="text-xl font-bold text-body">Read</h1>
+            <h1 class="text-xl font-bold text-body">Books</h1>
             <button type="button" wire:click="startAddBook"
                     class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
                 + Book

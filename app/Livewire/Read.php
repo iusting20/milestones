@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-#[Title('Read')]
+#[Title("Books")]
 class Read extends Component
 {
     public ?int $selectedBookId = null;

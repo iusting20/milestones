@@ -1,0 +1,207 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\Read;
+use App\Models\Book;
+use App\Models\ReadingSession;
+use App\Support\Clock;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class ReadTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_read_page_renders(): void
+    {
+        $this->get(route('read'))
+            ->assertOk()
+            ->assertSee('Read')
+            ->assertSeeLivewire(Read::class)
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
+    public function test_nav_includes_read(): void
+    {
+        $this->get(route('milestones'))
+            ->assertSeeInOrder(['Comms', 'Read', 'Links']);
+    }
+
+    public function test_unauthenticated_read_redirects_to_login(): void
+    {
+        $this->authenticate = false;
+        $this->flushSession();
+
+        $this->get(route('read'))
+            ->assertRedirect(route('login'))
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
+    public function test_can_add_book_and_session(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-09 15:00:00', Clock::timezone()));
+
+        Livewire::test(Read::class)
+            ->call('startAddBook')
+            ->set('newBookTitle', 'Atomic Habits')
+            ->set('newBookAuthor', 'James Clear')
+            ->set('newBookTotalPages', '320')
+            ->call('addBook')
+            ->assertSee('Atomic Habits');
+
+        $book = Book::query()->where('title', 'Atomic Habits')->first();
+        $this->assertNotNull($book);
+        $this->assertSame('James Clear', $book->author);
+        $this->assertSame(320, $book->total_pages);
+        $this->assertSame(Book::STATUS_READING, $book->status);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('startAddSession')
+            ->set('newSessionStartedAt', '2026-11-09T14:00')
+            ->set('newSessionFinishedAt', '2026-11-09T14:45')
+            ->set('newSessionPagesRead', '12')
+            ->set('newSessionNote', 'chapter 1')
+            ->call('addSession')
+            ->assertSee('45m')
+            ->assertSee('chapter 1');
+
+        $session = ReadingSession::query()->first();
+        $this->assertNotNull($session);
+        $this->assertSame(12, $session->pages_read);
+        $this->assertSame('chapter 1', $session->note);
+        $this->assertSame(45, $session->durationMinutes());
+        $this->assertSame(
+            '2026-11-09 14:00',
+            $session->started_at->timezone(Clock::timezone())->format('Y-m-d H:i')
+        );
+    }
+
+    public function test_rejects_session_when_finish_is_not_after_start(): void
+    {
+        $book = Book::query()->create([
+            'title' => 'Deep Work',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('startAddSession')
+            ->set('newSessionStartedAt', '2026-11-09T15:00')
+            ->set('newSessionFinishedAt', '2026-11-09T14:00')
+            ->call('addSession')
+            ->assertHasErrors('newSessionFinishedAt');
+
+        $this->assertSame(0, ReadingSession::query()->count());
+    }
+
+    public function test_start_and_stop_session_now(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-09 16:30:00', Clock::timezone()));
+
+        $book = Book::query()->create([
+            'title' => 'Sapiens',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('startSessionNow')
+            ->assertSee('Stop session')
+            ->assertSee('running');
+
+        $session = ReadingSession::query()->first();
+        $this->assertNotNull($session);
+        $this->assertNull($session->finished_at);
+
+        $this->travelTo(Carbon::parse('2026-11-09 17:10:00', Clock::timezone()));
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('stopSession', $session->id)
+            ->assertDontSee('running');
+
+        $session->refresh();
+        $this->assertNotNull($session->finished_at);
+        $this->assertSame(40, $session->durationMinutes());
+    }
+
+    public function test_can_edit_and_delete_session_and_book(): void
+    {
+        $book = Book::query()->create([
+            'title' => 'Old Title',
+            'author' => 'A',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+        $session = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-08 10:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-08 10:20:00', Clock::timezone())->utc(),
+            'pages_read' => 5,
+        ]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('startEditBook', $book->id)
+            ->set('editBookTitle', 'New Title')
+            ->set('editBookAuthor', 'B')
+            ->set('editBookStatus', Book::STATUS_FINISHED)
+            ->call('saveEditBook');
+
+        $book->refresh();
+        $this->assertSame('New Title', $book->title);
+        $this->assertSame('B', $book->author);
+        $this->assertTrue($book->isFinished());
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('startEditSession', $session->id)
+            ->set('editSessionStartedAt', '2026-11-08T10:00')
+            ->set('editSessionFinishedAt', '2026-11-08T10:35')
+            ->set('editSessionPagesRead', '8')
+            ->set('editSessionNote', 'revised')
+            ->call('saveEditSession');
+
+        $session->refresh();
+        $this->assertSame(35, $session->durationMinutes());
+        $this->assertSame(8, $session->pages_read);
+        $this->assertSame('revised', $session->note);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('deleteSession', $session->id);
+
+        $this->assertDatabaseMissing('reading_sessions', ['id' => $session->id]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->call('deleteBook', $book->id);
+
+        $this->assertDatabaseMissing('books', ['id' => $book->id]);
+    }
+
+    public function test_week_and_month_totals_count_completed_sessions(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-09 12:00:00', Clock::timezone()));
+
+        $book = Book::query()->create([
+            'title' => 'Stats',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-09 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-09 10:00:00', Clock::timezone())->utc(),
+        ]);
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-10-15 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-10-15 09:30:00', Clock::timezone())->utc(),
+        ]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->assertSee('1h') // week + book total at least
+            ->assertSee('This week')
+            ->assertSee('This month');
+    }
+}

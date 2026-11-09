@@ -35,6 +35,10 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('comms') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Comms
             </a>
+            <a href="{{ route('read') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('read') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Read
+            </a>
             <span class="mx-1 h-5 w-px shrink-0 bg-white/15" aria-hidden="true"></span>
             <a href="{{ route('links.hub', 'partners') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">

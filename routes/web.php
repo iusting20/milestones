@@ -5,6 +5,7 @@ use App\Http\Controllers\LoginController;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\LinkHub;
+use App\Livewire\Read;
 use App\Livewire\TaskLogBoard;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +31,8 @@ Route::view('/roadmaps', 'roadmaps')->name('roadmaps');
 Route::view('/week-board', 'week-board')->name('week-board');
 
 Route::view('/comms', 'comms')->name('comms');
+
+Route::get('/read', Read::class)->name('read');
 
 Route::redirect('/links', '/links/partners');
 

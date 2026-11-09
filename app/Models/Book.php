@@ -18,6 +18,7 @@ class Book extends Model
         'total_pages',
         'status',
         'position',
+        'type',
     ];
 
     protected function casts(): array

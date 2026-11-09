@@ -461,6 +461,17 @@ class Read extends Component
         return intdiv($days, 7).' weeks ago';
     }
 
+    public const BOOK_TYPES = ['A', 'B', 'C'];
+
+    public function setBookType(int $id, ?string $type): void
+    {
+        $type = $type === null || $type === '' ? null : strtoupper($type);
+        if ($type !== null && ! in_array($type, self::BOOK_TYPES, true)) {
+            return;
+        }
+        $this->findBook($id)->update(['type' => $type]);
+    }
+
     public function reorderBooks(array $ids): void
     {
         $ids = array_values(array_unique(array_map(intval(...), $ids)));

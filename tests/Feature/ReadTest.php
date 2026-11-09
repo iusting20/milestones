@@ -290,4 +290,16 @@ class ReadTest extends TestCase
         $this->assertSame(1, $b->fresh()->position);
         $this->assertSame(2, $a->fresh()->position);
     }
+
+    public function test_book_type_can_be_set_to_a_b_or_c(): void
+    {
+        $book = \App\Models\Book::query()->create(['title' => 'T', 'status' => 'reading', 'position' => 1]);
+        $c = \Livewire\Livewire::test(\App\Livewire\Read::class);
+        $c->call('setBookType', $book->id, 'B');
+        $this->assertSame('B', $book->fresh()->type);
+        $c->call('setBookType', $book->id, 'Z');
+        $this->assertSame('B', $book->fresh()->type);
+        $c->call('setBookType', $book->id, null);
+        $this->assertNull($book->fresh()->type);
+    }
 }

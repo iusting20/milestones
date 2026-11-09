@@ -178,9 +178,42 @@
             @endif
 
             <div class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Sessions</div>
-                    <div class="text-lg font-semibold tabular-nums">{{ $bookTotals['sessionCount'] }}</div>
+                <div x-data="{ typeOpen: false }" wire:key="book-type-{{ $selected->id }}">
+                    <button type="button" x-on:click="typeOpen = true"
+                            class="w-full rounded border border-white/10 bg-sidebar px-3 py-2 text-left hover:border-link/40">
+                        <div class="text-[10px] uppercase tracking-wide text-muted">Type</div>
+                        <div class="text-lg font-semibold">{{ $selected->type ?: '—' }}</div>
+                    </button>
+                    <template x-teleport="body">
+                        <div x-show="typeOpen" x-cloak x-transition.opacity
+                             x-on:keydown.escape.window="typeOpen = false"
+                             class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                             x-on:click.self="typeOpen = false">
+                            <div class="w-full max-w-xs rounded border border-white/10 bg-panel p-4 shadow-xl">
+                                <div class="mb-3 text-xs uppercase tracking-wide text-muted">Type</div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    @foreach (\App\Livewire\Read::BOOK_TYPES as $bookType)
+                                        <button type="button"
+                                                x-on:click="$wire.setBookType({{ $selected->id }}, '{{ $bookType }}'); typeOpen = false"
+                                                @class([
+                                                    'rounded border py-3 text-lg font-semibold',
+                                                    'border-link bg-link/10 text-body' => $selected->type === $bookType,
+                                                    'border-white/10 bg-sidebar text-muted hover:text-body' => $selected->type !== $bookType,
+                                                ])>{{ $bookType }}</button>
+                                    @endforeach
+                                </div>
+                                <div class="mt-3 flex justify-between text-xs">
+                                    @if ($selected->type)
+                                        <button type="button" x-on:click="$wire.setBookType({{ $selected->id }}, null); typeOpen = false"
+                                                class="text-muted hover:text-body">Clear</button>
+                                    @else
+                                        <span></span>
+                                    @endif
+                                    <button type="button" x-on:click="typeOpen = false" class="text-muted hover:text-body">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
                 <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Time read</div>

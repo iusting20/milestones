@@ -176,7 +176,7 @@
                     <div class="text-[10px] uppercase tracking-wide text-muted">Last read</div>
                     <div class="text-sm font-semibold">
                         @if ($bookTotals['lastRead'])
-                            {{ $bookTotals['lastRead']->timezone($timezone)->format('j M Y, H:i') }}
+                            <span title="{{ $bookTotals['lastRead']->timezone($timezone)->format('j M Y, H:i') }}">{{ \App\Livewire\Read::relativeDay($bookTotals['lastRead']) }}</span>
                         @else
                             —
                         @endif

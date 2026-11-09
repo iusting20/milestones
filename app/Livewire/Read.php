@@ -435,6 +435,33 @@ class Read extends Component
             ->implode(', ');
     }
 
+    /**
+     * Relative "last read" label by calendar day: today, yesterday, N days ago, last week, N weeks ago.
+     */
+    public static function relativeDay(?Carbon $when): string
+    {
+        if ($when === null) {
+            return '—';
+        }
+        $tz = Clock::timezone();
+        $days = (int) $when->copy()->timezone($tz)->startOfDay()
+            ->diffInDays(Clock::now()->timezone($tz)->startOfDay(), false);
+        if ($days <= 0) {
+            return 'today';
+        }
+        if ($days === 1) {
+            return 'yesterday';
+        }
+        if ($days < 7) {
+            return $days.' days ago';
+        }
+        if ($days < 14) {
+            return 'last week';
+        }
+
+        return intdiv($days, 7).' weeks ago';
+    }
+
     private function findBook(int $id): Book
     {
         return Book::query()->whereKey($id)->firstOrFail();

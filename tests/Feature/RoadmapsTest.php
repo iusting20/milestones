@@ -57,10 +57,11 @@ class RoadmapsTest extends TestCase
             ->assertSee('MARCH 2026');
     }
 
-    public function test_nav_shows_roadmaps_after_backlog(): void
+    public function test_nav_shows_week_board_before_timeline_and_backlog_on_page(): void
     {
         $this->get(route('milestones'))
-            ->assertSeeInOrder(['Backlog', 'Timeline', 'Week Board', 'Comms', 'Links']);
+            ->assertSeeInOrder(['Milestones', 'Week Board', 'Timeline', 'Comms', 'Links', 'For this week', 'Backlog'])
+            ->assertSee(route('backlog', absolute: false), false);
     }
 
     public function test_can_add_pending_range_from_selected_day(): void

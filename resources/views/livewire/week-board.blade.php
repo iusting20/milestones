@@ -77,5 +77,12 @@
             :show-log-controls="$showLogControls"
             :key="'week-list-'.$week"
         />
+
+        <div class="flex justify-center">
+            <a href="{{ route('backlog') }}"
+               class="rounded border border-white/10 px-4 py-1.5 text-sm text-link no-underline hover:bg-panel">
+                Backlog
+            </a>
+        </div>
     </div>
 </div>

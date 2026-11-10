@@ -19,17 +19,13 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('milestones*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Milestones
             </a>
-            <a href="{{ route('backlog') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('backlog*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
-                Backlog
+            <a href="{{ route('week-board') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('week-board') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Week Board
             </a>
             <a href="{{ route('roadmaps') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Timeline
-            </a>
-            <a href="{{ route('week-board') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('week-board') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
-                Week Board
             </a>
             <a href="{{ route('comms') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('comms') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">

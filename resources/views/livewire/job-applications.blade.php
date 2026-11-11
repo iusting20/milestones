@@ -1,8 +1,8 @@
 @php
     use App\Livewire\JobApplications as JA;
     $kindColors = [
-        'added' => '#58a6ff', 'applied' => '#3fb950', 'follow-up' => '#ffe600', 'rejected' => '#da3633',
-        'closed' => '#da3633', 'removed' => '#8b8b8b', 'status' => '#d2a8ff', 'interview' => '#3fb950', 'offer' => '#3fb950', 'note' => '#8b8b8b',
+        'added' => '#39c5cf', 'applied' => '#f0883e', 'follow-up' => '#f778ba', 'rejected' => '#da3633',
+        'closed' => '#da3633', 'removed' => '#6e7681', 'status' => '#a371f7', 'interview' => '#f0883e', 'offer' => '#f0883e', 'note' => '#6e7681',
     ];
 @endphp
 <div class="mx-auto max-w-4xl px-3 py-6 sm:px-4">
@@ -37,15 +37,15 @@
     {{-- Weekly --}}
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Per week</h2>
     <div class="mb-3 flex flex-wrap gap-4 text-xs text-muted">
-        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#58a6ff"></span>Added</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#3fb950"></span>Applied</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#39c5cf"></span>Added</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#f0883e"></span>Applied</span>
     </div>
     <div class="mb-10 overflow-x-auto rounded border border-white/10 bg-sidebar p-4">
         <div class="flex min-w-max gap-2 sm:gap-4" style="min-width: 100%">
             @foreach ($weekly as $w)
                 <div class="flex min-w-[2.5rem] flex-1 flex-col items-center">
                     <div class="flex h-40 w-full items-end justify-center gap-0.5">
-                        @foreach (['added' => '#58a6ff', 'applied' => '#3fb950'] as $series => $color)
+                        @foreach (['added' => '#39c5cf', 'applied' => '#f0883e'] as $series => $color)
                             <div class="flex h-full flex-1 flex-col justify-end">
                                 @if ($w[$series] > 0)
                                     <div class="text-center text-[10px] tabular-nums text-muted">{{ $w[$series] }}</div>
@@ -69,7 +69,7 @@
         <ul class="space-y-2 text-sm">
             @foreach ($typeCounts as $t => $n)
                 <li class="flex items-center gap-2">
-                    <span class="inline-block h-3 w-3 rounded-sm" style="background: {{ JA::TYPE_COLORS[$t] ?? '#8b8b8b' }}"></span>
+                    <span class="inline-block h-3 w-3 rounded-sm" style="background: {{ JA::TYPE_COLORS[$t] ?? '#6e7681' }}"></span>
                     <span class="w-24 text-body">{{ $t }}</span>
                     <span class="w-10 text-right font-semibold tabular-nums text-body">{{ $n }}</span>
                     <span class="tabular-nums text-muted">{{ $typeTotal ? round($n / $typeTotal * 100) : 0 }}%</span>
@@ -141,7 +141,7 @@
                 @php $lastDate = $entry['date']; @endphp
             @endif
             <li class="flex gap-3 px-4 py-1.5 text-sm">
-                <span class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" style="background: {{ $kindColors[$entry['kind']] ?? '#8b8b8b' }}"></span>
+                <span class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" style="background: {{ $kindColors[$entry['kind']] ?? '#6e7681' }}"></span>
                 <div class="min-w-0">
                     <span class="font-semibold text-body">{{ $entry['title'] }}</span>
                     @if ($entry['app'])<span class="text-body"> · {{ $entry['app']->label() }}</span>@endif

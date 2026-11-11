@@ -16,17 +16,17 @@ use Livewire\Component;
 class JobApplications extends Component
 {
     public const STATUS_COLORS = [
-        'Applied' => '#3fb950',
-        'To apply' => '#58a6ff',
-        'Low priority (perm)' => '#8b8b8b',
+        'Applied' => '#f0883e',
+        'To apply' => '#39c5cf',
+        'Low priority (perm)' => '#6e7681',
         'closed' => '#da3633',
     ];
 
-    public const OTHER_COLOR = '#ffe600';
+    public const OTHER_COLOR = '#f778ba';
 
     public const TYPE_COLORS = [
-        'Contract' => '#58a6ff',
-        'Permanent' => '#ffe600',
+        'Contract' => '#39c5cf',
+        'Permanent' => '#f778ba',
     ];
 
     public static function statusColor(?string $status): string
@@ -202,7 +202,7 @@ class JobApplications extends Component
         $acc = 0.0;
         foreach ($typeCounts as $t => $n) {
             $pct = $typeTotal ? $n / $typeTotal * 100 : 0;
-            $stops[] = (self::TYPE_COLORS[$t] ?? '#8b8b8b').' '.round($acc, 3).'% '.round($acc + $pct, 3).'%';
+            $stops[] = (self::TYPE_COLORS[$t] ?? '#6e7681').' '.round($acc, 3).'% '.round($acc + $pct, 3).'%';
             $acc += $pct;
         }
 

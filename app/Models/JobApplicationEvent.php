@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class JobApplicationEvent extends Model
 {
-    protected $fillable = ['job_application_id', 'type', 'from_value', 'to_value', 'note', 'occurred_at'];
+    protected $fillable = ['job_application_id', 'type', 'from_value', 'to_value', 'note', 'occurred_at', 'source'];
 
     protected function casts(): array
     {

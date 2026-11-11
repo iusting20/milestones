@@ -36,8 +36,19 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('links.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Links
             </a>
+            @php
+                $showGigs = filled(config('jobs.page_token'))
+                    && \Illuminate\Support\Facades\Route::has('jobs.secret')
+                    && session(\App\Http\Middleware\EnsureAuthenticated::SESSION_KEY) === true;
+            @endphp
+            @if ($showGigs)
+                <a href="{{ route('jobs.secret', config('jobs.page_token')) }}"
+                   class="ml-auto shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('jobs.secret') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                    Gigs
+                </a>
+            @endif
             <a href="{{ route('read') }}"
-               class="ml-auto shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('read') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+               class="{{ $showGigs ? '' : 'ml-auto ' }}shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('read') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Read
             </a>
             {{-- Log out button hidden (not needed)

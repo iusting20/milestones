@@ -27,6 +27,7 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="JOBS_PAGE_TOKEN" value="testJobsPageToken0123456789abcdef"/>
+        <env name="JOBS_API_TOKEN" value="testJobsApiToken0123456789abcdefXYZ"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

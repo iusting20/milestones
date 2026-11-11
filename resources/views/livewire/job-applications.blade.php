@@ -8,14 +8,21 @@
 <div class="mx-auto max-w-4xl px-3 py-6 sm:px-4">
     <div class="mb-1 flex flex-wrap items-baseline justify-between gap-2">
         <h1 class="text-xl font-bold text-body">Applications</h1>
-        <span class="text-xs text-muted">
-            @if ($lastSync)
-                Last synced {{ $lastSync->synced_at->copy()->timezone($tz)->format('j M Y, H:i') }} ({{ $tz }})
-            @else
-                Never synced
-            @endif
-        </span>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="text-xs text-muted">
+                @if ($lastChange)
+                    Last change {{ $lastChange->copy()->timezone($tz)->format('j M Y, H:i') }} ({{ $tz }})
+                @endif
+            </span>
+            <button type="button" wire:click="openCreate"
+                    class="rounded border border-white/15 bg-panel px-3 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">
+                + Add application
+            </button>
+        </div>
     </div>
+    @if ($flash)
+        <p class="mb-2 text-xs text-[#39c5cf]" wire:key="flash">{{ $flash }}</p>
+    @endif
     <p class="mb-6 text-sm text-muted">{{ $apps->count() }} roles tracked · {{ $statusCounts['Applied'] ?? 0 }} applied · {{ $followUps->count() }} follow-ups ahead</p>
 
     {{-- Status --}}
@@ -30,7 +37,7 @@
                 <span class="w-8 text-right font-semibold tabular-nums text-body">{{ $n }}</span>
             </div>
         @empty
-            <p class="text-sm text-muted">No applications synced yet.</p>
+            <p class="text-sm text-muted">No applications yet.</p>
         @endforelse
     </div>
 
@@ -145,6 +152,7 @@
                 <div class="min-w-0">
                     <span class="font-semibold text-body">{{ $entry['title'] }}</span>
                     @if ($entry['app'])<span class="text-body"> · {{ $entry['app']->label() }}</span>@endif
+                    @if ($entry['source'] === 'api' || $entry['source'] === 'manual')<span class="ml-1 text-[10px] uppercase tracking-wide text-faint">{{ $entry['source'] === 'api' ? 'via API' : 'by hand' }}</span>@endif
                     @if ($entry['detail'])<div class="text-xs text-muted">{{ $entry['detail'] }}</div>@endif
                 </div>
             </li>
@@ -158,17 +166,140 @@
         <summary class="cursor-pointer px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">All applications ({{ $apps->count() }})</summary>
         <ul class="divide-y divide-white/10 border-t border-white/10">
             @foreach ($apps as $a)
-                <li class="px-4 py-3 text-sm">
+                <li class="px-4 py-3 text-sm" wire:key="app-{{ $a->id }}">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <span class="font-semibold text-body">
                             @if ($a->link)<a href="{{ $a->link }}" target="_blank" rel="noopener noreferrer" class="text-link no-underline hover:underline">{{ $a->label() }}</a>@else{{ $a->label() }}@endif
                         </span>
-                        <span class="flex items-center gap-1.5 text-xs text-muted"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($a->status) }}"></span>{{ $a->status }}</span>
+                        <span class="flex items-center gap-3 text-xs text-muted">
+                            <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($a->status) }}"></span>{{ $a->status }}</span>
+                            <button type="button" wire:click="openEdit({{ $a->id }})"
+                                    class="rounded border border-white/10 px-2 py-0.5 text-xs text-muted hover:border-[#39c5cf]/60 hover:text-body"
+                                    aria-label="Edit {{ $a->label() }}">Edit</button>
+                        </span>
                     </div>
+                    @if ($a->next_step || $a->follow_up_date)
+                        <div class="mt-0.5 text-xs text-muted">{{ collect([$a->next_step, $a->follow_up_date ? 'Follow up '.$a->follow_up_date->format('j M') : null])->filter()->implode(' · ') }}</div>
+                    @endif
                     <div class="mt-0.5 text-xs text-muted">{{ collect([$a->type, $a->rate, $a->ir35 && $a->ir35 !== 'N/A' ? 'IR35 '.$a->ir35 : null, $a->location])->filter()->implode(' · ') }}</div>
                     <div class="text-xs text-faint">{{ collect([$a->date_added ? 'Added '.$a->date_added->format('j M') : null, $a->date_applied ? 'Applied '.$a->date_applied->format('j M') : null, $a->source, $a->contact])->filter()->implode(' · ') }}</div>
                 </li>
             @endforeach
         </ul>
     </details>
+    @if ($showForm)
+        <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+             wire:keydown.escape.window="closeForm"
+             role="dialog" aria-modal="true" aria-labelledby="job-form-title">
+            <div class="absolute inset-0 bg-black/60" wire:click="closeForm" aria-hidden="true"></div>
+
+            <form wire:submit="save" class="relative z-10 max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:rounded-lg sm:p-5">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 id="job-form-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        {{ $editingId ? 'Edit application' : 'Add application' }}
+                    </h2>
+                    <button type="button" wire:click="closeForm"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+
+                @error('form.fields')<p class="mb-3 text-xs text-[#da3633]">{{ $message }}</p>@enderror
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Company *
+                        <input type="text" wire:model="form.company" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.company')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Role *
+                        <input type="text" wire:model="form.role" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.role')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Status
+                        <input type="text" list="job-statuses" wire:model="form.status" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        <datalist id="job-statuses">@foreach ($knownStatuses as $opt)<option value="{{ $opt }}"></option>@endforeach</datalist>
+                        @error('form.status')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Type
+                        <select wire:model="form.type" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                            <option value="">—</option>
+                            @foreach ($types as $opt)<option value="{{ $opt }}">{{ $opt }}</option>@endforeach
+                        </select>
+                        @error('form.type')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Date added
+                        <input type="date" wire:model="form.date_added" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.date_added')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Date applied
+                        <input type="date" wire:model="form.date_applied" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.date_applied')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Rate / salary
+                        <input type="text" wire:model="form.rate" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.rate')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        IR35
+                        <select wire:model="form.ir35" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                            <option value="">—</option>
+                            @foreach ($ir35Options as $opt)<option value="{{ $opt }}">{{ $opt }}</option>@endforeach
+                        </select>
+                        @error('form.ir35')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Location
+                        <input type="text" wire:model="form.location" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.location')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Source / recruiter
+                        <input type="text" wire:model="form.source" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.source')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Contact
+                        <input type="text" wire:model="form.contact" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.contact')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Link
+                        <input type="text" inputmode="url" wire:model="form.link" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.link')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted sm:col-span-2">
+                        Next step / result
+                        <textarea wire:model="form.next_step" rows="3" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none"></textarea>
+                        @error('form.next_step')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Follow-up date
+                        <input type="date" wire:model="form.follow_up_date" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('form.follow_up_date')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <span class="hidden sm:block"></span>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted sm:col-span-2">
+                        Notes
+                        <textarea wire:model="form.notes" rows="3" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none"></textarea>
+                        @error('form.notes')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                </div>
+
+                <p class="mt-3 text-[11px] text-faint">Changes to status, applied date, next step, follow-up and notes go into the progress log.</p>
+
+                <div class="sticky bottom-0 -mx-4 mt-4 flex justify-end gap-2 border-t border-white/10 bg-sidebar px-4 pt-3 sm:-mx-5 sm:px-5">
+                    <button type="button" wire:click="closeForm"
+                            class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">Cancel</button>
+                    <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">
+                        {{ $editingId ? 'Save' : 'Add' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endif
 </div>

@@ -160,16 +160,17 @@ class JobTrackerImport
                 $app->save();
 
                 foreach ($events as $e) {
-                    JobApplicationEvent::query()->create($e + ['job_application_id' => $app->id, 'occurred_at' => $now]);
+                    JobApplicationEvent::query()->create($e + ['job_application_id' => $app->id, 'occurred_at' => $now, 'source' => 'sync']);
                 }
             }
 
-            JobApplication::query()->whereNull('removed_at')->whereNotIn('key', $keys)->get()
+            // Only sheet-imported rows can drop out of the sheet; rows created on the page/API never do.
+            JobApplication::query()->where('origin', 'sheet')->whereNull('removed_at')->whereNotIn('key', $keys)->get()
                 ->each(function (JobApplication $app) use ($now, &$stats) {
                     $app->update(['removed_at' => $now]);
                     JobApplicationEvent::query()->create([
                         'job_application_id' => $app->id, 'type' => 'removed', 'from_value' => $app->status,
-                        'note' => 'No longer in the sheet', 'occurred_at' => $now,
+                        'note' => 'No longer in the sheet', 'occurred_at' => $now, 'source' => 'sync',
                     ]);
                     $stats['removed']++;
                 });

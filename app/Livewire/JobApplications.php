@@ -4,10 +4,11 @@ namespace App\Livewire;
 
 use App\Models\JobApplication;
 use App\Models\JobApplicationEvent;
-use App\Models\JobSyncRun;
 use App\Support\Clock;
+use App\Support\JobApplicationWriter;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -15,6 +16,16 @@ use Livewire\Component;
 #[Title('Applications')]
 class JobApplications extends Component
 {
+    /** Add/edit form state. */
+    public bool $showForm = false;
+
+    public ?int $editingId = null;
+
+    /** @var array<string, ?string> */
+    public array $form = [];
+
+    public ?string $flash = null;
+
     public const STATUS_COLORS = [
         'Applied' => '#f0883e',
         'To apply' => '#39c5cf',
@@ -121,7 +132,7 @@ class JobApplications extends Component
         $add = function (string $date, string $kind, string $title, ?string $detail, ?JobApplication $app) use (&$entries) {
             $k = ($app?->id ?? 0).'|'.$kind.'|'.$date;
             if (! isset($entries[$k])) {
-                $entries[$k] = compact('date', 'kind', 'title', 'detail', 'app');
+                $entries[$k] = compact('date', 'kind', 'title', 'detail', 'app') + ['source' => null];
             }
         };
 
@@ -161,17 +172,26 @@ class JobApplications extends Component
         }
 
         foreach ($events as $e) {
+            // A direct create already shows as "Added to tracker" on its Date added.
+            if ($e->type === 'created' && $e->application?->date_added) {
+                continue;
+            }
             $date = $e->occurred_at->copy()->timezone(Clock::timezone())->toDateString();
             [$kind, $title, $detail] = match ($e->type) {
                 'status' => ['status', 'Status changed', ($e->from_value ?? '—').' → '.($e->to_value ?? '—')],
                 'applied' => ['applied', 'Applied', 'Date applied set to '.$e->to_value],
                 'next_step' => ['note', 'Next step updated', $e->note],
+                'created' => ['added', 'Added', $e->to_value],
+                'follow_up' => ['follow-up', $e->to_value ? 'Follow-up set' : 'Follow-up cleared', $e->to_value ? Carbon::parse($e->to_value)->format('D j M').($e->note ? ' · '.$e->note : '') : null],
+                'notes' => ['note', 'Notes updated', $e->note ? mb_strimwidth($e->note, 0, 200, '…') : null],
+                'updated' => ['note', 'Details updated', $e->note],
                 'removed' => ['removed', 'Removed from sheet', $e->from_value],
                 'restored' => ['note', 'Back in sheet', null],
                 default => ['note', ucfirst($e->type), $e->note],
             };
             $add($date, 'event-'.$e->id, $title, $detail, $e->application);
             $entries[array_key_last($entries)]['kind'] = $kind;
+            $entries[array_key_last($entries)]['source'] = $e->source;
         }
 
         $list = array_values($entries);
@@ -180,10 +200,72 @@ class JobApplications extends Component
         return $list;
     }
 
+    /** @return array<string, ?string> */
+    private static function blankForm(): array
+    {
+        return array_fill_keys(JobApplicationWriter::FIELDS, null);
+    }
+
+    public function openCreate(): void
+    {
+        $this->resetErrorBag();
+        $this->editingId = null;
+        $this->form = array_merge(self::blankForm(), [
+            'status' => JobApplicationWriter::DEFAULT_STATUS,
+            'date_added' => Clock::todayString(),
+        ]);
+        $this->showForm = true;
+    }
+
+    public function openEdit(int $id): void
+    {
+        $app = JobApplication::query()->findOrFail($id);
+        $this->resetErrorBag();
+        $this->editingId = $app->id;
+        $this->form = JobApplicationWriter::values($app);
+        $this->showForm = true;
+    }
+
+    public function closeForm(): void
+    {
+        $this->resetErrorBag();
+        $this->showForm = false;
+        $this->editingId = null;
+        $this->form = [];
+    }
+
+    public function save(): void
+    {
+        $input = array_intersect_key($this->form, array_flip(JobApplicationWriter::FIELDS));
+        $input = array_map(fn ($v) => is_string($v) || $v === null ? $v : (string) $v, $input);
+
+        try {
+            if ($this->editingId) {
+                $app = JobApplication::query()->findOrFail($this->editingId);
+                $events = JobApplicationWriter::update($app, $input, 'manual');
+                $this->flash = $events ? 'Saved '.$app->fresh()->label().'.' : 'No changes.';
+            } else {
+                [$app] = JobApplicationWriter::create($input, 'manual');
+                $this->flash = 'Added '.$app->label().'.';
+            }
+        } catch (ValidationException $e) {
+            foreach ($e->errors() as $field => $messages) {
+                foreach ($messages as $m) {
+                    $this->addError('form.'.$field, $m);
+                }
+            }
+
+            return;
+        }
+
+        $this->closeForm();
+    }
+
     public function render()
     {
         $today = Clock::today();
-        $apps = JobApplication::query()->whereNull('removed_at')->orderBy('sheet_row')->get();
+        $apps = JobApplication::query()->whereNull('removed_at')
+            ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
 
         $statusCounts = [];
         foreach (array_keys(self::STATUS_COLORS) as $s) {
@@ -251,7 +333,11 @@ class JobApplications extends Component
             'maxWeek' => $maxWeek,
             'followUps' => $followUps,
             'log' => $log,
-            'lastSync' => JobSyncRun::query()->latest('synced_at')->latest('id')->first(),
+            'lastChange' => collect([JobApplication::query()->max('updated_at'), JobApplicationEvent::query()->max('occurred_at')])
+                ->filter()->map(fn ($v) => Carbon::parse($v, 'UTC'))->max(),
+            'knownStatuses' => JobApplicationWriter::KNOWN_STATUSES,
+            'types' => JobApplicationWriter::TYPES,
+            'ir35Options' => JobApplicationWriter::IR35,
             'today' => $today,
             'tz' => Clock::timezone(),
         ]);

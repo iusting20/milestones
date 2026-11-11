@@ -36,9 +36,14 @@ class JobApplicationsTest extends TestCase
         $this->get($this->url())->assertRedirect(route('login'));
     }
 
-    public function test_page_is_not_linked_from_nav(): void
+    public function test_gigs_nav_link_shows_only_for_logged_in_users(): void
     {
-        $this->get(route('read.stats'))->assertOk()->assertDontSee(config('jobs.page_token'));
+        $url = route('jobs.secret', config('jobs.page_token'));
+        $this->get(route('read.stats'))->assertOk()->assertSee('Gigs')->assertSee($url, false);
+
+        $this->flushSession();
+        $this->get(route('login'))->assertDontSee($url, false)->assertDontSee(config('jobs.page_token'));
+        $this->get(route('read.stats'))->assertRedirect(route('login'));
     }
 
     public function test_import_upserts_and_records_status_changes_and_removals(): void

@@ -182,6 +182,10 @@
         </div>
     @endif
 
+    @if ($reech['configured'] && ! $reech['available'])
+        <p class="mb-3 text-xs text-faint" data-reech-unavailable>Reech unavailable — Make Products sessions are not shown.</p>
+    @endif
+
     @unless ($hasLogs)
         <p class="text-sm text-muted">No finished log entries this week.</p>
     @endunless
@@ -241,6 +245,13 @@
                             </li>
                         @endforeach
                     </ul>
+                @endif
+                @if ($activity[$hubKey]['otherHubMinutes'] > 0)
+                    <p class="mt-3 flex items-baseline justify-between gap-3 border-t border-white/10 pt-2 text-xs text-muted" data-activity-other-hub="{{ $hubKey }}"
+                       title="Logged time linked only to {{ $hubKey === 'partners' ? 'an asset' : 'a client' }}, shown on the other chart">
+                        <span class="italic">+ {{ $hubKey === 'partners' ? 'Asset-only work (no client)' : 'Client-only work (no asset)' }}</span>
+                        <span class="shrink-0 tabular-nums">{{ $activity[$hubKey]['otherHubDuration'] }} · week {{ $activity[$hubKey]['weekDuration'] }}</span>
+                    </p>
                 @endif
             </section>
         @endforeach

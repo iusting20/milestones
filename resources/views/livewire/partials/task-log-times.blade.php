@@ -3,13 +3,22 @@
     $todoItemId = $todoItemId ?? null;
     $startLogId = $startLogId ?? $logId;
     $finishLogId = $finishLogId ?? $logId;
+    $readonly = $timed && \App\Support\ReechTimelog::isExternalId($startLogId);
     $isEditingUntimed = ! $timed
         && $editingTodoItemId !== null
         && $editingTodoItemId === $todoItemId
         && $editingContext === $context;
 @endphp
 
-@if (! $timed)
+@if ($readonly)
+    <div @class(['flex flex-wrap items-center gap-1 tabular-nums', $textClass ?? 'text-[10px] text-muted/70'])
+         data-reech-session title="From Reech (read-only)">
+        <span class="px-0.5">{{ $started }}</span>
+        <span aria-hidden="true">→</span>
+        <span class="px-0.5">{{ $finished }}</span>
+        <span class="text-faint">· Reech</span>
+    </div>
+@elseif (! $timed)
     <div @class(['flex flex-wrap items-center gap-1 tabular-nums', $textClass ?? 'text-[10px] text-muted/70'])>
         @if ($isEditingUntimed)
             <div class="flex flex-wrap items-center gap-1"

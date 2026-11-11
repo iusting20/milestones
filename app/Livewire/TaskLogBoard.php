@@ -9,6 +9,7 @@ use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
 use App\Support\Clock;
 use App\Support\IdleTimeline;
+use App\Support\ReechTimelog;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -87,6 +88,9 @@ class TaskLogBoard extends Component
     public ?string $activityHub = null;
 
     public ?string $activityRow = null;
+
+    /** Reech feed state of the last weekLogs() call (configured / available). */
+    private array $reechState = ['configured' => false, 'available' => true];
 
     public function mount(): void
     {
@@ -241,6 +245,11 @@ class TaskLogBoard extends Component
         }
 
         if (! in_array($context, ['day', 'stats'], true)) {
+            return;
+        }
+
+        // Reech sessions (negative ids) are read-only here.
+        if (ReechTimelog::isExternalId($id)) {
             return;
         }
 
@@ -401,11 +410,7 @@ class TaskLogBoard extends Component
         $today = Clock::todayString();
 
         /** @var Collection<int, TaskLog> $logs */
-        $logs = TaskLog::query()
-            ->whereBetween('finished_at', [$start, $end])
-            ->orderBy('started_at')
-            ->orderBy('id')
-            ->get();
+        $logs = $this->weekLogs();
 
         /** @var Collection<string, Collection<int, TodoItem>> $completedUntimedByDate */
         $completedUntimedByDate = TodoItem::query()
@@ -516,6 +521,7 @@ class TaskLogBoard extends Component
                 'assets' => $this->hubActivity('assets', $logs),
             ],
             'activityModal' => $this->activityModal($logs),
+            'reech' => $this->reechState,
             'weekNumber' => $this->weekNumber(),
             'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
             'hasLogs' => $hasEntries,
@@ -1174,15 +1180,21 @@ class TaskLogBoard extends Component
         $othersItems = [];
         $othersDays = [];
         $daysByName = [];
+        $otherHubMinutes = 0;
+        $weekMinutes = 0;
 
         foreach ($logs as $log) {
             $minutes = $this->durationMinutes($log);
             $title = (string) $log->title;
             $dateKey = $log->finished_at->timezone('Europe/Bucharest')->toDateString();
             $name = $match($log);
+            $weekMinutes += $minutes;
 
             // Connected to the other side only: belongs to the other chart, not to Others.
+            // Counted separately so the chart can show how it adds up to the week total.
             if ($name === null && $matchOther($log) !== null) {
+                $otherHubMinutes += $minutes;
+
                 continue;
             }
 
@@ -1215,6 +1227,12 @@ class TaskLogBoard extends Component
         return [
             'totalMinutes' => $total,
             'totalDuration' => $this->formatDuration($total),
+            // Time linked only to the other hub (not on this chart) and the week total:
+            // totalMinutes + otherHubMinutes === weekMinutes.
+            'otherHubMinutes' => $otherHubMinutes,
+            'otherHubDuration' => $this->formatDuration($otherHubMinutes),
+            'weekMinutes' => $weekMinutes,
+            'weekDuration' => $this->formatDuration($weekMinutes),
             'rows' => array_map(fn (array $row): array => $row + [
                 'duration' => $this->formatDuration($row['minutes']),
                 'share' => $total > 0 ? round($row['minutes'] / $total * 100, 1) : 0.0,
@@ -1320,16 +1338,32 @@ class TaskLogBoard extends Component
         );
     }
 
-    /** @return Collection<int, TaskLog> */
+    /**
+     * The week's own task logs plus the read-only Reech work sessions ("Make Products - ..."),
+     * which are unsaved TaskLog models with negative ids (see ReechTimelog).
+     *
+     * @return Collection<int, TaskLog>
+     */
     private function weekLogs(): Collection
     {
         $start = $this->weekStart()->copy()->startOfDay();
 
-        return TaskLog::query()
+        $own = TaskLog::query()
             ->whereBetween('finished_at', [$start, $start->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay()])
             ->orderBy('started_at')
             ->orderBy('id')
             ->get();
+
+        $reech = ReechTimelog::forDays($start->toDateString(), $start->copy()->addDays(6)->toDateString());
+        $this->reechState = ['configured' => $reech['configured'], 'available' => $reech['available']];
+
+        if ($reech['logs']->isEmpty()) {
+            return $own;
+        }
+
+        return $own->concat($reech['logs'])
+            ->sortBy(fn (TaskLog $log): array => [$log->started_at->getTimestamp(), $log->id])
+            ->values();
     }
 
     /**

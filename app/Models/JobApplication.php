@@ -7,9 +7,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JobApplication extends Model
 {
+    protected $attributes = [
+        'category' => 'software',
+    ];
+
     protected $fillable = [
         'key', 'date_added', 'status', 'date_applied', 'company', 'role', 'type', 'rate', 'ir35',
-        'location', 'source', 'link', 'contact', 'next_step', 'follow_up_date', 'notes', 'sheet_row',
+        'category', 'location', 'source', 'link', 'contact', 'next_step', 'follow_up_date', 'notes', 'sheet_row',
         'first_seen_at', 'last_seen_at', 'removed_at', 'origin',
     ];
 

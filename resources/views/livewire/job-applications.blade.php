@@ -23,7 +23,17 @@
     @if ($flash)
         <p class="mb-2 text-xs text-[#39c5cf]" wire:key="flash">{{ $flash }}</p>
     @endif
-    <p class="mb-6 text-sm text-muted">{{ $apps->count() }} roles tracked · {{ $statusCounts['Applied'] ?? 0 }} applied · {{ $followUps->count() }} follow-ups ahead</p>
+    <p class="mb-4 text-sm text-muted">{{ $apps->count() }} roles tracked · {{ $statusCounts['Applied'] ?? 0 }} applied · {{ $followUps->count() }} follow-ups ahead</p>
+
+    <div class="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter by category">
+        @foreach (['all' => 'All'] + $categories as $value => $label)
+            <button type="button" wire:click="$set('category', '{{ $value }}')"
+                    class="rounded border px-3 py-1.5 text-sm {{ $category === $value ? 'border-[#39c5cf]/70 bg-[#39c5cf]/10 font-medium text-body' : 'border-white/15 text-muted hover:border-white/30 hover:text-body' }}"
+                    @if ($category === $value) aria-current="true" @endif>
+                {{ $label }}
+            </button>
+        @endforeach
+    </div>
 
     {{-- Status --}}
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">By status</h2>
@@ -181,7 +191,7 @@
                     @if ($a->next_step || $a->follow_up_date)
                         <div class="mt-0.5 text-xs text-muted">{{ collect([$a->next_step, $a->follow_up_date ? 'Follow up '.$a->follow_up_date->format('j M') : null])->filter()->implode(' · ') }}</div>
                     @endif
-                    <div class="mt-0.5 text-xs text-muted">{{ collect([$a->type, $a->rate, $a->ir35 && $a->ir35 !== 'N/A' ? 'IR35 '.$a->ir35 : null, $a->location])->filter()->implode(' · ') }}</div>
+                    <div class="mt-0.5 text-xs text-muted">{{ collect([$categories[$a->category] ?? null, $a->type, $a->rate, $a->ir35 && $a->ir35 !== 'N/A' ? 'IR35 '.$a->ir35 : null, $a->location])->filter()->implode(' · ') }}</div>
                     <div class="text-xs text-faint">{{ collect([$a->date_added ? 'Added '.$a->date_added->format('j M') : null, $a->date_applied ? 'Applied '.$a->date_applied->format('j M') : null, $a->source, $a->contact])->filter()->implode(' · ') }}</div>
                 </li>
             @endforeach
@@ -214,6 +224,13 @@
                         Role *
                         <input type="text" wire:model="form.role" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
                         @error('form.role')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Category
+                        <select wire:model="form.category" class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                            @foreach ($categories as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                        </select>
+                        @error('form.category')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
                     </label>
                     <label class="block text-xs uppercase tracking-[0.14em] text-muted">
                         Status

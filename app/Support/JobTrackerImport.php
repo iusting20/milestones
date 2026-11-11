@@ -132,6 +132,7 @@ class JobTrackerImport
                 unset($fields['key']);
 
                 if (! $app) {
+                    $row['category'] = JobApplicationWriter::inferCategory($row['role']);
                     JobApplication::query()->create($row + ['first_seen_at' => $now, 'last_seen_at' => $now]);
                     $stats['created']++;
 

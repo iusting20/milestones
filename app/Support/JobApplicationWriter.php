@@ -21,7 +21,7 @@ class JobApplicationWriter
 
     /** Editable fields, in form order. */
     public const FIELDS = [
-        'company', 'role', 'status', 'date_added', 'date_applied', 'type', 'rate', 'ir35',
+        'company', 'role', 'category', 'status', 'date_added', 'date_applied', 'type', 'rate', 'ir35',
         'location', 'source', 'link', 'contact', 'next_step', 'follow_up_date', 'notes',
     ];
 
@@ -31,6 +31,15 @@ class JobApplicationWriter
     public const KNOWN_STATUSES = ['To apply', 'Applied', 'Interview', 'Offer', 'Rejected', 'closed', 'Low priority (perm)'];
 
     public const TYPES = ['Contract', 'Permanent'];
+
+    public const CATEGORIES = ['software', 'ai'];
+
+    public const CATEGORY_LABELS = [
+        'software' => 'Software Engineer',
+        'ai' => 'AI Engineer',
+    ];
+
+    public const DEFAULT_CATEGORY = 'software';
 
     public const IR35 = ['Outside', 'Inside', 'N/A'];
 
@@ -70,6 +79,16 @@ class JobApplicationWriter
         $rules = [
             'company' => $req.'|string|max:255',
             'role' => $req.'|string|max:255',
+            'category' => array_values(array_filter([
+                $creating ? 'nullable' : 'sometimes',
+                $creating ? null : 'required',
+                'string',
+                function ($attr, $value, $fail) {
+                    if (self::canonicalCategory($value) === null) {
+                        $fail('The category must be software or ai.');
+                    }
+                },
+            ])),
             'status' => $str,
             'date_added' => 'nullable|date_format:Y-m-d',
             'date_applied' => 'nullable|date_format:Y-m-d',
@@ -92,6 +111,9 @@ class JobApplicationWriter
 
         $data = Validator::make($data, $rules, $messages)->validate();
 
+        if (array_key_exists('category', $data) && $data['category'] !== null) {
+            $data['category'] = self::canonicalCategory($data['category']);
+        }
         if (array_key_exists('status', $data) && $data['status'] !== null) {
             $data['status'] = self::canonical($data['status'], self::KNOWN_STATUSES) ?? $data['status'];
         }
@@ -116,6 +138,33 @@ class JobApplicationWriter
         return null;
     }
 
+    /** Normalise API/form input to software|ai; also accepts the display labels. */
+    public static function canonicalCategory(?string $value): ?string
+    {
+        $v = strtolower(trim((string) $value));
+        $v = str_replace(['_', '-'], ' ', $v);
+
+        return match ($v) {
+            'software', 'software engineer' => 'software',
+            'ai', 'ai engineer' => 'ai',
+            default => null,
+        };
+    }
+
+    /**
+     * Infer category from a role title. "AI" matches as a whole word only (so
+     * "maintain" is not a hit). "agent" also matches agentic/agents. "LLM",
+     * "LangGraph", "applied AI" and "artificial intelligence" also count as AI.
+     */
+    public static function inferCategory(?string $role): string
+    {
+        if (preg_match('/\bai\b|\bagent|\bllm\b|\blanggraph\b|applied\s+ai|artificial\s+intelligence/iu', (string) $role)) {
+            return 'ai';
+        }
+
+        return self::DEFAULT_CATEGORY;
+    }
+
     /** Unique key for rows created directly; can't collide with the sheet import's sha1 keys. */
     public static function newKey(): string
     {
@@ -135,6 +184,7 @@ class JobApplicationWriter
         $data = self::validate($input, true);
         $now = ($now ?? Carbon::now())->copy()->utc();
         $data['status'] = $data['status'] ?? self::DEFAULT_STATUS;
+        $data['category'] = $data['category'] ?? self::DEFAULT_CATEGORY;
         $data['date_added'] = $data['date_added'] ?? Clock::todayString();
 
         return DB::transaction(function () use ($data, $source, $now) {

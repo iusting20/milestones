@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /** Secret (unlinked, login-protected) dashboard for freelance/job applications. */
@@ -25,6 +26,10 @@ class JobApplications extends Component
     public array $form = [];
 
     public ?string $flash = null;
+
+    /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
+    #[Url(as: 'category', history: true, except: 'all')]
+    public string $category = 'all';
 
     public const STATUS_COLORS = [
         'Applied' => '#f0883e',
@@ -206,12 +211,30 @@ class JobApplications extends Component
         return array_fill_keys(JobApplicationWriter::FIELDS, null);
     }
 
+    public function mount(): void
+    {
+        $this->normalizeCategoryFilter();
+    }
+
+    public function updatedCategory(): void
+    {
+        $this->normalizeCategoryFilter();
+    }
+
+    private function normalizeCategoryFilter(): void
+    {
+        if (! in_array($this->category, ['all', ...JobApplicationWriter::CATEGORIES], true)) {
+            $this->category = 'all';
+        }
+    }
+
     public function openCreate(): void
     {
         $this->resetErrorBag();
         $this->editingId = null;
         $this->form = array_merge(self::blankForm(), [
             'status' => JobApplicationWriter::DEFAULT_STATUS,
+            'category' => JobApplicationWriter::DEFAULT_CATEGORY,
             'date_added' => Clock::todayString(),
         ]);
         $this->showForm = true;
@@ -264,7 +287,9 @@ class JobApplications extends Component
     public function render()
     {
         $today = Clock::today();
+        $this->normalizeCategoryFilter();
         $apps = JobApplication::query()->whereNull('removed_at')
+            ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
             ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
 
         $statusCounts = [];
@@ -314,8 +339,13 @@ class JobApplications extends Component
         $followUps = $apps->filter(fn ($a) => $a->follow_up_date && $a->follow_up_date->gte($today))
             ->sortBy(fn ($a) => $a->follow_up_date->toDateString())->values();
 
-        $events = JobApplicationEvent::query()->with('application')->orderBy('occurred_at')->get();
-        $log = self::progressLog(JobApplication::query()->get(), $events, $today);
+        $events = JobApplicationEvent::query()->with('application')
+            ->when($this->category !== 'all', fn ($q) => $q->whereHas('application', fn ($q) => $q->where('category', $this->category)))
+            ->orderBy('occurred_at')->get();
+        $logApps = JobApplication::query()
+            ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
+            ->get();
+        $log = self::progressLog($logApps, $events, $today);
 
         return view('livewire.job-applications', [
             'apps' => $apps,
@@ -337,6 +367,7 @@ class JobApplications extends Component
                 ->filter()->map(fn ($v) => Carbon::parse($v, 'UTC'))->max(),
             'knownStatuses' => JobApplicationWriter::KNOWN_STATUSES,
             'types' => JobApplicationWriter::TYPES,
+            'categories' => JobApplicationWriter::CATEGORY_LABELS,
             'ir35Options' => JobApplicationWriter::IR35,
             'today' => $today,
             'tz' => Clock::timezone(),

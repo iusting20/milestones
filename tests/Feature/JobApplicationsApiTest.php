@@ -144,6 +144,7 @@ class JobApplicationsApiTest extends TestCase
             ->call('openCreate')
             ->assertSet('showForm', true)
             ->assertSet('form.status', 'To apply')
+            ->assertSet('form.category', 'software')
             ->set('form.company', '')
             ->set('form.role', 'Dev')
             ->call('save')
@@ -194,5 +195,45 @@ class JobApplicationsApiTest extends TestCase
         JobTrackerImport::import("Date added,Status,Date applied,Company,Role,Type,Rate / Salary,IR35,Location,Source / Recruiter,Link,Contact,Next step / result,Follow-up date,Notes\n2026-10-26,To apply,,Acme,AI,Contract,,,,,,,,,\n", 'test');
         $this->assertNull(JobApplication::query()->findOrFail($id)->removed_at);
         $this->assertSame(2, JobApplication::query()->whereNull('removed_at')->count());
+    }
+    public function test_category_is_accepted_returned_and_filterable(): void
+    {
+        $this->flushSession();
+
+        $soft = $this->postJson('/api/jobs', ['company' => 'SoftCo', 'role' => 'Platform Engineer'], $this->auth());
+        $soft->assertCreated()
+            ->assertJsonPath('data.category', 'software')
+            ->assertJsonPath('data.company', 'SoftCo');
+
+        $ai = $this->postJson('/api/jobs', [
+            'company' => 'AiCo', 'role' => 'Applied AI Engineer', 'category' => 'AI Engineer',
+        ], $this->auth());
+        $ai->assertCreated()->assertJsonPath('data.category', 'ai');
+
+        $this->postJson('/api/jobs', ['company' => 'X', 'role' => 'Y', 'category' => 'design'], $this->auth())
+            ->assertUnprocessable()->assertJsonValidationErrors('category');
+
+        $this->getJson('/api/jobs', $this->auth())->assertOk()
+            ->assertJsonPath('meta.count', 2)
+            ->assertJsonPath('data.0.category', 'software');
+
+        $this->getJson('/api/jobs?category=ai', $this->auth())
+            ->assertOk()->assertJsonPath('meta.count', 1)->assertJsonPath('data.0.company', 'AiCo');
+        $this->getJson('/api/jobs?category=SOFTWARE', $this->auth())
+            ->assertOk()->assertJsonPath('meta.count', 1)->assertJsonPath('data.0.company', 'SoftCo');
+        $this->getJson('/api/jobs?category=nope', $this->auth())
+            ->assertOk()->assertJsonPath('meta.count', 0);
+
+        $this->patchJson('/api/jobs/'.$soft->json('data.id'), ['category' => 'ai'], $this->auth())
+            ->assertOk()->assertJsonPath('data.category', 'ai');
+        $this->assertDatabaseHas('job_application_events', [
+            'job_application_id' => $soft->json('data.id'),
+            'type' => 'updated',
+            'note' => 'Changed category',
+            'source' => 'api',
+        ]);
+
+        $this->patchJson('/api/jobs/'.$soft->json('data.id'), ['category' => ''], $this->auth())
+            ->assertUnprocessable()->assertJsonValidationErrors('category');
     }
 }

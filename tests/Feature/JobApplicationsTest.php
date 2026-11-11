@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Livewire\JobApplications;
 use App\Models\JobApplication;
 use App\Models\JobApplicationEvent;
+use App\Support\JobApplicationWriter;
 use App\Support\JobTrackerImport;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class JobApplicationsTest extends TestCase
@@ -92,5 +94,76 @@ class JobApplicationsTest extends TestCase
         $log = JobApplications::progressLog(collect([$app]), collect(), Carbon::parse('2026-11-11'));
         $kinds = array_map(fn ($e) => $e['date'].' '.$e['kind'], $log);
         $this->assertSame(['2026-11-07 added', '2026-10-12 rejected', '2026-09-22 applied'], $kinds);
+    }
+    public function test_category_is_inferred_from_role_title(): void
+    {
+        $ai = [
+            'AI Engineer',
+            'Senior Applied AI Engineer',
+            'NL Query Orchestration Developer (LangGraph)',
+            'Senior Software Engineer – Agentic Workflows',
+            'Artificial Intelligence Engineer',
+            'Artificial Intelligence Consultant',
+            'AI Engineer (LLM / agentic)',
+            'Full-stack AI Engineer / Senior Full-Stack – AI Agent Platform',
+            'ai automation engineer',
+        ];
+        foreach ($ai as $role) {
+            $this->assertSame('ai', JobApplicationWriter::inferCategory($role), $role);
+        }
+
+        $software = [
+            'Senior Full-Stack Software Engineer',
+            'Senior Product Engineer',
+            'Full Stack Engineer (Node.js TypeScript React)',
+            'Platform maintain lead',
+            'Details available on request',
+            null,
+            '',
+        ];
+        foreach ($software as $role) {
+            $this->assertSame('software', JobApplicationWriter::inferCategory($role), (string) $role);
+        }
+    }
+
+    public function test_category_filter_limits_list_and_counts(): void
+    {
+        JobApplication::query()->create([
+            'key' => 'k-soft', 'company' => 'FilterCoSoft', 'role' => 'Staff Platform Engineer',
+            'category' => 'software', 'status' => 'Applied', 'date_added' => '2026-11-01',
+        ]);
+        JobApplication::query()->create([
+            'key' => 'k-ai', 'company' => 'FilterCoAI', 'role' => 'Staff LLM Engineer',
+            'category' => 'ai', 'status' => 'To apply', 'date_added' => '2026-11-02',
+        ]);
+
+        $this->get($this->url())->assertOk()
+            ->assertSee('FilterCoSoft')->assertSee('FilterCoAI')
+            ->assertSee('2 roles tracked')
+            ->assertSee('All')->assertSee('Software Engineer')->assertSee('AI Engineer');
+
+        $this->get($this->url().'?category=ai')->assertOk()
+            ->assertSee('FilterCoAI')->assertDontSee('FilterCoSoft')
+            ->assertSee('1 roles tracked');
+
+        $this->get($this->url().'?category=software')->assertOk()
+            ->assertSee('FilterCoSoft')->assertDontSee('FilterCoAI')
+            ->assertSee('1 roles tracked');
+
+        $this->get($this->url().'?category=nope')->assertOk()
+            ->assertSee('FilterCoSoft')->assertSee('FilterCoAI')
+            ->assertSee('2 roles tracked');
+
+        Livewire::withQueryParams(['category' => 'ai'])
+            ->test(JobApplications::class)
+            ->assertSet('category', 'ai')
+            ->assertSee('FilterCoAI')
+            ->assertDontSee('FilterCoSoft')
+            ->set('category', 'software')
+            ->assertSee('FilterCoSoft')
+            ->assertDontSee('FilterCoAI')
+            ->set('category', 'all')
+            ->assertSee('FilterCoSoft')
+            ->assertSee('FilterCoAI');
     }
 }

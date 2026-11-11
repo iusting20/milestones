@@ -22,6 +22,14 @@ class JobApplicationController extends Controller
         if ($request->filled('status')) {
             $query->whereRaw('lower(status) = ?', [mb_strtolower((string) $request->query('status'))]);
         }
+        if ($request->filled('category')) {
+            $category = JobApplicationWriter::canonicalCategory((string) $request->query('category'));
+            if ($category) {
+                $query->where('category', $category);
+            } else {
+                $query->whereRaw('0 = 1');
+            }
+        }
         if ($withEvents) {
             $query->with(['events' => fn ($q) => $q->orderBy('occurred_at')->orderBy('id')]);
         }

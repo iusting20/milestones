@@ -4,6 +4,7 @@ use App\Http\Controllers\ImpactMapController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
+use App\Livewire\JobApplications;
 use App\Livewire\LinkHub;
 use App\Livewire\Read;
 use App\Livewire\ReadStats;
@@ -36,6 +37,13 @@ Route::view('/comms', 'comms')->name('comms');
 Route::get('/read', Read::class)->name('read');
 
 Route::get('/read/stats', ReadStats::class)->name('read.stats');
+
+// Secret, unlinked job-applications dashboard: unguessable path (JOBS_PAGE_TOKEN) + the normal login.
+if (filled(config('jobs.page_token'))) {
+    Route::get('/x/{token}', JobApplications::class)
+        ->where('token', preg_quote((string) config('jobs.page_token'), '/'))
+        ->name('jobs.secret');
+}
 
 Route::redirect('/links', '/links/partners');
 

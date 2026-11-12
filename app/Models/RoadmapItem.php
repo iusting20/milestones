@@ -16,6 +16,7 @@ class RoadmapItem extends Model
     protected $fillable = [
         'title',
         'started_on',
+        'finish_on',
         'completed_on',
     ];
 
@@ -23,6 +24,7 @@ class RoadmapItem extends Model
     {
         return [
             'started_on' => 'date',
+            'finish_on' => 'date',
             'completed_on' => 'date',
         ];
     }
@@ -37,15 +39,43 @@ class RoadmapItem extends Model
         return $this->started_on->copy()->startOfDay();
     }
 
+    /** Scheduled finish day (optional), or null when none is set. */
+    public function scheduledFinish(): ?Carbon
+    {
+        return $this->finish_on?->copy()->startOfDay();
+    }
+
+    /** True when the item was completed after its scheduled finish day. */
+    public function completedLate(): bool
+    {
+        $finish = $this->scheduledFinish();
+
+        return $finish !== null
+            && $this->completed_on !== null
+            && $this->completed_on->copy()->startOfDay()->gt($finish);
+    }
+
+    /**
+     * Last day the bar covers: the later of the scheduled finish and the completion day
+     * (or today while pending), so a late completion extends the bar past the finish day.
+     */
     public function rangeEnd(?Carbon $today = null): Carbon
     {
-        if ($this->completed_on !== null) {
-            return $this->completed_on->copy()->startOfDay();
-        }
-
-        $today = ($today ?? Clock::today())->copy()->startOfDay();
         $start = $this->rangeStart();
 
-        return $today->lt($start) ? $start : $today;
+        if ($this->completed_on !== null) {
+            $end = $this->completed_on->copy()->startOfDay();
+        } else {
+            $today = ($today ?? Clock::today())->copy()->startOfDay();
+            $end = $today->lt($start) ? $start : $today;
+        }
+
+        $finish = $this->scheduledFinish();
+
+        if ($finish !== null && $finish->gt($end)) {
+            $end = $finish;
+        }
+
+        return $end->lt($start) ? $start : $end;
     }
 }

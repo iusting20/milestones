@@ -1,21 +1,20 @@
 <div class="mx-auto max-w-5xl px-3 py-6 sm:px-4">
     <div class="mb-5 flex flex-wrap items-center gap-2">
-        <button type="button" wire:click="previousMonth"
-                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                aria-label="Previous month">‹</button>
+        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Timeline</h1>
 
-        <h1 class="inline-block bg-mark px-3 py-1 text-sm font-bold uppercase tracking-wide text-black sm:text-base">
-            Roadmaps - {{ $monthLabel }}
-        </h1>
-
-        <button type="button" wire:click="nextMonth"
-                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                aria-label="Next month">›</button>
-
-        <button type="button" wire:click="goToThisMonth"
-                class="ml-auto rounded border border-white/10 px-3 py-1.5 text-sm text-link no-underline hover:bg-panel">
-            Today
-        </button>
+        <div class="ml-2 flex items-center gap-0.5 text-xs text-muted" data-month-toggle>
+            <button type="button" wire:click="previousMonth"
+                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
+                    aria-label="Previous month">‹</button>
+            <span class="px-1 tabular-nums" data-month-label title="{{ $this->month }}">{{ $monthLabel }}</span>
+            <button type="button" wire:click="nextMonth"
+                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
+                    aria-label="Next month">›</button>
+            @unless ($isCurrentMonth)
+                <button type="button" wire:click="goToThisMonth"
+                        class="ml-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-body" data-month-today>This month</button>
+            @endunless
+        </div>
     </div>
 
     <div class="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11px] uppercase tracking-[0.18em] text-muted">
@@ -71,28 +70,31 @@
                                                  'roadmap-track-done' => ! $segment['pending'],
                                              ])
                                              style="grid-column: {{ $segment['col'] }} / span {{ $segment['span'] }}; --span: {{ $segment['span'] }}">
-                                            @if (! $segment['continuesLeft'])
-                                                <span class="roadmap-endpoint roadmap-endpoint-start" aria-hidden="true">
-                                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-                                                        <path d="M8 2.2v4.2"/>
-                                                        <path d="M4.15 4.7a5 5 0 1 0 7.7 0"/>
-                                                    </svg>
+                                            @foreach ($segment['markers'] as $marker)
+                                                <span class="roadmap-endpoint roadmap-endpoint-{{ $marker['type'] }}"
+                                                      style="--at: {{ $marker['at'] }}"
+                                                      data-marker="{{ $marker['type'] }}"
+                                                      data-date="{{ $marker['date'] }}"
+                                                      aria-hidden="true">
+                                                    @if ($marker['type'] === 'done')
+                                                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                                            <path d="M3.2 8.2 6.4 11.4 12.8 4.6"/>
+                                                        </svg>
+                                                    @else
+                                                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                                                            <path d="M8 2.2v4.2"/>
+                                                            <path d="M4.15 4.7a5 5 0 1 0 7.7 0"/>
+                                                        </svg>
+                                                    @endif
                                                 </span>
-                                            @endif
-                                            @if (! $segment['pending'] && ! $segment['continuesRight'])
-                                                <span class="roadmap-endpoint roadmap-endpoint-end" aria-hidden="true">
-                                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                                                        <path d="M3.2 8.2 6.4 11.4 12.8 4.6"/>
-                                                    </svg>
-                                                </span>
-                                            @endif
+                                            @endforeach
                                             <div @class([
                                                 'roadmap-bar',
                                                 'roadmap-color-'.$segment['colorIndex'] => $segment['pending'],
                                                 'roadmap-bar-pending' => $segment['pending'],
                                                 'roadmap-bar-done' => ! $segment['pending'],
-                                                'roadmap-bar-from-dot' => ! $segment['continuesLeft'] && ! ($segment['span'] === 1 && ! $segment['pending'] && ! $segment['continuesRight']),
-                                                'roadmap-bar-to-dot' => ! $segment['pending'] && ! $segment['continuesRight'] && ! ($segment['span'] === 1 && ! $segment['continuesLeft']),
+                                                'roadmap-bar-from-dot' => $segment['fromDot'],
+                                                'roadmap-bar-to-dot' => $segment['toDot'],
                                                 'rounded-l-sm' => ! $segment['continuesLeft'],
                                                 'rounded-r-sm' => ! $segment['continuesRight'],
                                                 'rounded-l-none' => $segment['continuesLeft'],
@@ -149,6 +151,17 @@
                                onpointerdown="if (this.showPicker) { event.preventDefault(); this.showPicker(); }">
                     </label>
                     <span aria-hidden="true">→</span>
+                    <label @class(['roadmap-date-hit', 'text-muted/60' => $item->finish_on === null]) title="{{ $item->finish_on ? 'Edit scheduled finish' : 'Set scheduled finish' }}" data-finish-for="{{ $item->id }}">
+                        <span class="pointer-events-none">{{ $item->finish_on ? $item->finish_on->format('j M') : 'finish?' }}</span>
+                        <input type="date"
+                               value="{{ $item->finish_on?->toDateString() }}"
+                               min="{{ $item->started_on->toDateString() }}"
+                               wire:change="updateFinishOn({{ $item->id }}, $event.target.value)"
+                               class="roadmap-date-input"
+                               aria-label="Scheduled finish for {{ $item->title }}"
+                               onpointerdown="if (this.showPicker) { event.preventDefault(); this.showPicker(); }">
+                    </label>
+                    <span aria-hidden="true" class="px-0.5">·</span>
                     @if ($item->isPending())
                         <label class="roadmap-date-hit text-mark" title="Set completion date">
                             <span class="pointer-events-none">pending</span>
@@ -262,12 +275,21 @@
                            class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
                 </label>
 
-                <label class="block text-xs uppercase tracking-[0.14em] text-muted">
-                    Start date
-                    <input type="date"
-                           wire:model="startedOn"
-                           class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
-                </label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Start date
+                        <input type="date"
+                               wire:model="startedOn"
+                               class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                    </label>
+
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Finish date <span class="normal-case tracking-normal text-muted/60">(optional)</span>
+                        <input type="date"
+                               wire:model="finishOn"
+                               class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none" />
+                    </label>
+                </div>
 
                 <div class="mt-5 flex justify-end gap-2">
                     <button type="button"

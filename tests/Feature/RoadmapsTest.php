@@ -18,7 +18,7 @@ class RoadmapsTest extends TestCase
 
         $this->get(route('roadmaps'))
             ->assertOk()
-            ->assertSee('Roadmaps')
+            ->assertSee('Timeline')
             ->assertSee('SEPTEMBER 2026')
             ->assertSeeLivewire(Roadmaps::class);
     }
@@ -301,5 +301,180 @@ class RoadmapsTest extends TestCase
         preg_match_all('/<span class="truncate">Span many weeks<\/span>/', $html, $matches);
 
         $this->assertCount(2, $matches[0]);
+    }
+
+    public function test_header_uses_subtle_month_toggle_like_week_board(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->assertSee('data-month-toggle', false)
+            ->assertSee('SEPTEMBER 2026')
+            ->assertDontSee('data-month-today', false)
+            ->call('nextMonth')
+            ->assertSet('month', '2026-10')
+            ->assertSee('OCTOBER 2026')
+            ->assertSee('data-month-today', false)
+            ->call('goToThisMonth')
+            ->assertSet('month', '2026-09');
+    }
+
+    public function test_can_add_item_with_scheduled_finish(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->assertSet('finishOn', '')
+            ->set('newTitle', 'Planned work')
+            ->set('startedOn', '2026-09-03')
+            ->set('finishOn', '2026-09-25')
+            ->call('addItem')
+            ->assertSee('25 Sep');
+
+        $item = RoadmapItem::query()->where('title', 'Planned work')->firstOrFail();
+        $this->assertSame('2026-09-25', $item->finish_on->toDateString());
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->set('newTitle', 'Backwards finish')
+            ->set('startedOn', '2026-09-10')
+            ->set('finishOn', '2026-09-01')
+            ->call('addItem');
+
+        $this->assertSame('2026-09-10', RoadmapItem::query()->where('title', 'Backwards finish')->firstOrFail()->finish_on->toDateString());
+    }
+
+    public function test_can_set_clamp_and_clear_scheduled_finish_inline(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Finish line',
+            'started_on' => '2026-09-10',
+        ]);
+
+        Livewire::test(Roadmaps::class)->call('updateFinishOn', $item->id, '2026-09-24');
+        $this->assertSame('2026-09-24', $item->fresh()->finish_on->toDateString());
+
+        Livewire::test(Roadmaps::class)->call('updateFinishOn', $item->id, '2026-09-01');
+        $this->assertSame('2026-09-10', $item->fresh()->finish_on->toDateString());
+
+        Livewire::test(Roadmaps::class)->call('updateFinishOn', $item->id, '');
+        $this->assertNull($item->fresh()->finish_on);
+    }
+
+    public function test_moving_start_after_finish_clamps_finish(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Clamp finish',
+            'started_on' => '2026-09-01',
+            'finish_on' => '2026-09-05',
+        ]);
+
+        Livewire::test(Roadmaps::class)->call('updateStartedOn', $item->id, '2026-09-10');
+
+        $this->assertSame('2026-09-10', $item->fresh()->finish_on->toDateString());
+    }
+
+    public function test_pending_item_bar_runs_to_scheduled_finish_with_start_and_finish_markers(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'Future finish',
+            'started_on' => '2026-09-15',
+            'finish_on' => '2026-09-24',
+        ]);
+
+        $html = Livewire::test(Roadmaps::class)->html();
+
+        $this->assertStringContainsString('data-marker="start"', $html);
+        $this->assertStringContainsString('data-marker="finish"', $html);
+        $this->assertStringContainsString('data-date="2026-09-15"', $html);
+        $this->assertStringContainsString('data-date="2026-09-24"', $html);
+        $this->assertStringNotContainsString('data-marker="done"', $html);
+        // Thu 24 Sep is the 4th day (offset 3) of its Mon-Sun week segment.
+        $this->assertMatchesRegularExpression('/style="--at: 3"\s+data-marker="finish"/', $html);
+    }
+
+    public function test_late_completion_extends_bar_and_keeps_finish_marker_on_scheduled_day(): void
+    {
+        $this->travelTo('2026-09-28 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Ran late',
+            'started_on' => '2026-09-07',
+            'finish_on' => '2026-09-16',
+            'completed_on' => '2026-09-23',
+        ]);
+
+        $this->assertTrue($item->completedLate());
+        $this->assertSame('2026-09-23', $item->rangeEnd()->toDateString());
+
+        $html = Livewire::test(Roadmaps::class)->html();
+
+        $this->assertStringContainsString('data-marker="finish"', $html);
+        $this->assertStringContainsString('data-date="2026-09-16"', $html);
+        $this->assertStringContainsString('data-marker="done"', $html);
+        $this->assertStringContainsString('data-date="2026-09-23"', $html);
+        // Bar continues into the week of 21-27 Sep, ending (with the checkmark) on Wed 23 Sep.
+        $this->assertMatchesRegularExpression('/style="--at: 2"\s+data-marker="done"/', $html);
+    }
+
+    public function test_early_completion_shows_checkmark_inside_bar_up_to_finish_day(): void
+    {
+        $this->travelTo('2026-09-28 12:00:00');
+
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Done early',
+            'started_on' => '2026-09-14',
+            'finish_on' => '2026-09-18',
+            'completed_on' => '2026-09-16',
+        ]);
+
+        $this->assertFalse($item->completedLate());
+        $this->assertSame('2026-09-18', $item->rangeEnd()->toDateString());
+
+        $html = Livewire::test(Roadmaps::class)->html();
+
+        $this->assertMatchesRegularExpression('/style="--at: 0"\s+data-marker="start"/', $html);
+        $this->assertMatchesRegularExpression('/style="--at: 4"\s+data-marker="finish"/', $html);
+        $this->assertMatchesRegularExpression('/style="--at: 2"\s+data-marker="done"/', $html);
+    }
+
+    public function test_completion_on_finish_day_shows_single_checkmark(): void
+    {
+        $this->travelTo('2026-09-28 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'On time',
+            'started_on' => '2026-09-14',
+            'finish_on' => '2026-09-17',
+            'completed_on' => '2026-09-17',
+        ]);
+
+        $html = Livewire::test(Roadmaps::class)->html();
+
+        $this->assertStringNotContainsString('data-marker="finish"', $html);
+        $this->assertSame(1, substr_count($html, 'data-marker="done"'));
+    }
+
+    public function test_item_completed_early_still_shows_in_month_of_its_scheduled_finish(): void
+    {
+        $this->travelTo('2026-10-20 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'Wrapped up early',
+            'started_on' => '2026-09-20',
+            'finish_on' => '2026-10-10',
+            'completed_on' => '2026-09-28',
+        ]);
+
+        Livewire::withQueryParams(['month' => '2026-10'])
+            ->test(Roadmaps::class)
+            ->assertSee('Wrapped up early');
     }
 }

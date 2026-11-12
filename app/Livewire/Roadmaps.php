@@ -36,6 +36,9 @@ class Roadmaps extends Component
 
     public string $startedOn = '';
 
+    /** Optional scheduled finish day for the "Start a project" form. */
+    public string $finishOn = '';
+
     public bool $creating = false;
 
     public function mount(): void
@@ -87,6 +90,7 @@ class Roadmaps extends Component
     {
         $this->newTitle = '';
         $this->startedOn = Clock::todayString();
+        $this->finishOn = '';
         $this->creating = true;
     }
 
@@ -104,13 +108,21 @@ class Roadmaps extends Component
             return;
         }
 
+        $finishOn = trim($this->finishOn) === '' ? null : $this->parseDate($this->finishOn);
+
+        if ($finishOn !== null && $finishOn->lt($startedOn)) {
+            $finishOn = $startedOn->copy();
+        }
+
         RoadmapItem::query()->create([
             'title' => $title,
             'started_on' => $startedOn->toDateString(),
+            'finish_on' => $finishOn?->toDateString(),
             'completed_on' => null,
         ]);
 
         $this->newTitle = '';
+        $this->finishOn = '';
         $this->creating = false;
         $this->month = $startedOn->format('Y-m');
     }
@@ -147,6 +159,10 @@ class Roadmaps extends Component
             $payload['completed_on'] = $startedOn->toDateString();
         }
 
+        if ($item->finish_on !== null && $item->finish_on->lt($startedOn)) {
+            $payload['finish_on'] = $startedOn->toDateString();
+        }
+
         $item->update($payload);
     }
 
@@ -175,6 +191,34 @@ class Roadmaps extends Component
         $item->update(['completed_on' => $completedOn->toDateString()]);
     }
 
+    /**
+     * Set or clear the scheduled finish day; it can't fall before the start day.
+     */
+    public function updateFinishOn(int $id, ?string $date = null): void
+    {
+        $item = RoadmapItem::query()->findOrFail($id);
+
+        if ($date === null || trim($date) === '') {
+            $item->update(['finish_on' => null]);
+
+            return;
+        }
+
+        $finishOn = $this->parseDate($date);
+
+        if (! $finishOn) {
+            return;
+        }
+
+        $start = $item->rangeStart();
+
+        if ($finishOn->lt($start)) {
+            $finishOn = $start;
+        }
+
+        $item->update(['finish_on' => $finishOn->toDateString()]);
+    }
+
     public function deleteItem(int $id): void
     {
         RoadmapItem::query()->whereKey($id)->delete();
@@ -197,7 +241,8 @@ class Roadmaps extends Component
             ->whereDate('started_on', '<=', $gridEnd->toDateString())
             ->where(function ($query) use ($gridStart): void {
                 $query->whereNull('completed_on')
-                    ->orWhereDate('completed_on', '>=', $gridStart->toDateString());
+                    ->orWhereDate('completed_on', '>=', $gridStart->toDateString())
+                    ->orWhereDate('finish_on', '>=', $gridStart->toDateString());
             })
             ->orderBy('started_on')
             ->orderBy('id')
@@ -209,6 +254,7 @@ class Roadmaps extends Component
 
         return view('livewire.roadmaps', [
             'monthLabel' => strtoupper($monthStart->format('F Y')),
+            'isCurrentMonth' => $monthStart->format('Y-m') === Clock::currentMonth(),
             'yearMinimap' => $this->yearMinimap($monthStart, $today),
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
@@ -238,7 +284,8 @@ class Roadmaps extends Component
             ->whereDate('started_on', '<=', $yearEnd->toDateString())
             ->where(function ($query) use ($yearStart): void {
                 $query->whereNull('completed_on')
-                    ->orWhereDate('completed_on', '>=', $yearStart->toDateString());
+                    ->orWhereDate('completed_on', '>=', $yearStart->toDateString())
+                    ->orWhereDate('finish_on', '>=', $yearStart->toDateString());
             })
             ->orderBy('started_on')
             ->orderBy('id')
@@ -301,7 +348,7 @@ class Roadmaps extends Component
 
     /**
      * @param  Collection<int, RoadmapItem>  $items
-     * @return list<array{days: list<Carbon>, lanes: list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>}>
+     * @return list<array{days: list<Carbon>, lanes: list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool, markers: list<array{type: string, at: int, date: string}>, fromDot: bool, toDot: bool}>>}>
      */
     private function weeks(Carbon $gridStart, Carbon $gridEnd, Carbon $monthStart, Carbon $monthEnd, Collection $items, Carbon $today): array
     {
@@ -328,7 +375,7 @@ class Roadmaps extends Component
 
     /**
      * @param  Collection<int, RoadmapItem>  $items
-     * @return list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool}>>
+     * @return list<list<array{id: int, title: string, pending: bool, colorIndex: int, col: int, span: int, continuesLeft: bool, continuesRight: bool, markers: list<array{type: string, at: int, date: string}>, fromDot: bool, toDot: bool}>>
      */
     private function lanesForWeek(Carbon $weekStart, Carbon $weekEnd, Carbon $monthStart, Carbon $monthEnd, Collection $items, Carbon $today): array
     {
@@ -347,7 +394,10 @@ class Roadmaps extends Component
             $segStart = $rangeStart->greaterThan($weekStart) ? $rangeStart : $weekStart;
             $segEnd = $rangeEnd->lessThan($weekEnd) ? $rangeEnd : $weekEnd;
             $col = $segStart->dayOfWeekIso;
-            $span = $segStart->diffInDays($segEnd) + 1;
+            $span = (int) $segStart->diffInDays($segEnd) + 1;
+            $markers = $this->markersFor($item, $originalStart, $segStart, $segEnd);
+            $hasStartMarker = collect($markers)->contains(fn (array $m): bool => $m['type'] === 'start' && $m['at'] === 0);
+            $hasEndMarker = collect($markers)->contains(fn (array $m): bool => $m['type'] !== 'start' && $m['at'] === $span - 1);
 
             $segments[] = [
                 'id' => $item->id,
@@ -355,9 +405,12 @@ class Roadmaps extends Component
                 'pending' => $item->isPending(),
                 'colorIndex' => $this->colorIndexFor($item->id),
                 'col' => $col,
-                'span' => (int) $span,
+                'span' => $span,
                 'continuesLeft' => $originalStart->lt($segStart),
                 'continuesRight' => $originalEnd->gt($segEnd),
+                'markers' => $markers,
+                'fromDot' => $hasStartMarker && ! ($span === 1 && $hasEndMarker),
+                'toDot' => $hasEndMarker && ! ($span === 1 && $hasStartMarker),
             ];
         }
 
@@ -396,6 +449,37 @@ class Roadmaps extends Component
         }
 
         return $lanes;
+    }
+
+    /**
+     * Icons drawn on one week segment, positioned by day offset ("at") within it:
+     * start (start day), finish (scheduled finish day, same icon as start) and
+     * done (checkmark on the completion day). Done is listed last so it sits on top.
+     *
+     * @return list<array{type: string, at: int, date: string}>
+     */
+    private function markersFor(RoadmapItem $item, Carbon $start, Carbon $segStart, Carbon $segEnd): array
+    {
+        $markers = [];
+        $within = fn (Carbon $day): bool => ! $day->lt($segStart) && ! $day->gt($segEnd);
+        $offset = fn (Carbon $day): int => (int) $segStart->diffInDays($day);
+
+        if ($within($start)) {
+            $markers[] = ['type' => 'start', 'at' => $offset($start), 'date' => $start->toDateString()];
+        }
+
+        $finish = $item->scheduledFinish();
+        $completed = $item->completed_on?->copy()->startOfDay();
+
+        if ($finish !== null && $within($finish) && ! ($completed !== null && $completed->equalTo($finish))) {
+            $markers[] = ['type' => 'finish', 'at' => $offset($finish), 'date' => $finish->toDateString()];
+        }
+
+        if ($completed !== null && $within($completed)) {
+            $markers[] = ['type' => 'done', 'at' => $offset($completed), 'date' => $completed->toDateString()];
+        }
+
+        return $markers;
     }
 
     private function overlaps(RoadmapItem $item, Carbon $from, Carbon $to, Carbon $today): bool

@@ -1,6 +1,7 @@
 <div class="mx-auto flex max-w-6xl flex-col gap-6 px-3 py-6 sm:px-4 lg:flex-row"
      x-data="readLiveTotals(@js($liveTotals))"
-     x-init="start()">
+     x-init="start()"
+     x-on:read-live-totals.window="applyTotals($event.detail.totals)">
     {{-- Books sidebar --}}
     <aside class="w-full shrink-0 lg:w-72">
         <div class="mb-4 grid grid-cols-2 gap-2 text-xs text-muted">
@@ -352,7 +353,30 @@
                                                   x-init="start()"
                                                   x-text="display">00:00:00</span>
                                         @else
-                                            <span class="text-muted">→ {{ $session->finished_at->timezone($timezone)->format('H:i') }}</span>
+                                            @php
+                                                $finishLocal = $session->finished_at->copy()->timezone($timezone);
+                                                $finishNextDay = $finishLocal->toDateString() !== $session->started_at->copy()->timezone($timezone)->toDateString();
+                                            @endphp
+                                            <span class="text-muted"
+                                                  wire:key="finish-{{ $session->id }}-{{ $session->finished_at->timestamp }}"
+                                                  x-data="inlineFinish({{ $session->id }}, @js($finishLocal->format('H:i')))">
+                                                <span x-show="!editing"
+                                                      x-on:dblclick.prevent="open()"
+                                                      x-on:touchend="tap($event)"
+                                                      data-finish-edit
+                                                      title="Double-click to edit finish time"
+                                                      class="cursor-text select-none rounded px-0.5 hover:bg-white/5 hover:text-body"
+                                                      style="touch-action: manipulation; -webkit-user-select: none;">→ {{ $finishLocal->format('H:i') }}@if ($finishNextDay)<sup class="ml-0.5 text-[10px] text-faint" title="Next day">+1</sup>@endif</span>
+                                                <span x-show="editing" x-cloak class="inline-flex items-center gap-1">→
+                                                    <input type="time" x-ref="input" x-model="value" aria-label="Finish time"
+                                                           x-on:keydown.enter.prevent="save()"
+                                                           x-on:keydown.escape.prevent="cancel()"
+                                                           x-on:blur="save()"
+                                                           x-bind:disabled="saving"
+                                                           class="rounded border border-white/10 bg-panel px-1.5 py-0.5 text-sm tabular-nums text-body focus:border-link focus:outline-none" />
+                                                </span>
+                                                <span x-show="error" x-cloak x-text="error" class="ml-1 text-xs text-red-400"></span>
+                                            </span>
                                             <span class="ml-2 font-semibold tabular-nums text-link">{{ $this->formatDuration($session->durationMinutes()) }}</span>
                                         @endif
                                     </div>
@@ -423,6 +447,71 @@
                 weekMinutes() { return this.weekBase + this.sumRuns(this.weekRuns); },
                 bookMinutes() { return this.bookBase + this.sumRuns(this.bookRuns); },
                 formatMinutes(m) { return formatReadMinutes(m); },
+                applyTotals(t) {
+                    if (!t) return;
+                    this.todayBase = t.todayBase || 0;
+                    this.weekBase = t.weekBase || 0;
+                    this.bookBase = t.bookBase || 0;
+                    this.todayRuns = t.todayRuns || [];
+                    this.weekRuns = t.weekRuns || [];
+                    this.bookRuns = t.bookRuns || [];
+                    this.tick = Date.now();
+                },
+            };
+        }
+
+        // Inline finish-time editor: double-click (desktop) or double-tap (touch) "→ HH:MM".
+        // Enter / blur saves, Esc cancels. Server validates (finish > start, overnight ≤ 12h).
+        function inlineFinish(id, original) {
+            return {
+                id,
+                original,
+                value: original,
+                editing: false,
+                saving: false,
+                error: '',
+                lastTap: 0,
+                open() {
+                    if (this.editing) return;
+                    this.value = this.original;
+                    this.error = '';
+                    this.editing = true;
+                    this.$nextTick(() => { this.$refs.input && this.$refs.input.focus(); });
+                },
+                tap(e) {
+                    const now = Date.now();
+                    if (now - this.lastTap < 350) {
+                        e.preventDefault();
+                        this.lastTap = 0;
+                        this.open();
+                    } else {
+                        this.lastTap = now;
+                    }
+                },
+                cancel() {
+                    this.editing = false;
+                    this.error = '';
+                    this.value = this.original;
+                },
+                async save() {
+                    if (!this.editing || this.saving) return;
+                    if (!this.value || this.value === this.original) { this.cancel(); return; }
+                    this.saving = true;
+                    try {
+                        const r = await this.$wire.updateSessionFinish(this.id, this.value);
+                        if (r && r.ok) {
+                            this.original = r.finish || this.value;
+                            this.editing = false;
+                            this.error = '';
+                        } else {
+                            this.error = (r && r.error) || 'Could not save.';
+                        }
+                    } catch (e) {
+                        this.error = 'Could not save.';
+                    } finally {
+                        this.saving = false;
+                    }
+                },
             };
         }
 
@@ -445,3 +534,4 @@
         }
     </script>
 </div>
+ 

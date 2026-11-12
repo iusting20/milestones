@@ -322,6 +322,76 @@ class Read extends Component
         $this->editingSessionId = null;
     }
 
+    /**
+     * Inline edit of a finished session's finish time (double-click / double-tap "→ HH:MM" on /read).
+     *
+     * $time is "HH:MM" in the display timezone (Europe/Bucharest). The finish keeps the session's
+     * start date. If that lands at or before the start, it is read as "after midnight" and moved to
+     * the next day, but only when the session then lasts at most 12 hours (e.g. 23:30 → 00:15 = 45m).
+     * Anything else at or before the start is rejected. Running sessions cannot be edited here,
+     * and a finish in the future is rejected.
+     *
+     * @return array{ok: bool, error?: string, finish?: string, duration?: string}
+     */
+    public function updateSessionFinish(int $id, string $time): array
+    {
+        $session = ReadingSession::query()->whereKey($id)->first();
+        if (! $session) {
+            return ['ok' => false, 'error' => 'Session not found.'];
+        }
+
+        if ($session->isRunning()) {
+            return ['ok' => false, 'error' => 'Stop the running session first.'];
+        }
+
+        if (! preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', trim($time), $m)) {
+            return ['ok' => false, 'error' => 'Use HH:MM.'];
+        }
+
+        $finished = self::resolveInlineFinish($session->started_at, (int) $m[1], (int) $m[2]);
+        $startLocal = $session->started_at->copy()->timezone(Clock::timezone());
+
+        if ($finished === null) {
+            return ['ok' => false, 'error' => 'Finish must be after start ('.$startLocal->format('H:i').').'];
+        }
+
+        if ($finished->greaterThan(Carbon::now())) {
+            return ['ok' => false, 'error' => 'Finish can\'t be in the future.'];
+        }
+
+        $session->update(['finished_at' => $finished->copy()->utc()]);
+
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
+
+        return [
+            'ok' => true,
+            'finish' => $finished->copy()->timezone(Clock::timezone())->format('H:i'),
+            'duration' => $this->formatDuration($session->durationMinutes()),
+        ];
+    }
+
+    /**
+     * Finish moment for an inline "HH:MM" edit, or null when it can't be after the start.
+     * Same calendar day as the start (display timezone); rolls to the next day only for an
+     * overnight session of at most 12 hours.
+     */
+    public static function resolveInlineFinish(Carbon $startedAt, int $hour, int $minute): ?Carbon
+    {
+        $start = $startedAt->copy()->timezone(Clock::timezone());
+        $candidate = $start->copy()->setTime($hour, $minute, 0);
+
+        if ($candidate->greaterThan($start)) {
+            return $candidate;
+        }
+
+        $nextDay = $start->copy()->addDay()->setTime($hour, $minute, 0);
+        if ($nextDay->greaterThan($start) && $start->diffInMinutes($nextDay) <= 12 * 60) {
+            return $nextDay;
+        }
+
+        return null;
+    }
+
     public function deleteSession(int $id): void
     {
         $this->findSession($id)->delete();
@@ -393,18 +463,7 @@ class Read extends Component
         $pageTotals['weekDuration'] = $this->formatDuration($pageTotals['weekMinutes']);
         $pageTotals['todayDuration'] = $this->formatDuration($pageTotals['todayMinutes']);
 
-        $liveTotals = [
-            'todayBase' => $this->overlapMinutes($todayStart, $nowUtc, finishedOnly: true),
-            'weekBase' => $this->overlapMinutes($weekStart, $nowUtc, finishedOnly: true),
-            'bookBase' => $selected
-                ? $this->overlapMinutes($epochStart, $nowUtc, $selected->id, finishedOnly: true)
-                : 0,
-            'todayRuns' => $this->runningClipStartsMs($todayStart),
-            'weekRuns' => $this->runningClipStartsMs($weekStart),
-            'bookRuns' => $selected
-                ? $this->runningClipStartsMs($epochStart, $selected->id)
-                : [],
-        ];
+        $liveTotals = $this->liveTotals($selected?->id);
 
         return view('livewire.read', [
             'books' => $books,
@@ -416,6 +475,36 @@ class Read extends Component
             'runningSession' => $selected ? $this->runningSessionFor($selected->id) : null,
             'timezone' => Clock::timezone(),
         ])->layout('layouts.app');
+    }
+
+    /**
+     * Base minutes (finished sessions) + running-session clip starts for the live Alpine counters.
+     *
+     * @return array{todayBase: int, weekBase: int, bookBase: int, todayRuns: list<int>, weekRuns: list<int>, bookRuns: list<int>}
+     */
+    private function liveTotals(?int $bookId = null): array
+    {
+        if ($bookId === null && $this->selectedBookId) {
+            $bookId = Book::query()->whereKey($this->selectedBookId)->exists() ? $this->selectedBookId : null;
+        }
+
+        $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
+        $todayStart = Clock::now()->startOfDay()->utc();
+        $nowUtc = Clock::now()->utc();
+        $epochStart = Carbon::createFromTimestampUTC(0);
+
+        return [
+            'todayBase' => $this->overlapMinutes($todayStart, $nowUtc, finishedOnly: true),
+            'weekBase' => $this->overlapMinutes($weekStart, $nowUtc, finishedOnly: true),
+            'bookBase' => $bookId
+                ? $this->overlapMinutes($epochStart, $nowUtc, $bookId, finishedOnly: true)
+                : 0,
+            'todayRuns' => $this->runningClipStartsMs($todayStart),
+            'weekRuns' => $this->runningClipStartsMs($weekStart),
+            'bookRuns' => $bookId
+                ? $this->runningClipStartsMs($epochStart, $bookId)
+                : [],
+        ];
     }
 
     /**
@@ -637,3 +726,4 @@ class Read extends Component
         return $hours.'h '.$remaining.'m';
     }
 }
+ 

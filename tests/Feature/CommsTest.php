@@ -70,7 +70,7 @@ class CommsTest extends TestCase
     public function test_nav_shows_comms_after_roadmaps(): void
     {
         $this->get(route('milestones'))
-            ->assertSeeInOrder(['Week Board', 'Timeline', 'Comms', 'Links']);
+            ->assertSeeInOrder(['Week Board', 'Timelines', 'Comms', 'Links']);
     }
 
     public function test_can_log_a_communication_on_a_selected_day(): void

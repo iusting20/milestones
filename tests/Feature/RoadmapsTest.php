@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\Roadmaps;
+use App\Models\Project;
 use App\Models\RoadmapItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -16,11 +17,18 @@ class RoadmapsTest extends TestCase
     {
         $this->travelTo('2026-09-18 12:00:00');
 
-        $this->get(route('roadmaps'))
+        $this->get(route('timelines'))
             ->assertOk()
-            ->assertSee('Timeline')
+            ->assertSee('<title>Timelines</title>', false)
+            ->assertSee('>Timelines</h1>', false)
             ->assertSee('SEPTEMBER 2026')
             ->assertSeeLivewire(Roadmaps::class);
+    }
+
+    public function test_legacy_roadmaps_url_redirects_to_timelines(): void
+    {
+        $this->get('/roadmaps')
+            ->assertRedirect('/timelines');
     }
 
     public function test_year_minimap_uses_event_colors(): void
@@ -60,7 +68,7 @@ class RoadmapsTest extends TestCase
     public function test_nav_shows_week_board_before_timeline_and_backlog_on_page(): void
     {
         $this->get(route('milestones'))
-            ->assertSeeInOrder(['Milestones', 'Week Board', 'Timeline', 'Comms', 'Links', 'For this week', 'Backlog'])
+            ->assertSeeInOrder(['Milestones', 'Week Board', 'Timelines', 'Comms', 'Links', 'For this week', 'Backlog'])
             ->assertSee(route('backlog', absolute: false), false);
     }
 
@@ -78,7 +86,7 @@ class RoadmapsTest extends TestCase
             ->assertSet('creating', false)
             ->assertSee('Auth rewrite')
             ->assertSee('pending')
-            ->assertSee('Add project');
+            ->assertSee('Add timeline');
 
         $item = RoadmapItem::query()->where('title', 'Auth rewrite')->first();
 
@@ -476,5 +484,162 @@ class RoadmapsTest extends TestCase
         Livewire::withQueryParams(['month' => '2026-10'])
             ->test(Roadmaps::class)
             ->assertSee('Wrapped up early');
+    }
+
+    public function test_can_add_a_timeline_with_link_and_client(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $client = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Acme',
+            'slug' => 'acme',
+            'position' => 1,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->assertSee('Link title')
+            ->assertSee('Link URL')
+            ->assertSeeHtml('optgroup label="Clients"')
+            ->assertSee('Acme')
+            ->set('newTitle', 'Portal rewrite')
+            ->set('startedOn', '2026-09-03')
+            ->set('newLinkTitle', 'Figma file')
+            ->set('newLinkUrl', 'figma.com/file/abc')
+            ->set('newProjectId', (string) $client->id)
+            ->call('addItem')
+            ->assertHasNoErrors()
+            ->assertSee('Portal rewrite')
+            ->assertSee('Figma file')
+            ->assertSee('Acme')
+            ->assertSeeHtml('href="https://figma.com/file/abc"')
+            ->assertSeeHtml('target="_blank"')
+            ->assertSeeHtml('rel="noopener noreferrer"');
+
+        $item = RoadmapItem::query()->where('title', 'Portal rewrite')->first();
+
+        $this->assertNotNull($item);
+        $this->assertSame('Figma file', $item->link_title);
+        $this->assertSame('https://figma.com/file/abc', $item->link_url);
+        $this->assertSame($client->id, $item->project_id);
+    }
+
+    public function test_link_without_title_shows_the_url_in_the_list(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->set('newTitle', 'Docs pass')
+            ->set('startedOn', '2026-09-03')
+            ->set('newLinkUrl', 'https://example.com/brief')
+            ->call('addItem')
+            ->assertSee('Docs pass')
+            ->assertSee('https://example.com/brief')
+            ->assertSeeHtml('href="https://example.com/brief"');
+
+        $item = RoadmapItem::query()->where('title', 'Docs pass')->first();
+
+        $this->assertNotNull($item);
+        $this->assertNull($item->link_title);
+        $this->assertSame('https://example.com/brief', $item->link_url);
+    }
+
+    public function test_invalid_link_url_is_rejected(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->set('newTitle', 'Broken link')
+            ->set('startedOn', '2026-09-03')
+            ->set('newLinkUrl', 'not a url')
+            ->call('addItem')
+            ->assertHasErrors('newLinkUrl')
+            ->assertSet('creating', true);
+
+        $this->assertDatabaseCount('roadmap_items', 0);
+    }
+
+    public function test_can_edit_link_and_association_on_an_existing_timeline(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        $asset = Project::query()->create([
+            'hub' => 'assets',
+            'name' => 'Website',
+            'slug' => 'website',
+            'position' => 1,
+        ]);
+        $item = RoadmapItem::factory()->create([
+            'title' => 'Launch site',
+            'started_on' => '2026-09-01',
+            'link_title' => 'Old doc',
+            'link_url' => 'https://example.com/old',
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('openEdit', $item->id)
+            ->assertSet('creating', true)
+            ->assertSet('editingId', $item->id)
+            ->assertSet('newTitle', 'Launch site')
+            ->assertSet('newLinkTitle', 'Old doc')
+            ->assertSee('Edit timeline')
+            ->assertSeeHtml('optgroup label="Assets"')
+            ->assertSee('Website')
+            ->set('newLinkTitle', 'Live site')
+            ->set('newLinkUrl', 'https://example.com')
+            ->set('newProjectId', (string) $asset->id)
+            ->call('addItem')
+            ->assertHasNoErrors()
+            ->assertSet('creating', false)
+            ->assertSee('Launch site')
+            ->assertSee('Live site')
+            ->assertSee('Website')
+            ->assertDontSee('Old doc');
+
+        $item->refresh();
+
+        $this->assertSame('Live site', $item->link_title);
+        $this->assertSame('https://example.com', $item->link_url);
+        $this->assertSame($asset->id, $item->project_id);
+    }
+
+    public function test_association_dropdown_omits_delimiters_and_archived_projects(): void
+    {
+        Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Visible client',
+            'slug' => 'visible-client',
+            'position' => 1,
+        ]);
+        Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Archived client',
+            'slug' => 'archived-client',
+            'position' => 2,
+            'is_archived' => true,
+        ]);
+        Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Delimiter row',
+            'slug' => 'delimiter-row',
+            'position' => 3,
+            'is_delimiter' => true,
+        ]);
+        Project::query()->create([
+            'hub' => 'assets',
+            'name' => 'Visible asset',
+            'slug' => 'visible-asset',
+            'position' => 1,
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate')
+            ->assertSee('Visible client')
+            ->assertSee('Visible asset')
+            ->assertDontSee('Archived client')
+            ->assertDontSee('Delimiter row');
     }
 }

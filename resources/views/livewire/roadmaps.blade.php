@@ -1,6 +1,6 @@
 <div class="mx-auto max-w-5xl px-3 py-6 sm:px-4">
     <div class="mb-5 flex flex-wrap items-center gap-2">
-        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Timeline</h1>
+        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Timelines</h1>
 
         <div class="ml-2 flex items-center gap-0.5 text-xs text-muted" data-month-toggle>
             <button type="button" wire:click="previousMonth"
@@ -137,7 +137,23 @@
                     'text-muted' => ! $item->isPending(),
                     'text-body' => $item->isPending(),
                 ])>
-                    {{ $item->title }}
+                    <button type="button"
+                            wire:click="openEdit({{ $item->id }})"
+                            class="truncate text-left hover:underline"
+                            title="Edit {{ $item->title }}">
+                        {{ $item->title }}
+                    </button>
+                    @if ($item->hasLink())
+                        <a href="{{ $item->link_url }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="ml-2 text-link hover:underline"
+                           title="{{ $item->link_url }}">{{ $item->linkLabel() }}</a>
+                    @endif
+                    @if ($item->project)
+                        <span class="ml-2 text-xs text-muted"
+                              title="{{ $item->project->hub === 'assets' ? 'Asset' : 'Client' }}">{{ $item->project->name }}</span>
+                    @endif
                 </span>
 
                 <span class="flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted">
@@ -245,7 +261,7 @@
     <button type="button"
             wire:click="openCreate"
             class="mt-6 rounded border border-white/15 px-4 py-2 text-sm font-medium text-muted hover:bg-panel hover:text-body">
-        Add project
+        Add timeline
     </button>
 
     @if ($creating)
@@ -259,7 +275,7 @@
             <form wire:submit="addItem" class="relative z-10 w-full max-w-md rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <h2 id="start-project-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                        Start a project
+                        {{ $editingId ? 'Edit timeline' : 'Add a timeline' }}
                     </h2>
                     <button type="button"
                             wire:click="closeCreate"
@@ -291,6 +307,49 @@
                     </label>
                 </div>
 
+                <div class="mt-3 grid grid-cols-2 gap-3">
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Link title <span class="normal-case tracking-normal text-muted/60">(optional)</span>
+                        <input type="text"
+                               wire:model="newLinkTitle"
+                               placeholder="Title"
+                               class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                    </label>
+
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Link URL <span class="normal-case tracking-normal text-muted/60">(optional)</span>
+                        <input type="url"
+                               wire:model="newLinkUrl"
+                               placeholder="https://"
+                               class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none" />
+                        @error('newLinkUrl')
+                            <span class="mt-1 block text-xs normal-case tracking-normal text-red-400">{{ $message }}</span>
+                        @enderror
+                    </label>
+                </div>
+
+                <label class="mt-3 block text-xs uppercase tracking-[0.14em] text-muted">
+                    Associated with <span class="normal-case tracking-normal text-muted/60">(optional)</span>
+                    <select wire:model="newProjectId"
+                            class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                        <option value="">None</option>
+                        @if ($clients->isNotEmpty())
+                            <optgroup label="Clients">
+                                @foreach ($clients as $client)
+                                    <option value="{{ $client->id }}">{{ $client->name }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endif
+                        @if ($assets->isNotEmpty())
+                            <optgroup label="Assets">
+                                @foreach ($assets as $asset)
+                                    <option value="{{ $asset->id }}">{{ $asset->name }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endif
+                    </select>
+                </label>
+
                 <div class="mt-5 flex justify-end gap-2">
                     <button type="button"
                             wire:click="closeCreate"
@@ -298,7 +357,7 @@
                         Cancel
                     </button>
                     <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
-                        Add
+                        {{ $editingId ? 'Save' : 'Add' }}
                     </button>
                 </div>
             </form>

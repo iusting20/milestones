@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Timeline')
+@section('title', 'Timelines')
 
 @section('content')
     <livewire:roadmaps />

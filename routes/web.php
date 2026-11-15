@@ -28,7 +28,8 @@ Route::view('/backlog', 'backlog')->name('backlog');
 
 Route::get('/backlog/drip-matrix', BacklogDripMatrix::class)->name('backlog.drip-matrix');
 
-Route::view('/roadmaps', 'roadmaps')->name('roadmaps');
+Route::redirect('/roadmaps', '/timelines', 301);
+Route::view('/timelines', 'roadmaps')->name('timelines');
 
 Route::view('/week-board', 'week-board')->name('week-board');
 

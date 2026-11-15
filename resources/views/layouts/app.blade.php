@@ -23,9 +23,9 @@
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('week-board') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                 Week Board
             </a>
-            <a href="{{ route('roadmaps') }}"
-               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('roadmaps') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
-                Timeline
+            <a href="{{ route('timelines') }}"
+               class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('timelines') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                Timelines
             </a>
             <a href="{{ route('comms') }}"
                class="shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('comms') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">

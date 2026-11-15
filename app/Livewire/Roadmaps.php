@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Support\Clock;
+use App\Models\Project;
 use App\Models\RoadmapItem;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -39,7 +40,17 @@ class Roadmaps extends Component
     /** Optional scheduled finish day for the "Start a project" form. */
     public string $finishOn = '';
 
+    public string $newLinkTitle = '';
+
+    public string $newLinkUrl = '';
+
+    /** Associated client or asset (projects.id), or empty for none. */
+    public string $newProjectId = '';
+
     public bool $creating = false;
+
+    /** Set when the create/edit modal is editing an existing item. */
+    public ?int $editingId = null;
 
     public function mount(): void
     {
@@ -88,15 +99,32 @@ class Roadmaps extends Component
 
     public function openCreate(): void
     {
-        $this->newTitle = '';
+        $this->resetFormFields();
         $this->startedOn = Clock::todayString();
-        $this->finishOn = '';
+        $this->editingId = null;
+        $this->creating = true;
+    }
+
+    public function openEdit(int $id): void
+    {
+        $item = RoadmapItem::query()->findOrFail($id);
+
+        $this->resetErrorBag();
+        $this->editingId = $item->id;
+        $this->newTitle = $item->title;
+        $this->startedOn = $item->started_on->toDateString();
+        $this->finishOn = $item->finish_on?->toDateString() ?? '';
+        $this->newLinkTitle = $item->link_title ?? '';
+        $this->newLinkUrl = $item->link_url ?? '';
+        $this->newProjectId = $item->project_id ? (string) $item->project_id : '';
         $this->creating = true;
     }
 
     public function closeCreate(): void
     {
         $this->creating = false;
+        $this->editingId = null;
+        $this->resetErrorBag();
     }
 
     public function addItem(): void
@@ -108,22 +136,42 @@ class Roadmaps extends Component
             return;
         }
 
+        $link = $this->normalizedLink();
+
+        if ($link === false) {
+            $this->addError('newLinkUrl', 'Enter a valid URL.');
+
+            return;
+        }
+
+        [$linkTitle, $linkUrl] = $link;
+
         $finishOn = trim($this->finishOn) === '' ? null : $this->parseDate($this->finishOn);
 
         if ($finishOn !== null && $finishOn->lt($startedOn)) {
             $finishOn = $startedOn->copy();
         }
 
-        RoadmapItem::query()->create([
+        $payload = [
             'title' => $title,
             'started_on' => $startedOn->toDateString(),
             'finish_on' => $finishOn?->toDateString(),
-            'completed_on' => null,
-        ]);
+            'link_title' => $linkTitle,
+            'link_url' => $linkUrl,
+            'project_id' => $this->resolvedProjectId(),
+        ];
 
-        $this->newTitle = '';
-        $this->finishOn = '';
+        if ($this->editingId) {
+            $item = RoadmapItem::query()->findOrFail($this->editingId);
+            $item->update($payload);
+        } else {
+            $payload['completed_on'] = null;
+            RoadmapItem::query()->create($payload);
+        }
+
+        $this->resetFormFields();
         $this->creating = false;
+        $this->editingId = null;
         $this->month = $startedOn->format('Y-m');
     }
 
@@ -238,6 +286,7 @@ class Roadmaps extends Component
         $gridEnd = $monthEnd->copy()->endOfWeek(Carbon::SUNDAY);
 
         $items = RoadmapItem::query()
+            ->with('project')
             ->whereDate('started_on', '<=', $gridEnd->toDateString())
             ->where(function ($query) use ($gridStart): void {
                 $query->whereNull('completed_on')
@@ -259,6 +308,8 @@ class Roadmaps extends Component
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
             'visibleItems' => $visibleItems,
+            'clients' => $this->associableProjects('partners'),
+            'assets' => $this->associableProjects('assets'),
             'activeCount' => RoadmapItem::query()
                 ->whereDate('started_on', '<=', $today->toDateString())
                 ->whereNull('completed_on')
@@ -490,6 +541,91 @@ class Roadmaps extends Component
     public function colorIndexFor(int $id): int
     {
         return (($id % self::PENDING_COLOR_COUNT) + self::PENDING_COLOR_COUNT) % self::PENDING_COLOR_COUNT;
+    }
+
+    private function resetFormFields(): void
+    {
+        $this->newTitle = '';
+        $this->finishOn = '';
+        $this->newLinkTitle = '';
+        $this->newLinkUrl = '';
+        $this->newProjectId = '';
+        $this->resetErrorBag();
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string}|false
+     */
+    private function normalizedLink(): array|false
+    {
+        $title = trim($this->newLinkTitle);
+        $url = trim($this->newLinkUrl);
+
+        if ($url === '') {
+            return [null, null];
+        }
+
+        if (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://')) {
+            $url = 'https://'.$url;
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        return [$title !== '' ? $title : null, $url];
+    }
+
+    private function resolvedProjectId(): ?int
+    {
+        if ($this->newProjectId === '' || $this->newProjectId === '0') {
+            return null;
+        }
+
+        $id = (int) $this->newProjectId;
+        $currentId = $this->editingId
+            ? RoadmapItem::query()->whereKey($this->editingId)->value('project_id')
+            : null;
+
+        $exists = Project::query()
+            ->whereKey($id)
+            ->whereIn('hub', ['partners', 'assets'])
+            ->where('is_delimiter', false)
+            ->where(function ($query) use ($currentId): void {
+                $query->where('is_archived', false);
+
+                if ($currentId) {
+                    $query->orWhereKey($currentId);
+                }
+            })
+            ->exists();
+
+        return $exists ? $id : null;
+    }
+
+    /**
+     * @return Collection<int, Project>
+     */
+    private function associableProjects(string $hub): Collection
+    {
+        $query = Project::query()
+            ->where('hub', $hub)
+            ->where('is_delimiter', false)
+            ->where(function ($q): void {
+                $q->where('is_archived', false);
+
+                if ($this->editingId) {
+                    $currentId = RoadmapItem::query()->whereKey($this->editingId)->value('project_id');
+
+                    if ($currentId) {
+                        $q->orWhereKey($currentId);
+                    }
+                }
+            })
+            ->orderBy('position')
+            ->orderBy('name');
+
+        return $query->get();
     }
 
     private function parseMonth(string $month): ?Carbon

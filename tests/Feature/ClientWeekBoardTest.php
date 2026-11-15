@@ -315,7 +315,7 @@ class ClientWeekBoardTest extends TestCase
             '/milestones/log' => 'Log',
             '/backlog' => 'Backlog',
             '/backlog/drip-matrix' => 'Backlog DRIP Matrix',
-            '/roadmaps' => 'Timeline',
+            '/timelines' => 'Timelines',
             '/week-board' => 'Week Board',
             '/comms' => 'Comms',
             '/links/partners' => 'Links',

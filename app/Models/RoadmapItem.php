@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Database\Factories\RoadmapItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RoadmapItem extends Model
 {
@@ -15,6 +16,9 @@ class RoadmapItem extends Model
 
     protected $fillable = [
         'title',
+        'link_title',
+        'link_url',
+        'project_id',
         'started_on',
         'finish_on',
         'completed_on',
@@ -27,6 +31,23 @@ class RoadmapItem extends Model
             'finish_on' => 'date',
             'completed_on' => 'date',
         ];
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function hasLink(): bool
+    {
+        return filled($this->link_url);
+    }
+
+    public function linkLabel(): string
+    {
+        $title = trim((string) $this->link_title);
+
+        return $title !== '' ? $title : (string) $this->link_url;
     }
 
     public function isPending(): bool

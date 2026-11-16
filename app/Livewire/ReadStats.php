@@ -57,7 +57,7 @@ class ReadStats extends Component
         }
 
         $sessions = ReadingSession::query()
-            ->with('book:id,title,type,kind')
+            ->with('book:id,title,type,kind,status,started_on')
             ->where('started_at', '<', $weekEnd->copy()->utc())
             ->where(function ($q) use ($weekStart) {
                 $q->whereNull('finished_at')->orWhere('finished_at', '>', $weekStart->copy()->utc());
@@ -101,7 +101,13 @@ class ReadStats extends Component
                 foreach ($day['bookSeconds'][$t] as $bookId => $secs) {
                     $m = intdiv((int) $secs, 60);
                     if ($m > 0) {
-                        $list[] = ['title' => $bookInfo[$bookId]?->title ?? 'Deleted book', 'minutes' => $m];
+                        $info = $bookInfo[$bookId] ?? null;
+                        $list[] = [
+                            'title' => $info?->title ?? 'Deleted book',
+                            'minutes' => $m,
+                            'startedToday' => $info?->isStartedToday($now) ?? false,
+                            'finished' => $info?->isFinished() ?? false,
+                        ];
                     }
                 }
                 usort($list, fn ($a, $b) => $b['minutes'] <=> $a['minutes']);
@@ -117,12 +123,15 @@ class ReadStats extends Component
                 continue;
             }
             $isArticle = ($bookInfo[$id]?->kind === Book::KIND_ARTICLE);
+            $info = $bookInfo[$id] ?? null;
             $items[] = [
                 'id' => $id,
-                'title' => $bookInfo[$id]?->title ?? ($isArticle ? 'Deleted article' : 'Deleted book'),
-                'type' => $isArticle ? 'articles' : $bookInfo[$id]?->type,
+                'title' => $info?->title ?? ($isArticle ? 'Deleted article' : 'Deleted book'),
+                'type' => $isArticle ? 'articles' : $info?->type,
                 'kind' => $isArticle ? Book::KIND_ARTICLE : Book::KIND_BOOK,
                 'minutes' => $minutes,
+                'startedToday' => $info?->isStartedToday($now) ?? false,
+                'finished' => $info?->isFinished() ?? false,
             ];
         }
         usort($items, fn ($a, $b) => $b['minutes'] <=> $a['minutes'] ?: strcasecmp($a['title'], $b['title']));

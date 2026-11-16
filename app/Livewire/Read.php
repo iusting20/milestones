@@ -14,6 +14,8 @@ class Read extends Component
 
     public ?int $selectedBookId = null;
 
+    public bool $showFinished = false;
+
     public bool $editMode = false;
 
     public bool $addingBook = false;
@@ -179,6 +181,21 @@ class Read extends Component
     public function markBookReading(int $id): void
     {
         $this->findBook($id)->update(['status' => Book::STATUS_READING]);
+    }
+
+    public function markStartedToday(int $id): void
+    {
+        $this->findBook($id)->update(['started_on' => Clock::todayString()]);
+    }
+
+    public function clearStartedToday(int $id): void
+    {
+        $book = $this->findBook($id);
+        if (! $book->isStartedToday()) {
+            return;
+        }
+
+        $book->update(['started_on' => null]);
     }
 
     public function deleteBook(int $id): void
@@ -434,14 +451,16 @@ class Read extends Component
 
     public function render()
     {
-        $books = $this->catalog()
+        $all = $this->catalog()
             ->withCount('readingSessions')
             ->with(['latestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
             ->orderBy('position')
             ->orderBy('id')
             ->get();
 
-        $selected = $books->firstWhere('id', $this->selectedBookId);
+        $books = $all->reject(fn (Book $book) => $book->isFinished())->values();
+        $finishedBooks = $all->filter(fn (Book $book) => $book->isFinished())->values();
+        $selected = $all->firstWhere('id', $this->selectedBookId);
 
         $sessions = collect();
         $bookTotals = [
@@ -488,6 +507,7 @@ class Read extends Component
 
         return view('livewire.read', [
             'books' => $books,
+            'finishedBooks' => $finishedBooks,
             'selected' => $selected,
             'sessions' => $sessions,
             'bookTotals' => $bookTotals,
@@ -590,7 +610,7 @@ class Read extends Component
     public function reorderBooks(array $ids): void
     {
         $ids = array_values(array_unique(array_map(intval(...), $ids)));
-        if ($ids === [] || $this->catalog()->whereIn('id', $ids)->count() !== count($ids)) {
+        if ($ids === [] || $this->catalog()->where('status', '!=', Book::STATUS_FINISHED)->whereIn('id', $ids)->count() !== count($ids)) {
             return;
         }
         foreach ($ids as $i => $id) {

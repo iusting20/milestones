@@ -58,13 +58,10 @@
                                 'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
                         <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="text-base font-semibold leading-snug text-body">{{ $book->title }}</span>
+                        <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => false])</span>
                         <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
                             @if ($book->author)
                                 <span>{{ $book->author }}</span>
-                            @endif
-                            @if ($book->isFinished())
-                                <span class="uppercase tracking-wide text-check">{{ $book->status }}</span>
                             @endif
                             @if ($book->readingSessions->isNotEmpty())
                                 <span class="text-mark">● live</span>
@@ -78,7 +75,11 @@
                 </li>
             @empty
                 <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-sm text-muted">
-                    No {{ $isArticles ? 'articles' : 'books' }} yet. Add one to start tracking.
+                    @if ($finishedBooks->isNotEmpty())
+                        No open {{ $isArticles ? 'articles' : 'books' }}.
+                    @else
+                        No {{ $isArticles ? 'articles' : 'books' }} yet. Add one to start tracking.
+                    @endif
                 </li>
             @endforelse
         </ul>
@@ -114,6 +115,46 @@
                 };
             }
         </script>
+
+        @if ($finishedBooks->isNotEmpty())
+            <div class="mt-3">
+                <button type="button" wire:click="$toggle('showFinished')"
+                        class="flex items-center gap-1 text-xs text-muted no-underline hover:text-body"
+                        aria-expanded="{{ $showFinished ? 'true' : 'false' }}">
+                    <span class="inline-block w-3 text-[10px]">{{ $showFinished ? '▾' : '▸' }}</span>
+                    Finished ({{ $finishedBooks->count() }})
+                </button>
+                @if ($showFinished)
+                    <ul class="mt-1 space-y-1" data-finished-list>
+                        @foreach ($finishedBooks as $book)
+                            <li wire:key="finished-book-{{ $book->id }}" data-finished-item="{{ $book->id }}">
+                                <button type="button" wire:click="selectBook({{ $book->id }})"
+                                        @class([
+                                            'flex w-full items-center gap-3 rounded border py-2 px-3 text-left text-sm transition',
+                                            'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
+                                            'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
+                                        ])>
+                                    <span class="flex min-w-0 flex-1 flex-col">
+                                    <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => true])</span>
+                                    <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
+                                        @if ($book->author)
+                                            <span>{{ $book->author }}</span>
+                                        @endif
+                                        @if ($book->readingSessions->isNotEmpty())
+                                            <span class="text-mark">● live</span>
+                                        @endif
+                                    </span>
+                                    </span>
+                                    @if ($book->type)
+                                        <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
+                                    @endif
+                                </button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        @endif
         @if ($isArticles)
             <a href="{{ route('read') }}" class="mt-6 inline-block text-xs text-faint no-underline hover:text-muted">books</a>
         @else
@@ -128,7 +169,7 @@
         @else
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 class="text-2xl font-bold text-body">{{ $selected->title }}</h2>
+                    <h2 class="text-2xl font-bold text-body">@include('livewire.partials.read-item-name', ['title' => $selected->title, 'startedToday' => $selected->isStartedToday(), 'finished' => $selected->isFinished()])</h2>
                     <p class="mt-1 text-sm text-muted">
                         @php
                             $metaParts = array_values(array_filter([
@@ -204,11 +245,11 @@
                 </form>
             @endif
 
-            <div @class(['mb-5 grid grid-cols-2 gap-2', 'sm:grid-cols-4' => ! $isArticles, 'sm:grid-cols-3' => $isArticles])>
+            <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 @unless ($isArticles)
-                <div x-data="{ typeOpen: false }" wire:key="book-type-{{ $selected->id }}">
+                <div class="sm:w-28 sm:shrink-0" x-data="{ typeOpen: false }" wire:key="book-type-{{ $selected->id }}">
                     <button type="button" x-on:click="typeOpen = true"
-                            class="w-full rounded border border-white/10 bg-sidebar px-3 py-2 text-left hover:border-link/40">
+                            class="h-full w-full rounded border border-white/10 bg-sidebar px-3 py-2 text-left hover:border-link/40">
                         <div class="text-[10px] uppercase tracking-wide text-muted">Type</div>
                         <div class="text-lg font-semibold">{{ $selected->type ?: '—' }}</div>
                     </button>
@@ -244,6 +285,7 @@
                     </template>
                 </div>
                 @endunless
+                <div class="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
                 <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Total time read</div>
                     <div class="text-lg font-semibold tabular-nums" x-text="formatMinutes(bookMinutes())">{{ $bookTotals['totalDuration'] }}</div>
@@ -261,6 +303,23 @@
                             —
                         @endif
                     </div>
+                </div>
+                <div class="flex flex-col justify-center gap-1 px-1 py-1">
+                    @if ($selected->isStartedToday())
+                        <button type="button" wire:click="clearStartedToday({{ $selected->id }})"
+                                class="text-left text-xs text-muted hover:text-body">Clear 'started today'</button>
+                    @else
+                        <button type="button" wire:click="markStartedToday({{ $selected->id }})"
+                                class="text-left text-xs text-muted hover:text-body">Mark as 'started today'</button>
+                    @endif
+                    @if ($selected->isFinished())
+                        <button type="button" wire:click="markBookReading({{ $selected->id }})"
+                                class="text-left text-xs text-muted hover:text-body">Mark as unfinished</button>
+                    @else
+                        <button type="button" wire:click="markBookFinished({{ $selected->id }})"
+                                class="text-left text-xs text-muted hover:text-body">Mark as 'finished'</button>
+                    @endif
+                </div>
                 </div>
             </div>
 

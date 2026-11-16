@@ -33,7 +33,7 @@
                                             ])>
                                             <ul class="list-disc space-y-0.5 pl-4 text-muted">
                                                 @foreach ($day['books'][$t] as $b)
-                                                    <li><span class="text-body">{{ $b['title'] }}</span> · {{ \App\Livewire\ReadStats::formatMinutes($b['minutes']) }}</li>
+                                                    <li><span class="text-body">@include('livewire.partials.read-item-name', ['title' => $b['title'], 'startedToday' => $b['startedToday'] ?? false, 'finished' => $b['finished'] ?? false])</span> · {{ \App\Livewire\ReadStats::formatMinutes($b['minutes']) }}</li>
                                                 @endforeach
                                             </ul>
                                         </div>
@@ -77,7 +77,7 @@
         @forelse ($books as $book)
             <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
                 <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors[$book['type'] && isset($colors[$book['type']]) ? $book['type'] : '—'] }}"></span>
-                <span class="min-w-0 flex-1 truncate text-body">{{ $book['title'] }}</span>
+                <span class="min-w-0 flex-1 truncate text-body">@include('livewire.partials.read-item-name', ['title' => $book['title'], 'startedToday' => $book['startedToday'] ?? false, 'finished' => $book['finished'] ?? false, 'truncate' => true])</span>
                 <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($book['minutes']) }}</span>
             </li>
         @empty
@@ -91,7 +91,7 @@
         @forelse ($articles as $article)
             <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
                 <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors['articles'] }}"></span>
-                <span class="min-w-0 flex-1 truncate text-body">{{ $article['title'] }}</span>
+                <span class="min-w-0 flex-1 truncate text-body">@include('livewire.partials.read-item-name', ['title' => $article['title'], 'startedToday' => $article['startedToday'] ?? false, 'finished' => $article['finished'] ?? false, 'truncate' => true])</span>
                 <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($article['minutes']) }}</span>
             </li>
         @empty

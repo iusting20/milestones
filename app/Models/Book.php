@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\Clock;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,6 +27,7 @@ class Book extends Model
         'position',
         'type',
         'kind',
+        'started_on',
     ];
 
     protected function casts(): array
@@ -32,6 +35,7 @@ class Book extends Model
         return [
             'total_pages' => 'integer',
             'position' => 'integer',
+            'started_on' => 'date',
         ];
     }
 
@@ -67,6 +71,20 @@ class Book extends Model
     public function isArticle(): bool
     {
         return $this->kind === self::KIND_ARTICLE;
+    }
+
+    /**
+     * True when started_on is the display-timezone calendar day of $now (Europe/Bucharest).
+     */
+    public function isStartedToday(?Carbon $now = null): bool
+    {
+        if ($this->started_on === null) {
+            return false;
+        }
+
+        $today = ($now ?? Clock::now())->timezone(Clock::timezone())->toDateString();
+
+        return $this->started_on->toDateString() === $today;
     }
 
     public function scopeOfKind(Builder $query, string $kind): Builder

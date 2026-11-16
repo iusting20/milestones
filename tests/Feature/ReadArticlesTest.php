@@ -214,7 +214,7 @@ class ReadArticlesTest extends TestCase
         $this->assertSame(['A book'], array_column($data['books'], 'title'));
         $this->assertSame(['An article'], array_column($data['articles'], 'title'));
         $this->assertSame([40], array_column($data['articles'], 'minutes'));
-        $this->assertSame([['title' => 'An article', 'minutes' => 40]], $data['days'][0]['books']['articles']);
+        $this->assertSame([['title' => 'An article', 'minutes' => 40, 'startedToday' => false, 'finished' => false]], $data['days'][0]['books']['articles']);
 
         $this->travelTo($now);
         $this->get(route('read.stats'))

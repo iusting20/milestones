@@ -70,17 +70,40 @@ class ReadStatusMarksTest extends TestCase
         $this->assertSame(Book::STATUS_READING, $done->fresh()->status);
     }
 
+    public function test_started_today_icon_is_an_svg_and_absent_otherwise(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-16 12:00:00', Clock::timezone()));
+        $started = $this->book(['title' => 'Started SVG', 'started_on' => '2026-11-16', 'position' => 1]);
+
+        $startedHtml = Livewire::test(Read::class, ['selectedBookId' => $started->id])->html();
+        $this->assertStringContainsString('data-read-icon="started-today"', $startedHtml);
+        $this->assertStringContainsString('<svg', $startedHtml);
+        $this->assertStringNotContainsString('⏻', $startedHtml);
+        $this->assertStringNotContainsString('data-read-icon="finished"', $startedHtml);
+
+        $started->update(['started_on' => '2026-11-15']);
+        $otherHtml = Livewire::test(Read::class, ['selectedBookId' => $started->id])->html();
+        $this->assertStringNotContainsString('data-read-icon="started-today"', $otherHtml);
+        $this->assertStringNotContainsString('⏻', $otherHtml);
+    }
+
     public function test_mark_started_today_stores_bucharest_date_and_shows_glyph_only_that_day(): void
     {
         $this->travelTo(Carbon::parse('2026-11-16 23:30:00', Clock::timezone()));
         $book = $this->book(['title' => 'Started Book']);
 
-        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->call('markStartedToday', $book->id)
             ->assertSee('aria-label="Started today"', false)
-            ->assertSee('⏻')
+            ->assertSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('<svg')
+            ->assertDontSeeHtml('⏻')
             ->assertSee("Clear 'started today'", false)
-            ->assertDontSee("Mark as 'started today'", false);
+            ->assertDontSee("Mark as 'started today'", false)
+            ->html();
+
+        $this->assertSame(2, substr_count($html, 'data-read-icon="started-today"')); // list + title
+        $this->assertStringContainsString('stroke="currentColor"', $html);
 
         $this->assertSame('2026-11-16', $book->fresh()->started_on->toDateString());
 
@@ -88,7 +111,7 @@ class ReadStatusMarksTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
             ->assertDontSee('aria-label="Started today"', false)
-            ->assertDontSee('⏻')
+            ->assertDontSeeHtml('data-read-icon="started-today"')
             ->assertSee("Mark as 'started today'", false)
             ->assertDontSee("Clear 'started today'", false);
 
@@ -131,7 +154,10 @@ class ReadStatusMarksTest extends TestCase
             ->assertSee('Finished (1)')
             ->set('showFinished', true)
             ->assertSeeHtml('data-finished-item="'.$article->id.'"')
-            ->assertSee('⏻')
+            ->assertSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertSeeHtml('<svg')
+            ->assertDontSeeHtml('⏻')
             ->assertSee('aria-label="Finished"', false);
     }
 
@@ -179,7 +205,10 @@ class ReadStatusMarksTest extends TestCase
         $this->travelTo($now);
         $this->get(route('read.stats'))
             ->assertOk()
-            ->assertSee('⏻')
+            ->assertSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertSeeHtml('<svg')
+            ->assertDontSeeHtml('⏻')
             ->assertSee('aria-label="Started today"', false)
             ->assertSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');
@@ -192,7 +221,9 @@ class ReadStatusMarksTest extends TestCase
         $this->travelTo($monday->copy()->addDay()->setTime(10, 0));
         $this->get(route('read.stats'))
             ->assertOk()
-            ->assertDontSee('⏻')
+            ->assertDontSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertDontSeeHtml('⏻')
             ->assertDontSee('aria-label="Started today"', false)
             ->assertSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');

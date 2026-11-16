@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Book;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use Carbon\Carbon;
@@ -15,12 +16,23 @@ class ReadStats extends Component
         'A' => '#3fb950',
         'B' => '#ffe600',
         'C' => '#58a6ff',
+        'articles' => '#c084fc',
         '—' => '#8b8b8b',
     ];
 
+    public static function typeLabel(string $type): string
+    {
+        return match ($type) {
+            '—' => 'No type',
+            'articles' => 'Articles',
+            default => 'Type '.$type,
+        };
+    }
+
     /**
-     * Minutes read per local day (Mon..Sun of the current week) and per book type.
+     * Minutes read per local day (Mon..Sun of the current week) and per book type / articles.
      * Sessions spanning midnight are split across days; a live session counts up to now.
+     * Article time is kept in the "articles" category so book type totals stay unchanged.
      *
      * @return array{days: array<int, array{label: string, date: string, minutes: array<string, int>}>, totals: array<string, int>}
      */
@@ -45,7 +57,7 @@ class ReadStats extends Component
         }
 
         $sessions = ReadingSession::query()
-            ->with('book:id,title,type')
+            ->with('book:id,title,type,kind')
             ->where('started_at', '<', $weekEnd->copy()->utc())
             ->where(function ($q) use ($weekStart) {
                 $q->whereNull('finished_at')->orWhere('finished_at', '>', $weekStart->copy()->utc());
@@ -55,7 +67,7 @@ class ReadStats extends Component
         $bookSeconds = [];
         $bookInfo = [];
         foreach ($sessions as $session) {
-            $type = $session->book?->type && isset(self::TYPE_COLORS[$session->book->type]) ? $session->book->type : '—';
+            $type = self::categoryFor($session->book);
             $start = $session->started_at->copy()->timezone($tz);
             $end = ($session->finished_at ?? $now)->copy()->timezone($tz);
             if ($end->gt($now)) {
@@ -98,22 +110,36 @@ class ReadStats extends Component
             unset($days[$i]['seconds'], $days[$i]['bookSeconds']);
         }
 
-        $books = [];
+        $items = [];
         foreach ($bookSeconds as $id => $secs) {
             $minutes = intdiv((int) $secs, 60);
             if ($minutes <= 0) {
                 continue;
             }
-            $books[] = [
+            $isArticle = ($bookInfo[$id]?->kind === Book::KIND_ARTICLE);
+            $items[] = [
                 'id' => $id,
-                'title' => $bookInfo[$id]?->title ?? 'Deleted book',
-                'type' => $bookInfo[$id]?->type,
+                'title' => $bookInfo[$id]?->title ?? ($isArticle ? 'Deleted article' : 'Deleted book'),
+                'type' => $isArticle ? 'articles' : $bookInfo[$id]?->type,
+                'kind' => $isArticle ? Book::KIND_ARTICLE : Book::KIND_BOOK,
                 'minutes' => $minutes,
             ];
         }
-        usort($books, fn ($a, $b) => $b['minutes'] <=> $a['minutes'] ?: strcasecmp($a['title'], $b['title']));
+        usort($items, fn ($a, $b) => $b['minutes'] <=> $a['minutes'] ?: strcasecmp($a['title'], $b['title']));
 
-        return ['days' => $days, 'totals' => $totals, 'books' => $books];
+        $books = array_values(array_filter($items, fn ($item) => $item['kind'] !== Book::KIND_ARTICLE));
+        $articles = array_values(array_filter($items, fn ($item) => $item['kind'] === Book::KIND_ARTICLE));
+
+        return ['days' => $days, 'totals' => $totals, 'books' => $books, 'articles' => $articles];
+    }
+
+    public static function categoryFor(?Book $book): string
+    {
+        if ($book?->kind === Book::KIND_ARTICLE) {
+            return 'articles';
+        }
+
+        return $book?->type && isset(self::TYPE_COLORS[$book->type]) ? $book->type : '—';
     }
 
     public static function formatMinutes(int $minutes): string
@@ -162,6 +188,7 @@ class ReadStats extends Component
             'days' => $data['days'],
             'totals' => $data['totals'],
             'books' => $data['books'],
+            'articles' => $data['articles'],
             'types' => $types,
             'colors' => self::TYPE_COLORS,
             'maxDay' => max(1, $maxDay),

@@ -10,7 +10,7 @@
         @foreach ($types as $t)
             <span class="flex items-center gap-1.5">
                 <span class="inline-block h-2.5 w-2.5 rounded-sm" style="background: {{ $colors[$t] }}"></span>
-                {{ $t === '—' ? 'No type' : 'Type '.$t }}
+                {{ \App\Livewire\ReadStats::typeLabel($t) }}
             </span>
         @endforeach
     </div>
@@ -62,7 +62,7 @@
             @foreach ($types as $t)
                 <li class="flex items-center gap-2">
                     <span class="inline-block h-3 w-3 rounded-sm" style="background: {{ $colors[$t] }}"></span>
-                    <span class="w-16 text-body">{{ $t === '—' ? 'No type' : 'Type '.$t }}</span>
+                    <span class="w-20 text-body">{{ \App\Livewire\ReadStats::typeLabel($t) }}</span>
                     <span class="w-12 text-right font-semibold tabular-nums text-body">{{ $weekTotal > 0 ? round($totals[$t] / $weekTotal * 100) : 0 }}%</span>
                     <span class="tabular-nums text-muted">{{ \App\Livewire\ReadStats::formatMinutes($totals[$t]) }}</span>
                 </li>
@@ -82,6 +82,20 @@
             </li>
         @empty
             <li class="px-4 py-4 text-sm text-muted">No books read yet this week.</li>
+        @endforelse
+    </ul>
+
+    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Articles read this week</h2>
+
+    <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
+        @forelse ($articles as $article)
+            <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors['articles'] }}"></span>
+                <span class="min-w-0 flex-1 truncate text-body">{{ $article['title'] }}</span>
+                <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($article['minutes']) }}</span>
+            </li>
+        @empty
+            <li class="px-4 py-4 text-sm text-muted">No articles read yet this week.</li>
         @endforelse
     </ul>
 </div>

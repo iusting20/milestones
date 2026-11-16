@@ -16,24 +16,26 @@
         </div>
 
         <div class="mb-3 flex items-center justify-between gap-2">
-            <h1 class="text-xl font-bold text-body">Books</h1>
+            <h1 class="text-xl font-bold text-body">{{ $isArticles ? 'Articles' : 'Books' }}</h1>
             <a href="{{ route('read.stats') }}" class="ml-auto text-sm font-semibold text-mark no-underline hover:opacity-80">Stats</a>
             <button type="button" wire:click="startAddBook"
                     class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
-                + Book
+                + {{ $isArticles ? 'Article' : 'Book' }}
             </button>
         </div>
 
         @if ($addingBook)
             <form wire:submit="addBook" class="mb-3 space-y-2 rounded border border-white/10 bg-panel p-3">
-                <input type="text" wire:model="newBookTitle" placeholder="Title" required
+                <input type="text" wire:model="newBookTitle" placeholder="{{ $isArticles ? 'Name' : 'Title' }}" required
                        class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                 @error('newBookTitle') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                 <input type="text" wire:model="newBookAuthor" placeholder="Author (optional)"
                        class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                @unless ($isArticles)
                 <input type="number" min="0" wire:model="newBookTotalPages" placeholder="Total pages (optional)"
                        class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                 @error('newBookTotalPages') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                @endunless
                 <div class="flex gap-2">
                     <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Add</button>
                     <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
@@ -76,7 +78,7 @@
                 </li>
             @empty
                 <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-sm text-muted">
-                    No books yet. Add one to start tracking.
+                    No {{ $isArticles ? 'articles' : 'books' }} yet. Add one to start tracking.
                 </li>
             @endforelse
         </ul>
@@ -112,6 +114,11 @@
                 };
             }
         </script>
+        @if ($isArticles)
+            <a href="{{ route('read') }}" class="mt-6 inline-block text-xs text-faint no-underline hover:text-muted">books</a>
+        @else
+            <a href="{{ route('read.articles') }}" class="mt-6 inline-block text-xs text-faint no-underline hover:text-muted">articles</a>
+        @endif
     </aside>
 
     {{-- Book detail --}}
@@ -146,7 +153,7 @@
                                 class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Edit</button>
                         <button type="button"
                                 wire:click="deleteBook({{ $selected->id }})"
-                                wire:confirm="Delete this book and all its sessions?"
+                                wire:confirm="Delete this {{ $isArticles ? 'article' : 'book' }} and all its sessions?"
                                 class="rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">Delete</button>
                     @endif
                     <button type="button"
@@ -168,7 +175,7 @@
             @if ($editingBookId === $selected->id)
                 <form wire:submit="saveEditBook" class="mb-4 flex flex-col gap-2 rounded border border-white/10 bg-panel p-3 sm:flex-row sm:flex-wrap sm:items-end">
                     <div class="sm:w-48">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Title</label>
+                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">{{ $isArticles ? 'Name' : 'Title' }}</label>
                         <input type="text" wire:model="editBookTitle"
                                class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                     </div>
@@ -177,11 +184,13 @@
                         <input type="text" wire:model="editBookAuthor"
                                class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                     </div>
+                    @unless ($isArticles)
                     <div class="sm:w-28">
                         <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
                         <input type="number" min="0" wire:model="editBookTotalPages"
                                class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                     </div>
+                    @endunless
                     <div class="sm:w-32">
                         <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Status</label>
                         <select wire:model="editBookStatus"
@@ -195,7 +204,8 @@
                 </form>
             @endif
 
-            <div class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div @class(['mb-5 grid grid-cols-2 gap-2', 'sm:grid-cols-4' => ! $isArticles, 'sm:grid-cols-3' => $isArticles])>
+                @unless ($isArticles)
                 <div x-data="{ typeOpen: false }" wire:key="book-type-{{ $selected->id }}">
                     <button type="button" x-on:click="typeOpen = true"
                             class="w-full rounded border border-white/10 bg-sidebar px-3 py-2 text-left hover:border-link/40">
@@ -233,6 +243,7 @@
                         </div>
                     </template>
                 </div>
+                @endunless
                 <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
                     <div class="text-[10px] uppercase tracking-wide text-muted">Total time read</div>
                     <div class="text-lg font-semibold tabular-nums" x-text="formatMinutes(bookMinutes())">{{ $bookTotals['totalDuration'] }}</div>
@@ -286,12 +297,14 @@
                                    class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                             @error('newSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                         </div>
+                        @unless ($isArticles)
                         <div class="sm:w-28">
                             <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
                             <input type="number" min="0" wire:model="newSessionPagesRead" placeholder="—"
                                    class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                             @error('newSessionPagesRead') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                         </div>
+                        @endunless
                         <div class="sm:flex-1">
                             <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
                             <input type="text" wire:model="newSessionNote" placeholder="Optional"
@@ -325,11 +338,13 @@
                                                class="rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                                         @error('editSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
                                     </div>
+                                    @unless ($isArticles)
                                     <div class="sm:w-28">
                                         <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
                                         <input type="number" min="0" wire:model="editSessionPagesRead"
                                                class="w-full rounded border border-white/10 bg-panel px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
                                     </div>
+                                    @endunless
                                     <div class="sm:flex-1">
                                         <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
                                         <input type="text" wire:model="editSessionNote"

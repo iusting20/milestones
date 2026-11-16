@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -12,6 +13,10 @@ class Book extends Model
 
     public const STATUS_FINISHED = 'finished';
 
+    public const KIND_BOOK = 'book';
+
+    public const KIND_ARTICLE = 'article';
+
     protected $fillable = [
         'title',
         'author',
@@ -19,6 +24,7 @@ class Book extends Model
         'status',
         'position',
         'type',
+        'kind',
     ];
 
     protected function casts(): array
@@ -27,6 +33,15 @@ class Book extends Model
             'total_pages' => 'integer',
             'position' => 'integer',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Book $book): void {
+            if ($book->kind === null || $book->kind === '') {
+                $book->kind = self::KIND_BOOK;
+            }
+        });
     }
 
     public function readingSessions(): HasMany
@@ -47,5 +62,15 @@ class Book extends Model
     public function isFinished(): bool
     {
         return $this->status === self::STATUS_FINISHED;
+    }
+
+    public function isArticle(): bool
+    {
+        return $this->kind === self::KIND_ARTICLE;
+    }
+
+    public function scopeOfKind(Builder $query, string $kind): Builder
+    {
+        return $query->where('kind', $kind);
     }
 }

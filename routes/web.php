@@ -37,6 +37,8 @@ Route::view('/comms', 'comms')->name('comms');
 
 Route::get('/read', Read::class)->name('read');
 
+Route::get('/read/articles', Read::class)->name('read.articles');
+
 Route::get('/read/stats', ReadStats::class)->name('read.stats');
 
 // Secret, unlinked job-applications dashboard: unguessable path (JOBS_PAGE_TOKEN) + the normal login.

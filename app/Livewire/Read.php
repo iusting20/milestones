@@ -6,12 +6,12 @@ use App\Models\Book;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use Carbon\Carbon;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
-#[Title("Books")]
 class Read extends Component
 {
+    public string $kind = Book::KIND_BOOK;
+
     public ?int $selectedBookId = null;
 
     public bool $editMode = false;
@@ -56,8 +56,19 @@ class Read extends Component
 
     public function mount(?int $selectedBookId = null): void
     {
+        if (request()->routeIs('read.articles')) {
+            $this->kind = Book::KIND_ARTICLE;
+        } elseif (! in_array($this->kind, [Book::KIND_BOOK, Book::KIND_ARTICLE], true)) {
+            $this->kind = Book::KIND_BOOK;
+        }
+
         // No book is selected on first load / refresh.
         $this->selectedBookId = $selectedBookId;
+    }
+
+    public function isArticles(): bool
+    {
+        return $this->kind === Book::KIND_ARTICLE;
     }
 
     public function selectBook(int $id): void
@@ -85,19 +96,23 @@ class Read extends Component
             return;
         }
 
-        $pages = $this->parseOptionalPages($this->newBookTotalPages, 'newBookTotalPages');
-        if ($this->getErrorBag()->has('newBookTotalPages')) {
-            return;
+        $pages = null;
+        if (! $this->isArticles()) {
+            $pages = $this->parseOptionalPages($this->newBookTotalPages, 'newBookTotalPages');
+            if ($this->getErrorBag()->has('newBookTotalPages')) {
+                return;
+            }
         }
 
-        $max = (int) Book::query()->max('position');
+        $max = (int) $this->catalog()->max('position');
 
-        $book = Book::query()->create([
+        $book = $this->catalog()->create([
             'title' => $title,
             'author' => trim($this->newBookAuthor) !== '' ? trim($this->newBookAuthor) : null,
-            'total_pages' => $pages,
+            'total_pages' => $this->isArticles() ? null : $pages,
             'status' => Book::STATUS_READING,
             'position' => $max + 1,
+            'kind' => $this->kind,
         ]);
 
         $this->addingBook = false;
@@ -138,9 +153,12 @@ class Read extends Component
             return;
         }
 
-        $pages = $this->parseOptionalPages($this->editBookTotalPages, 'editBookTotalPages');
-        if ($this->getErrorBag()->has('editBookTotalPages')) {
-            return;
+        $pages = $book->total_pages;
+        if (! $this->isArticles()) {
+            $pages = $this->parseOptionalPages($this->editBookTotalPages, 'editBookTotalPages');
+            if ($this->getErrorBag()->has('editBookTotalPages')) {
+                return;
+            }
         }
 
         $book->update([
@@ -170,7 +188,7 @@ class Read extends Component
         $book->delete();
 
         if ($wasSelected) {
-            $this->selectedBookId = Book::query()->orderBy('position')->orderBy('id')->value('id');
+            $this->selectedBookId = $this->catalog()->orderBy('position')->orderBy('id')->value('id');
             $this->selectedBookId = $this->selectedBookId ? (int) $this->selectedBookId : null;
         }
 
@@ -335,7 +353,10 @@ class Read extends Component
      */
     public function updateSessionFinish(int $id, string $time): array
     {
-        $session = ReadingSession::query()->whereKey($id)->first();
+        $session = ReadingSession::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->first();
         if (! $session) {
             return ['ok' => false, 'error' => 'Session not found.'];
         }
@@ -413,7 +434,7 @@ class Read extends Component
 
     public function render()
     {
-        $books = Book::query()
+        $books = $this->catalog()
             ->withCount('readingSessions')
             ->with(['latestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
             ->orderBy('position')
@@ -474,7 +495,8 @@ class Read extends Component
             'liveTotals' => $liveTotals,
             'runningSession' => $selected ? $this->runningSessionFor($selected->id) : null,
             'timezone' => Clock::timezone(),
-        ])->layout('layouts.app');
+            'isArticles' => $this->isArticles(),
+        ])->layout('layouts.app')->title($this->isArticles() ? 'Articles' : 'Books');
     }
 
     /**
@@ -485,7 +507,7 @@ class Read extends Component
     private function liveTotals(?int $bookId = null): array
     {
         if ($bookId === null && $this->selectedBookId) {
-            $bookId = Book::query()->whereKey($this->selectedBookId)->exists() ? $this->selectedBookId : null;
+            $bookId = $this->catalog()->whereKey($this->selectedBookId)->exists() ? $this->selectedBookId : null;
         }
 
         $weekStart = Clock::now()->startOfWeek(Carbon::MONDAY)->utc();
@@ -554,6 +576,10 @@ class Read extends Component
 
     public function setBookType(int $id, ?string $type): void
     {
+        if ($this->isArticles()) {
+            return;
+        }
+
         $type = $type === null || $type === '' ? null : strtoupper($type);
         if ($type !== null && ! in_array($type, self::BOOK_TYPES, true)) {
             return;
@@ -564,22 +590,30 @@ class Read extends Component
     public function reorderBooks(array $ids): void
     {
         $ids = array_values(array_unique(array_map(intval(...), $ids)));
-        if ($ids === [] || Book::query()->whereIn('id', $ids)->count() !== count($ids)) {
+        if ($ids === [] || $this->catalog()->whereIn('id', $ids)->count() !== count($ids)) {
             return;
         }
         foreach ($ids as $i => $id) {
-            Book::query()->whereKey($id)->update(['position' => $i + 1]);
+            $this->catalog()->whereKey($id)->update(['position' => $i + 1]);
         }
+    }
+
+    private function catalog()
+    {
+        return Book::query()->ofKind($this->kind);
     }
 
     private function findBook(int $id): Book
     {
-        return Book::query()->whereKey($id)->firstOrFail();
+        return $this->catalog()->whereKey($id)->firstOrFail();
     }
 
     private function findSession(int $id): ReadingSession
     {
-        return ReadingSession::query()->whereKey($id)->firstOrFail();
+        return ReadingSession::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
     }
 
     private function runningSessionFor(int $bookId): ?ReadingSession
@@ -659,6 +693,8 @@ class Read extends Component
 
         if ($bookId !== null) {
             $query->where('book_id', $bookId);
+        } else {
+            $query->whereHas('book', fn ($q) => $q->where('kind', $this->kind));
         }
 
         if ($finishedOnly) {
@@ -691,6 +727,8 @@ class Read extends Component
 
         if ($bookId !== null) {
             $query->where('book_id', $bookId);
+        } else {
+            $query->whereHas('book', fn ($q) => $q->where('kind', $this->kind));
         }
 
         $starts = [];

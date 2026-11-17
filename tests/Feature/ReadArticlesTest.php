@@ -224,4 +224,30 @@ class ReadArticlesTest extends TestCase
             ->assertSee('A book')
             ->assertSee('Articles read this week');
     }
+    public function test_new_article_is_added_at_the_top_without_changing_relative_order(): void
+    {
+        $a = Book::query()->create(['title' => 'Older article', 'status' => Book::STATUS_READING, 'position' => 1, 'kind' => Book::KIND_ARTICLE]);
+        $b = Book::query()->create(['title' => 'Newer article', 'status' => Book::STATUS_READING, 'position' => 2, 'kind' => Book::KIND_ARTICLE]);
+        $book = Book::query()->create(['title' => 'A book', 'status' => Book::STATUS_READING, 'position' => 1, 'kind' => Book::KIND_BOOK]);
+
+        Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE])
+            ->call('startAddBook')
+            ->set('newBookTitle', 'Brand new article')
+            ->call('addBook');
+
+        $new = Book::query()->where('title', 'Brand new article')->first();
+        $this->assertNotNull($new);
+        $this->assertSame(Book::KIND_ARTICLE, $new->kind);
+        $this->assertSame(1, $new->position);
+        $this->assertSame(2, $a->fresh()->position);
+        $this->assertSame(3, $b->fresh()->position);
+        $this->assertSame(1, $book->fresh()->position);
+
+        $html = Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE])->html();
+        $posNew = strpos($html, 'data-sort-item="'.$new->id.'"');
+        $posA = strpos($html, 'data-sort-item="'.$a->id.'"');
+        $posB = strpos($html, 'data-sort-item="'.$b->id.'"');
+        $this->assertLessThan($posA, $posNew);
+        $this->assertLessThan($posB, $posA);
+    }
 }

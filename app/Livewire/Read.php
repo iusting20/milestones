@@ -106,14 +106,20 @@ class Read extends Component
             }
         }
 
-        $max = (int) $this->catalog()->max('position');
+        $min = $this->catalog()->min('position');
+        if ($min === null) {
+            $position = 1;
+        } else {
+            $position = (int) $min;
+            $this->catalog()->increment('position');
+        }
 
         $book = $this->catalog()->create([
             'title' => $title,
             'author' => trim($this->newBookAuthor) !== '' ? trim($this->newBookAuthor) : null,
             'total_pages' => $this->isArticles() ? null : $pages,
             'status' => Book::STATUS_READING,
-            'position' => $max + 1,
+            'position' => $position,
             'kind' => $this->kind,
         ]);
 

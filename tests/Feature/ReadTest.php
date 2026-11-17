@@ -308,4 +308,45 @@ class ReadTest extends TestCase
         \App\Models\Book::query()->create(['title' => 'First', 'status' => 'reading', 'position' => 1]);
         \Livewire\Livewire::test(\App\Livewire\Read::class)->assertSet('selectedBookId', null);
     }
+    public function test_new_book_is_added_at_the_top_without_changing_relative_order(): void
+    {
+        $a = Book::query()->create(['title' => 'Older A', 'status' => Book::STATUS_READING, 'position' => 2, 'kind' => Book::KIND_BOOK]);
+        $b = Book::query()->create(['title' => 'Older B', 'status' => Book::STATUS_READING, 'position' => 5, 'kind' => Book::KIND_BOOK]);
+        $finished = Book::query()->create(['title' => 'Done', 'status' => Book::STATUS_FINISHED, 'position' => 3, 'kind' => Book::KIND_BOOK]);
+        $article = Book::query()->create(['title' => 'An article', 'status' => Book::STATUS_READING, 'position' => 2, 'kind' => Book::KIND_ARTICLE]);
+
+        Livewire::test(Read::class)
+            ->call('startAddBook')
+            ->set('newBookTitle', 'Newest')
+            ->call('addBook');
+
+        $new = Book::query()->where('title', 'Newest')->first();
+        $this->assertNotNull($new);
+        $this->assertSame(2, $new->position);
+        $this->assertSame(3, $a->fresh()->position);
+        $this->assertSame(6, $b->fresh()->position);
+        $this->assertSame(4, $finished->fresh()->position);
+        $this->assertSame(2, $article->fresh()->position);
+
+        $html = Livewire::test(Read::class)->html();
+        $posNew = strpos($html, 'data-sort-item="'.$new->id.'"');
+        $posA = strpos($html, 'data-sort-item="'.$a->id.'"');
+        $posB = strpos($html, 'data-sort-item="'.$b->id.'"');
+        $this->assertNotFalse($posNew);
+        $this->assertNotFalse($posA);
+        $this->assertNotFalse($posB);
+        $this->assertLessThan($posA, $posNew);
+        $this->assertLessThan($posB, $posA);
+        $this->assertStringNotContainsString('data-sort-item="'.$finished->id.'"', $html);
+    }
+
+    public function test_first_book_gets_position_one(): void
+    {
+        Livewire::test(Read::class)
+            ->call('startAddBook')
+            ->set('newBookTitle', 'Only')
+            ->call('addBook');
+
+        $this->assertSame(1, Book::query()->where('title', 'Only')->value('position'));
+    }
 }

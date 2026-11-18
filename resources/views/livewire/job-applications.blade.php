@@ -126,6 +126,23 @@
         @endif
     </div>
 
+    {{-- Follow-ups --}}
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Upcoming follow-ups</h2>
+    <ul class="mb-10 divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
+        @forelse ($followUps as $a)
+            <li class="px-4 py-3 text-sm">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <span class="font-semibold text-body">{{ $a->label() }}</span>
+                    <span class="tabular-nums {{ $a->follow_up_date->isSameDay($today) ? 'font-semibold text-mark' : 'text-muted' }}">{{ $a->follow_up_date->format('D j M') }}</span>
+                </div>
+                @if ($a->next_step)<div class="mt-0.5 text-muted">{{ $a->next_step }}</div>@endif
+                <div class="mt-0.5 text-xs text-faint">{{ collect([$a->source, $a->contact])->filter()->implode(' · ') }}</div>
+            </li>
+        @empty
+            <li class="px-4 py-4 text-sm text-muted">No follow-ups scheduled.</li>
+        @endforelse
+    </ul>
+
     {{-- Day rates --}}
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Contract day rates</h2>
     <div class="mb-10 rounded border border-white/10 bg-sidebar p-4">
@@ -161,23 +178,6 @@
             <p class="text-sm text-muted">No contract rates to show.</p>
         @endif
     </div>
-
-    {{-- Follow-ups --}}
-    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Upcoming follow-ups</h2>
-    <ul class="mb-10 divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
-        @forelse ($followUps as $a)
-            <li class="px-4 py-3 text-sm">
-                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <span class="font-semibold text-body">{{ $a->label() }}</span>
-                    <span class="tabular-nums {{ $a->follow_up_date->isSameDay($today) ? 'font-semibold text-mark' : 'text-muted' }}">{{ $a->follow_up_date->format('D j M') }}</span>
-                </div>
-                @if ($a->next_step)<div class="mt-0.5 text-muted">{{ $a->next_step }}</div>@endif
-                <div class="mt-0.5 text-xs text-faint">{{ collect([$a->source, $a->contact])->filter()->implode(' · ') }}</div>
-            </li>
-        @empty
-            <li class="px-4 py-4 text-sm text-muted">No follow-ups scheduled.</li>
-        @endforelse
-    </ul>
 
     {{-- Activity log (collapsed by default; wire:ignore.self keeps it open across Livewire updates) --}}
     <details class="group mb-10 rounded border border-white/10 bg-sidebar" wire:ignore.self data-activity-log>

@@ -14,6 +14,10 @@
                     Last change {{ $lastChange->copy()->timezone($tz)->format('j M Y, H:i') }} ({{ $tz }})
                 @endif
             </span>
+            <button type="button" wire:click="openCoverLetters" data-my-cover-letters
+                    class="rounded border border-white/15 bg-panel px-3 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">
+                My cover letters{!! $savedCoverLetters->isEmpty() ? '' : ' <span class="tabular-nums text-muted">(' . e($savedCoverLetters->count()) . ')</span>' !!}
+            </button>
             <button type="button" wire:click="openCreate"
                     class="rounded border border-white/15 bg-panel px-3 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">
                 + Add application
@@ -117,6 +121,16 @@
                         <a href="{{ $nextUp->link }}" target="_blank" rel="noopener noreferrer"
                            class="rounded border border-white/15 px-3 py-1.5 text-sm text-link no-underline hover:border-[#39c5cf]/60">Open job ↗</a>
                     @endif
+                    <button type="button" wire:click="openCoverLetter({{ $nextUp->id }})" data-cover-letter-btn="{{ $nextUp->id }}"
+                            class="rounded border px-3 py-1.5 text-sm font-medium {{ $nextUp->hasCoverLetter() ? 'border-[#39c5cf]/60 bg-[#39c5cf]/10 text-body hover:bg-[#39c5cf]/20' : ($nextUp->cover_letter_not_needed ? 'border-white/10 text-muted hover:border-white/30 hover:text-body' : 'border-white/15 text-body hover:border-[#39c5cf]/60') }}">
+                        @if ($nextUp->hasCoverLetter())
+                            Cover letter ✓
+                        @elseif ($nextUp->cover_letter_not_needed)
+                            No cover letter
+                        @else
+                            Cover letter
+                        @endif
+                    </button>
                     <button type="button" wire:click="markApplied({{ $nextUp->id }})" wire:loading.attr="disabled"
                             class="rounded border border-[#f0883e]/60 bg-[#f0883e]/10 px-3 py-1.5 text-sm font-medium text-body hover:bg-[#f0883e]/20">Done, I applied</button>
                 </div>
@@ -217,6 +231,16 @@
                         <button type="button" wire:click="openView({{ $a->id }})" class="min-w-0 text-left font-semibold text-link hover:underline">{{ $a->label() }}</button>
                         <span class="flex items-center gap-3 text-xs text-muted">
                             <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($a->status) }}"></span>{{ $a->status }}</span>
+                            @if ($a->hasCoverLetter())
+                                <button type="button" wire:click="openCoverLetter({{ $a->id }})"
+                                        class="rounded border border-[#39c5cf]/40 px-2 py-0.5 text-xs text-body hover:border-[#39c5cf]/60"
+                                        aria-label="Cover letter for {{ $a->label() }}">Cover letter ✓</button>
+                            @endif
+                            @if (($a->messages_count ?? 0) > 0)
+                                <button type="button" wire:click="openView({{ $a->id }})" data-conversation-count="{{ $a->id }}"
+                                        class="rounded border border-white/10 px-2 py-0.5 text-xs text-muted hover:border-[#39c5cf]/60 hover:text-body"
+                                        aria-label="Conversation for {{ $a->label() }}">{{ $a->messages_count }} {{ \Illuminate\Support\Str::plural('message', $a->messages_count) }}</button>
+                            @endif
                             <button type="button" wire:click="openEdit({{ $a->id }})"
                                     class="rounded border border-white/10 px-2 py-0.5 text-xs text-muted hover:border-[#39c5cf]/60 hover:text-body"
                                     aria-label="Edit {{ $a->label() }}">Edit</button>
@@ -278,7 +302,89 @@
                     @endif
                 </dl>
 
+                <section class="mt-6 border-t border-white/10 pt-4" data-conversation data-conversation-job="{{ $viewing->id }}">
+                    <h3 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        Conversation{!! $viewing->messages->isEmpty() ? '' : ' <span class="tabular-nums normal-case tracking-normal text-faint">(' . e($viewing->messages->count()) . ')</span>' !!}
+                    </h3>
+                    <ol class="mb-4 space-y-3">
+                        @forelse ($viewing->messages as $m)
+                            <li class="rounded border border-white/10 bg-panel p-3" wire:key="msg-{{ $m->id }}" @if ($editingMessageId === $m->id) data-editing-message @endif>
+                                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                    <span class="text-xs font-semibold" style="color: {{ $m->direction === 'sent' ? '#39c5cf' : '#f778ba' }}">
+                                        {{ $m->direction === 'sent' ? 'Sent by me' : 'Received' }}
+                                    </span>
+                                    <span class="text-xs tabular-nums text-muted">{{ $m->occurred_at->copy()->timezone($tz)->format('D j M Y, H:i') }} ({{ $tz }})</span>
+                                </div>
+                                @if ($m->subject)
+                                    <div class="mt-1 text-sm font-medium text-body">{{ $m->subject }}</div>
+                                @endif
+                                <div class="mt-1 whitespace-pre-line break-words text-sm text-body">{{ $m->body }}</div>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button type="button" wire:click="startEditMessage({{ $m->id }})"
+                                            class="rounded border border-white/10 px-2 py-0.5 text-xs text-muted hover:border-[#39c5cf]/60 hover:text-body">Edit</button>
+                                    <button type="button" wire:click="deleteMessage({{ $m->id }})"
+                                            wire:confirm="Delete this conversation entry?"
+                                            class="rounded border border-white/10 px-2 py-0.5 text-xs text-muted hover:border-[#da3633]/60 hover:text-body">Delete</button>
+                                </div>
+                            </li>
+                        @empty
+                            <li class="text-sm text-muted">No emails logged yet. Paste what you sent and any reply you got back.</li>
+                        @endforelse
+                    </ol>
+
+                    <form wire:submit="saveMessage" class="rounded border border-white/10 bg-panel p-3">
+                        <p class="mb-2 text-xs font-medium text-body">{{ $editingMessageId ? 'Edit entry' : 'Add an email' }}</p>
+                        <div class="mb-2 flex flex-wrap gap-1" role="group" aria-label="Direction">
+                            <button type="button" wire:click="$set('messageForm.direction', 'sent')"
+                                    class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'sent' ? 'border-[#39c5cf]/70 bg-[#39c5cf]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">Sent by me</button>
+                            <button type="button" wire:click="$set('messageForm.direction', 'received')"
+                                    class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'received' ? 'border-[#f778ba]/70 bg-[#f778ba]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">Received</button>
+                        </div>
+                        @error('messageForm.direction')<p class="mb-2 text-xs text-[#da3633]">{{ $message }}</p>@enderror
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                                Date
+                                <input type="datetime-local" wire:model="messageForm.occurred_at"
+                                       class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                                @error('messageForm.occurred_at')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                            </label>
+                            <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                                Subject <span class="normal-case tracking-normal text-faint">(optional)</span>
+                                <input type="text" wire:model="messageForm.subject"
+                                       class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none">
+                                @error('messageForm.subject')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                            </label>
+                            <label class="block text-xs uppercase tracking-[0.14em] text-muted sm:col-span-2">
+                                Body
+                                <textarea wire:model="messageForm.body" rows="4"
+                                          class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none"
+                                          placeholder="Paste the email here"></textarea>
+                                @error('messageForm.body')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                            </label>
+                        </div>
+                        <div class="mt-3 flex justify-end gap-2">
+                            @if ($editingMessageId)
+                                <button type="button" wire:click="cancelEditMessage"
+                                        class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">Cancel</button>
+                            @endif
+                            <button type="submit" class="rounded border border-white/15 bg-sidebar px-3 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">
+                                {{ $editingMessageId ? 'Save entry' : 'Add to conversation' }}
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
                 <div class="sticky bottom-0 -mx-4 mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 bg-sidebar px-4 pt-3 sm:-mx-5 sm:px-5">
+                    <button type="button" wire:click="openCoverLetter({{ $viewing->id }})" data-cover-letter-btn="{{ $viewing->id }}"
+                            class="rounded border px-3 py-1.5 text-sm font-medium {{ $viewing->hasCoverLetter() ? 'border-[#39c5cf]/60 bg-[#39c5cf]/10 text-body hover:bg-[#39c5cf]/20' : ($viewing->cover_letter_not_needed ? 'border-white/10 text-muted hover:text-body' : 'border-white/15 text-muted hover:text-body') }}">
+                        @if ($viewing->hasCoverLetter())
+                            Cover letter ✓
+                        @elseif ($viewing->cover_letter_not_needed)
+                            No cover letter
+                        @else
+                            Cover letter
+                        @endif
+                    </button>
                     <button type="button" wire:click="openEdit({{ $viewing->id }})"
                             class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">Edit</button>
                     @if ($viewing->link)
@@ -288,6 +394,99 @@
                         <span class="px-2 py-1.5 text-xs text-faint">No application link</span>
                     @endif
                 </div>
+            </div>
+        </div>
+    @endif
+    @if ($coverLetterJob && $coverLetterJobId)
+        <div class="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4"
+             wire:keydown.escape.window="closeCoverLetter"
+             role="dialog" aria-modal="true" aria-labelledby="cover-letter-title" data-cover-letter-modal>
+            <div class="absolute inset-0 bg-black/60" wire:click="closeCoverLetter" aria-hidden="true"></div>
+            <div class="relative z-10 max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:rounded-lg sm:p-5"
+                 x-data="{ copied: false }">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 id="cover-letter-title" class="text-base font-semibold text-body">Cover letter</h2>
+                        <p class="text-sm text-muted">{{ $coverLetterJob->label() }}</p>
+                    </div>
+                    <button type="button" wire:click="closeCoverLetter"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+
+                <form wire:submit="saveCoverLetter">
+                    <label class="mb-3 flex items-center gap-2 text-sm text-body">
+                        <input type="checkbox" wire:model="coverLetterNotNeeded" class="rounded border-white/20 bg-panel">
+                        This job does not need a cover letter
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.14em] text-muted">
+                        Cover letter
+                        <textarea wire:model="coverLetterBody" x-ref="letter" rows="14"
+                                  class="mt-1 w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm normal-case tracking-normal text-body focus:border-link focus:outline-none"
+                                  placeholder="Paste your cover letter here"></textarea>
+                        @error('coverLetterBody')<span class="mt-1 block normal-case tracking-normal text-[#da3633]">{{ $message }}</span>@enderror
+                    </label>
+                    @if ($coverLetterJob->cover_letter_updated_at)
+                        <p class="mt-2 text-[11px] text-faint">Last saved {{ $coverLetterJob->cover_letter_updated_at->copy()->timezone($tz)->format('j M Y, H:i') }} ({{ $tz }})</p>
+                    @endif
+
+                    <div class="sticky bottom-0 -mx-4 mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 bg-sidebar px-4 pt-3 sm:-mx-5 sm:px-5">
+                        <button type="button"
+                                x-on:click="navigator.clipboard.writeText($refs.letter.value); copied = true; setTimeout(() => copied = false, 1500)"
+                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
+                                :disabled="!($refs.letter && $refs.letter.value)">
+                            <span x-text="copied ? 'Copied' : 'Copy'"></span>
+                        </button>
+                        <button type="button" wire:click="closeCoverLetter"
+                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">Cancel</button>
+                        <button type="submit" class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+    @if ($showCoverLetters)
+        <div class="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4"
+             wire:keydown.escape.window="closeCoverLetters"
+             role="dialog" aria-modal="true" aria-labelledby="cover-letters-title" data-cover-letters-modal>
+            <div class="absolute inset-0 bg-black/60" wire:click="closeCoverLetters" aria-hidden="true"></div>
+            <div class="relative z-10 max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:rounded-lg sm:p-5">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 id="cover-letters-title" class="text-base font-semibold text-body">My cover letters</h2>
+                        <p class="text-sm text-muted">{{ $savedCoverLetters->count() }} saved</p>
+                    </div>
+                    <button type="button" wire:click="closeCoverLetters"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+                <ul class="divide-y divide-white/10 rounded border border-white/10">
+                    @forelse ($savedCoverLetters as $letter)
+                        <li class="px-3 py-3" wire:key="cl-{{ $letter->id }}" x-data="{ copied: false }">
+                            <details>
+                                <summary class="cursor-pointer">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                        <span class="font-semibold text-body">{{ $letter->label() }}</span>
+                                        @if ($letter->cover_letter_updated_at)
+                                            <span class="text-xs tabular-nums text-muted">{{ $letter->cover_letter_updated_at->copy()->timezone($tz)->format('j M Y, H:i') }}</span>
+                                        @endif
+                                    </div>
+                                    <p class="mt-1 text-xs text-muted">{{ \Illuminate\Support\Str::limit(preg_replace('/\s+/', ' ', $letter->cover_letter), 140) }}</p>
+                                </summary>
+                                <pre class="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded border border-white/10 bg-panel p-3 text-sm text-body" x-ref="letter">{{ $letter->cover_letter }}</pre>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button type="button"
+                                            x-on:click="navigator.clipboard.writeText($refs.letter.textContent); copied = true; setTimeout(() => copied = false, 1500)"
+                                            class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">
+                                        <span x-text="copied ? 'Copied' : 'Copy'"></span>
+                                    </button>
+                                    <button type="button" wire:click="openView({{ $letter->id }})"
+                                            class="rounded border border-white/15 px-3 py-1.5 text-sm text-body hover:border-[#39c5cf]/60">Open job</button>
+                                </div>
+                            </details>
+                        </li>
+                    @empty
+                        <li class="px-3 py-4 text-sm text-muted">No cover letters saved yet. Open a job and paste one from the Cover letter button.</li>
+                    @endforelse
+                </ul>
             </div>
         </div>
     @endif

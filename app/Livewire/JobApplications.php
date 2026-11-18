@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\JobApplication;
 use App\Models\JobApplicationEvent;
+use App\Models\JobApplicationMessage;
 use App\Support\Clock;
 use App\Support\JobApplicationWriter;
 use Carbon\Carbon;
@@ -29,6 +30,26 @@ class JobApplications extends Component
 
     /** Job shown in the read-only details modal. */
     public ?int $viewingId = null;
+
+    /** Job whose cover letter is being edited. */
+    public ?int $coverLetterJobId = null;
+
+    public string $coverLetterBody = '';
+
+    public bool $coverLetterNotNeeded = false;
+
+    /** "My cover letters" list modal. */
+    public bool $showCoverLetters = false;
+
+    /** @var array{direction: string, occurred_at: string, subject: string, body: string} */
+    public array $messageForm = [
+        'direction' => 'sent',
+        'occurred_at' => '',
+        'subject' => '',
+        'body' => '',
+    ];
+
+    public ?int $editingMessageId = null;
 
     /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
     #[Url(as: 'category', history: true, except: 'all')]
@@ -285,6 +306,8 @@ class JobApplications extends Component
     public function openCreate(): void
     {
         $this->resetErrorBag();
+        $this->closeCoverLetter();
+        $this->showCoverLetters = false;
         $this->editingId = null;
         $this->form = array_merge(self::blankForm(), [
             'status' => JobApplicationWriter::DEFAULT_STATUS,
@@ -298,6 +321,8 @@ class JobApplications extends Component
     {
         $app = JobApplication::query()->findOrFail($id);
         $this->resetErrorBag();
+        $this->closeCoverLetter();
+        $this->showCoverLetters = false;
         $this->viewingId = null;
         $this->editingId = $app->id;
         $this->form = JobApplicationWriter::values($app);
@@ -314,12 +339,154 @@ class JobApplications extends Component
 
     public function openView(int $id): void
     {
+        $this->showCoverLetters = false;
         $this->viewingId = JobApplication::query()->findOrFail($id)->id;
+        $this->resetMessageForm();
     }
 
     public function closeView(): void
     {
+        if ($this->coverLetterJobId !== null || $this->showCoverLetters) {
+            return;
+        }
         $this->viewingId = null;
+        $this->resetMessageForm();
+    }
+
+    public function openCoverLetter(int $id): void
+    {
+        $app = JobApplication::query()->findOrFail($id);
+        $this->resetErrorBag();
+        $this->showCoverLetters = false;
+        $this->coverLetterJobId = $app->id;
+        $this->coverLetterBody = (string) ($app->cover_letter ?? '');
+        $this->coverLetterNotNeeded = (bool) $app->cover_letter_not_needed;
+    }
+
+    public function closeCoverLetter(): void
+    {
+        $this->resetErrorBag(['coverLetterBody', 'coverLetterNotNeeded']);
+        $this->coverLetterJobId = null;
+        $this->coverLetterBody = '';
+        $this->coverLetterNotNeeded = false;
+    }
+
+    public function saveCoverLetter(): void
+    {
+        $app = JobApplication::query()->findOrFail((int) $this->coverLetterJobId);
+        $validated = $this->validate([
+            'coverLetterBody' => 'nullable|string|max:20000',
+            'coverLetterNotNeeded' => 'boolean',
+        ]);
+        $body = trim((string) ($validated['coverLetterBody'] ?? ''));
+        $notNeeded = (bool) $validated['coverLetterNotNeeded'];
+        if ($body !== '') {
+            $notNeeded = false;
+        }
+
+        $app->cover_letter = $body === '' ? null : $body;
+        $app->cover_letter_not_needed = $notNeeded;
+        $app->cover_letter_updated_at = now();
+        $app->save();
+
+        $this->flash = $notNeeded
+            ? 'Marked cover letter as not needed for '.$app->label().'.'
+            : ($body === '' ? 'Cleared the cover letter for '.$app->label().'.' : 'Saved cover letter for '.$app->label().'.');
+        $this->closeCoverLetter();
+    }
+
+    public function openCoverLetters(): void
+    {
+        $this->closeCoverLetter();
+        $this->showForm = false;
+        $this->showCoverLetters = true;
+    }
+
+    public function closeCoverLetters(): void
+    {
+        $this->showCoverLetters = false;
+    }
+
+    /** @return array{direction: string, occurred_at: string, subject: string, body: string} */
+    private function blankMessageForm(): array
+    {
+        return [
+            'direction' => 'sent',
+            'occurred_at' => Clock::now()->format('Y-m-d\TH:i'),
+            'subject' => '',
+            'body' => '',
+        ];
+    }
+
+    private function resetMessageForm(): void
+    {
+        $this->resetErrorBag(['messageForm.direction', 'messageForm.occurred_at', 'messageForm.subject', 'messageForm.body']);
+        $this->editingMessageId = null;
+        $this->messageForm = $this->blankMessageForm();
+    }
+
+    public function startEditMessage(int $id): void
+    {
+        $message = $this->findViewingMessage($id);
+        $this->resetErrorBag(['messageForm.direction', 'messageForm.occurred_at', 'messageForm.subject', 'messageForm.body']);
+        $this->editingMessageId = $message->id;
+        $this->messageForm = [
+            'direction' => $message->direction,
+            'occurred_at' => $message->occurred_at->copy()->timezone(Clock::timezone())->format('Y-m-d\TH:i'),
+            'subject' => (string) ($message->subject ?? ''),
+            'body' => (string) $message->body,
+        ];
+    }
+
+    public function cancelEditMessage(): void
+    {
+        $this->resetMessageForm();
+    }
+
+    public function saveMessage(): void
+    {
+        $app = JobApplication::query()->findOrFail((int) $this->viewingId);
+        $validated = $this->validate([
+            'messageForm.direction' => 'required|in:'.implode(',', JobApplicationMessage::DIRECTIONS),
+            'messageForm.occurred_at' => 'required|date',
+            'messageForm.subject' => 'nullable|string|max:255',
+            'messageForm.body' => 'required|string|max:20000',
+        ]);
+        $data = $validated['messageForm'];
+        $subject = trim((string) ($data['subject'] ?? ''));
+        $payload = [
+            'direction' => $data['direction'],
+            'occurred_at' => Carbon::parse($data['occurred_at'], Clock::timezone())->utc(),
+            'subject' => $subject === '' ? null : $subject,
+            'body' => trim((string) $data['body']),
+        ];
+
+        if ($this->editingMessageId) {
+            $message = $this->findViewingMessage($this->editingMessageId);
+            $message->fill($payload)->save();
+            $this->flash = 'Updated the conversation entry.';
+        } else {
+            $app->messages()->create($payload);
+            $this->flash = 'Added a conversation entry for '.$app->label().'.';
+        }
+
+        $this->resetMessageForm();
+    }
+
+    public function deleteMessage(int $id): void
+    {
+        $this->findViewingMessage($id)->delete();
+        if ($this->editingMessageId === $id) {
+            $this->resetMessageForm();
+        }
+        $this->flash = 'Removed the conversation entry.';
+    }
+
+    private function findViewingMessage(int $id): JobApplicationMessage
+    {
+        return JobApplicationMessage::query()
+            ->where('job_application_id', (int) $this->viewingId)
+            ->findOrFail($id);
     }
 
     /** "Done, I applied" from Next Steps: status Applied + date applied today, logged like any manual edit. */
@@ -367,6 +534,7 @@ class JobApplications extends Component
         $today = Clock::today();
         $this->normalizeCategoryFilter();
         $apps = JobApplication::query()->whereNull('removed_at')
+            ->withCount('messages')
             ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
             ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
 
@@ -444,7 +612,16 @@ class JobApplications extends Component
             'log' => $log,
             'nextUp' => $queue->first(),
             'nextQueueCount' => $queue->count(),
-            'viewing' => $this->viewingId ? JobApplication::query()->find($this->viewingId) : null,
+            'viewing' => $this->viewingId
+                ? JobApplication::query()->with(['messages' => fn ($q) => $q->orderBy('occurred_at')->orderBy('id')])->find($this->viewingId)
+                : null,
+            'coverLetterJob' => $this->coverLetterJobId ? JobApplication::query()->find($this->coverLetterJobId) : null,
+            'savedCoverLetters' => JobApplication::query()
+                ->whereNotNull('cover_letter')
+                ->where('cover_letter', '!=', '')
+                ->orderByDesc('cover_letter_updated_at')
+                ->orderByDesc('id')
+                ->get(),
             'lastChange' => collect([JobApplication::query()->max('updated_at'), JobApplicationEvent::query()->max('occurred_at')])
                 ->filter()->map(fn ($v) => Carbon::parse($v, 'UTC'))->max(),
             'knownStatuses' => JobApplicationWriter::KNOWN_STATUSES,

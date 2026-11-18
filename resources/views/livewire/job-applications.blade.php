@@ -95,6 +95,37 @@
         </ul>
     </div>
 
+    {{-- Next steps --}}
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Next Steps:</h2>
+    <div class="mb-10 rounded border border-white/10 bg-sidebar p-4" data-next-steps>
+        @if ($nextUp)
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                    <p class="text-xs text-muted">Apply next{{ $nextQueueCount > 1 ? ' · '.($nextQueueCount - 1).' more waiting' : '' }}</p>
+                    <button type="button" wire:click="openView({{ $nextUp->id }})" class="mt-0.5 text-left text-base font-semibold text-body hover:text-link" data-next-step-id="{{ $nextUp->id }}">{{ $nextUp->role ?: 'Role' }}</button>
+                    <div class="text-sm text-body">{{ $nextUp->company }}</div>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                        <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($nextUp->status) }}"></span>{{ $nextUp->status }}</span>
+                        @foreach (array_filter([$categories[$nextUp->category] ?? null, $nextUp->type, $nextUp->rate, $nextUp->ir35 && $nextUp->ir35 !== 'N/A' ? 'IR35 '.$nextUp->ir35 : null, $nextUp->location]) as $bit)
+                            <span>· {{ $bit }}</span>
+                        @endforeach
+                    </div>
+                    @if ($nextUp->next_step)<div class="mt-1 text-xs text-muted">{{ $nextUp->next_step }}</div>@endif
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    @if ($nextUp->link)
+                        <a href="{{ $nextUp->link }}" target="_blank" rel="noopener noreferrer"
+                           class="rounded border border-white/15 px-3 py-1.5 text-sm text-link no-underline hover:border-[#39c5cf]/60">Open job ↗</a>
+                    @endif
+                    <button type="button" wire:click="markApplied({{ $nextUp->id }})" wire:loading.attr="disabled"
+                            class="rounded border border-[#f0883e]/60 bg-[#f0883e]/10 px-3 py-1.5 text-sm font-medium text-body hover:bg-[#f0883e]/20">Done, I applied</button>
+                </div>
+            </div>
+        @else
+            <p class="text-sm text-muted">Nothing left to apply to{{ $category !== 'all' ? ' in this category' : '' }}.</p>
+        @endif
+    </div>
+
     {{-- Day rates --}}
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Contract day rates</h2>
     <div class="mb-10 rounded border border-white/10 bg-sidebar p-4">
@@ -148,9 +179,13 @@
         @endforelse
     </ul>
 
-    {{-- Progress log --}}
-    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Progress log</h2>
-    <ol class="mb-10 rounded border border-white/10 bg-sidebar">
+    {{-- Activity log (collapsed by default; wire:ignore.self keeps it open across Livewire updates) --}}
+    <details class="group mb-10 rounded border border-white/10 bg-sidebar" wire:ignore.self data-activity-log>
+        <summary class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+            <span>Activity log ({{ count($log) }})</span>
+            <span class="text-xs font-normal normal-case tracking-normal text-link"><span class="group-open:hidden">Show</span><span class="hidden group-open:inline">Hide</span></span>
+        </summary>
+    <ol class="border-t border-white/10">
         @php $lastDate = null; @endphp
         @forelse ($log as $entry)
             @if ($entry['date'] !== $lastDate)
@@ -170,17 +205,16 @@
             <li class="px-4 py-4 text-sm text-muted">Nothing logged yet.</li>
         @endforelse
     </ol>
+    </details>
 
     {{-- All rows --}}
-    <details class="mb-10 rounded border border-white/10 bg-sidebar">
+    <details class="mb-10 rounded border border-white/10 bg-sidebar" wire:ignore.self>
         <summary class="cursor-pointer px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">All applications ({{ $apps->count() }})</summary>
         <ul class="divide-y divide-white/10 border-t border-white/10">
             @foreach ($apps as $a)
                 <li class="px-4 py-3 text-sm" wire:key="app-{{ $a->id }}">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <span class="font-semibold text-body">
-                            @if ($a->link)<a href="{{ $a->link }}" target="_blank" rel="noopener noreferrer" class="text-link no-underline hover:underline">{{ $a->label() }}</a>@else{{ $a->label() }}@endif
-                        </span>
+                        <button type="button" wire:click="openView({{ $a->id }})" class="min-w-0 text-left font-semibold text-link hover:underline">{{ $a->label() }}</button>
                         <span class="flex items-center gap-3 text-xs text-muted">
                             <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($a->status) }}"></span>{{ $a->status }}</span>
                             <button type="button" wire:click="openEdit({{ $a->id }})"
@@ -197,6 +231,66 @@
             @endforeach
         </ul>
     </details>
+    @if ($viewing)
+        @php
+            $rows = [
+                'Company' => $viewing->company,
+                'Role' => $viewing->role,
+                'Category' => $categories[$viewing->category] ?? $viewing->category,
+                'Status' => $viewing->status,
+                'Type' => $viewing->type,
+                'Rate / salary' => $viewing->rate,
+                'IR35' => $viewing->ir35,
+                'Location' => $viewing->location,
+                'Source / recruiter' => $viewing->source,
+                'Contact' => $viewing->contact,
+                'Date added' => $viewing->date_added?->format('D j M Y'),
+                'Date applied' => $viewing->date_applied?->format('D j M Y'),
+                'Follow-up date' => $viewing->follow_up_date?->format('D j M Y'),
+                'Next step / result' => $viewing->next_step,
+                'Notes' => $viewing->notes,
+            ];
+        @endphp
+        <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+             wire:keydown.escape.window="closeView"
+             role="dialog" aria-modal="true" aria-labelledby="job-view-title" data-job-modal>
+            <div class="absolute inset-0 bg-black/60" wire:click="closeView" aria-hidden="true"></div>
+
+            <div class="relative z-10 max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:rounded-lg sm:p-5">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 id="job-view-title" class="text-base font-semibold text-body">{{ $viewing->role ?: 'Role' }}</h2>
+                        <p class="text-sm text-muted">{{ $viewing->company }}</p>
+                    </div>
+                    <button type="button" wire:click="closeView"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+
+                <dl class="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[10rem_1fr]">
+                    @foreach ($rows as $label => $value)
+                        @continue($value === null || $value === '')
+                        <dt class="text-xs uppercase tracking-[0.14em] text-muted sm:pt-0.5">{{ $label }}</dt>
+                        <dd class="mb-1 whitespace-pre-line break-words text-body sm:mb-0">{{ $value }}</dd>
+                    @endforeach
+                    @if ($viewing->link)
+                        <dt class="text-xs uppercase tracking-[0.14em] text-muted sm:pt-0.5">Link</dt>
+                        <dd class="mb-1 break-all text-xs text-muted sm:mb-0">{{ $viewing->link }}</dd>
+                    @endif
+                </dl>
+
+                <div class="sticky bottom-0 -mx-4 mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 bg-sidebar px-4 pt-3 sm:-mx-5 sm:px-5">
+                    <button type="button" wire:click="openEdit({{ $viewing->id }})"
+                            class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body">Edit</button>
+                    @if ($viewing->link)
+                        <a href="{{ $viewing->link }}" target="_blank" rel="noopener noreferrer"
+                           class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium text-link no-underline hover:border-[#39c5cf]/60">Open application ↗</a>
+                    @else
+                        <span class="px-2 py-1.5 text-xs text-faint">No application link</span>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
     @if ($showForm)
         <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
              wire:keydown.escape.window="closeForm"
@@ -307,7 +401,7 @@
                     </label>
                 </div>
 
-                <p class="mt-3 text-[11px] text-faint">Changes to status, applied date, next step, follow-up and notes go into the progress log.</p>
+                <p class="mt-3 text-[11px] text-faint">Changes to status, applied date, next step, follow-up and notes go into the activity log.</p>
 
                 <div class="sticky bottom-0 -mx-4 mt-4 flex justify-end gap-2 border-t border-white/10 bg-sidebar px-4 pt-3 sm:-mx-5 sm:px-5">
                     <button type="button" wire:click="closeForm"

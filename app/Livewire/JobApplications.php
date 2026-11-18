@@ -27,6 +27,9 @@ class JobApplications extends Component
 
     public ?string $flash = null;
 
+    /** Job shown in the read-only details modal. */
+    public ?int $viewingId = null;
+
     /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
     #[Url(as: 'category', history: true, except: 'all')]
     public string $category = 'all';
@@ -122,6 +125,57 @@ class JobApplications extends Component
         }
 
         return array_values($weeks);
+    }
+
+    /** Statuses that count as "not applied yet" for the Next Steps panel (case-insensitive). */
+    public const NEXT_STEP_STATUSES = ['To apply', 'Lead'];
+
+    /**
+     * Comparable day rate for ranking leads: the top of the stated range, hourly rates
+     * converted at 8 hours a day. Null when no rate can be read (salaries, "Not stated").
+     */
+    public static function rankRate(?string $text): ?int
+    {
+        if ($text === null || trim($text) === '') {
+            return null;
+        }
+        if (preg_match('/(?:\/|\bper\s+)(?:hour|hr|h)\b|\bhourly\b|\bp\/?h\b/i', $text)) {
+            preg_match_all('/\d[\d,]*(?:\.\d+)?/', $text, $m);
+            $values = array_filter(array_map(fn ($v) => (float) str_replace(',', '', $v), $m[0]), fn ($v) => $v >= 10 && $v <= 500);
+
+            return $values ? (int) round(max($values) * 8) : null;
+        }
+        $r = self::parseDayRate($text);
+
+        return $r ? $r['max'] : null;
+    }
+
+    public static function isFlagged(JobApplication $a): bool
+    {
+        return str_starts_with(trim((string) $a->role), "\u{1F6A9}") || str_starts_with(trim((string) $a->company), "\u{1F6A9}");
+    }
+
+    public static function isNextStepCandidate(JobApplication $a): bool
+    {
+        return $a->removed_at === null
+            && $a->date_applied === null
+            && JobApplicationWriter::canonical((string) $a->status, self::NEXT_STEP_STATUSES) !== null;
+    }
+
+    /**
+     * Not-yet-applied leads, best first: 🚩-prefixed roles, then highest day rate
+     * (unknown rate last), then oldest added, then id.
+     */
+    public static function nextStepQueue(Collection $apps): Collection
+    {
+        return $apps->filter(fn ($a) => self::isNextStepCandidate($a))
+            ->sort(function ($x, $y) {
+                $rx = self::rankRate($x->rate);
+                $ry = self::rankRate($y->rate);
+
+                return [self::isFlagged($x) ? 0 : 1, $rx === null ? 1 : 0, -($rx ?? 0), $x->date_added?->toDateString() ?? '9999', $x->id]
+                    <=> [self::isFlagged($y) ? 0 : 1, $ry === null ? 1 : 0, -($ry ?? 0), $y->date_added?->toDateString() ?? '9999', $y->id];
+            })->values();
     }
 
     /**
@@ -244,6 +298,7 @@ class JobApplications extends Component
     {
         $app = JobApplication::query()->findOrFail($id);
         $this->resetErrorBag();
+        $this->viewingId = null;
         $this->editingId = $app->id;
         $this->form = JobApplicationWriter::values($app);
         $this->showForm = true;
@@ -255,6 +310,29 @@ class JobApplications extends Component
         $this->showForm = false;
         $this->editingId = null;
         $this->form = [];
+    }
+
+    public function openView(int $id): void
+    {
+        $this->viewingId = JobApplication::query()->findOrFail($id)->id;
+    }
+
+    public function closeView(): void
+    {
+        $this->viewingId = null;
+    }
+
+    /** "Done, I applied" from Next Steps: status Applied + date applied today, logged like any manual edit. */
+    public function markApplied(int $id): void
+    {
+        $app = JobApplication::query()->find($id);
+        if (! $app || ! self::isNextStepCandidate($app)) {
+            $this->flash = 'That role is no longer waiting to be applied to.';
+
+            return;
+        }
+        JobApplicationWriter::update($app, ['status' => 'Applied', 'date_applied' => Clock::todayString()], 'manual');
+        $this->flash = 'Marked '.$app->fresh()->label().' as applied.';
     }
 
     public function save(): void
@@ -346,6 +424,7 @@ class JobApplications extends Component
             ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
             ->get();
         $log = self::progressLog($logApps, $events, $today);
+        $queue = self::nextStepQueue($apps);
 
         return view('livewire.job-applications', [
             'apps' => $apps,
@@ -363,6 +442,9 @@ class JobApplications extends Component
             'maxWeek' => $maxWeek,
             'followUps' => $followUps,
             'log' => $log,
+            'nextUp' => $queue->first(),
+            'nextQueueCount' => $queue->count(),
+            'viewing' => $this->viewingId ? JobApplication::query()->find($this->viewingId) : null,
             'lastChange' => collect([JobApplication::query()->max('updated_at'), JobApplicationEvent::query()->max('occurred_at')])
                 ->filter()->map(fn ($v) => Carbon::parse($v, 'UTC'))->max(),
             'knownStatuses' => JobApplicationWriter::KNOWN_STATUSES,

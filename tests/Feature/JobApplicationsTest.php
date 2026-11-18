@@ -166,4 +166,93 @@ class JobApplicationsTest extends TestCase
             ->assertSee('FilterCoSoft')
             ->assertSee('FilterCoAI');
     }
+
+    private function job(string $key, array $attrs): JobApplication
+    {
+        return JobApplication::query()->create($attrs + [
+            'key' => $key, 'company' => 'Co '.$key, 'role' => 'Engineer '.$key,
+            'category' => 'software', 'status' => 'To apply', 'type' => 'Contract', 'date_added' => '2026-11-01',
+        ]);
+    }
+
+    public function test_rank_rate_reads_day_and_hourly_rates(): void
+    {
+        $this->assertSame(900, JobApplications::rankRate('£700–£900/day'));
+        $this->assertSame(650, JobApplications::rankRate('Up to £650/day'));
+        $this->assertSame(800, JobApplications::rankRate('Up to €100/hour'));
+        $this->assertSame(600, JobApplications::rankRate('£75 per hour'));
+        $this->assertNull(JobApplications::rankRate('Not stated'));
+        $this->assertNull(JobApplications::rankRate('£95k–£120k'));
+        $this->assertNull(JobApplications::rankRate(null));
+    }
+
+    public function test_next_step_queue_order_flagged_then_rate_then_unknown(): void
+    {
+        $this->job('low', ['rate' => '£450–£500/day']);
+        $this->job('high', ['rate' => '£800–£900/day']);
+        $this->job('unknown', ['rate' => 'Not stated', 'date_added' => '2026-10-01']);
+        $this->job('hourly', ['rate' => '€100/hour']);
+        $this->job('flag', ['role' => "\u{1F6A9} Indeed job", 'rate' => null]);
+        $this->job('applied', ['rate' => '£999/day', 'status' => 'Applied', 'date_applied' => '2026-11-02']);
+        $this->job('dated', ['rate' => '£990/day', 'date_applied' => '2026-11-02']);
+        $this->job('closed', ['rate' => '£980/day', 'status' => 'closed']);
+        $this->job('perm', ['rate' => '£95k', 'status' => 'Low priority (perm)', 'type' => 'Permanent']);
+        $this->job('lead', ['rate' => '£520/day', 'status' => 'lead']);
+        $this->job('gone', ['rate' => '£970/day', 'removed_at' => '2026-11-03 10:00:00']);
+
+        $queue = JobApplications::nextStepQueue(JobApplication::query()->get());
+        $this->assertSame(['flag', 'high', 'hourly', 'lead', 'low', 'unknown'], $queue->pluck('key')->all());
+    }
+
+    public function test_next_steps_panel_respects_category_and_marks_applied(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-18 23:30:00', 'UTC')); // 19 Nov in Bucharest
+        $soft = $this->job('soft', ['company' => 'NextSoftCo', 'rate' => '£600/day']);
+        $soft2 = $this->job('soft2', ['company' => 'NextSoftTwo', 'rate' => '£500/day']);
+        $ai = $this->job('ai', ['company' => 'NextAiCo', 'category' => 'ai', 'rate' => '£700/day']);
+
+        $c = Livewire::test(JobApplications::class)
+            ->assertSee('Next Steps:')->assertSee('Done, I applied')
+            ->assertViewHas('nextUp', fn ($a) => $a->id === $ai->id)
+            ->set('category', 'software')
+            ->assertViewHas('nextUp', fn ($a) => $a->id === $soft->id)
+            ->call('markApplied', $soft->id)
+            ->assertViewHas('nextUp', fn ($a) => $a->id === $soft2->id)
+            ->assertSee('as applied');
+
+        $soft->refresh();
+        $this->assertSame('Applied', $soft->status);
+        $this->assertSame('2026-11-19', $soft->date_applied->toDateString());
+        $this->assertSame(1, JobApplicationEvent::query()->where('job_application_id', $soft->id)->where('type', 'status')->where('to_value', 'Applied')->where('source', 'manual')->count());
+        $this->assertSame(1, JobApplicationEvent::query()->where('job_application_id', $soft->id)->where('type', 'applied')->where('to_value', '2026-11-19')->count());
+
+        // A second click on an already-applied role changes nothing.
+        $c->call('markApplied', $soft->id)->assertSee('no longer waiting');
+        $this->assertSame(2, JobApplicationEvent::query()->where('job_application_id', $soft->id)->count());
+
+        $c->call('markApplied', $soft2->id)->assertViewHas('nextUp', null)->assertSee('Nothing left to apply to in this category');
+        Carbon::setTestNow();
+    }
+
+    public function test_job_details_modal_and_activity_log_toggle(): void
+    {
+        $a = $this->job('modal', [
+            'company' => 'ModalCo', 'role' => 'Modal Engineer', 'rate' => '£650/day', 'ir35' => 'Outside',
+            'location' => 'Remote UK', 'source' => 'ModalRecruiter', 'contact' => 'Jane Modal',
+            'link' => 'https://jobs.example.com/modal', 'next_step' => 'Send CV', 'notes' => 'Modal notes here',
+        ]);
+
+        $this->get($this->url())->assertOk()
+            ->assertSee('Activity log')->assertDontSee('Progress log')
+            ->assertSee('data-activity-log', false);
+
+        Livewire::test(JobApplications::class)
+            ->assertDontSee('Open application')
+            ->call('openView', $a->id)
+            ->assertSee('Open application')->assertSee('Jane Modal')->assertSee('Modal notes here')->assertSee('ModalRecruiter')
+            ->assertSeeHtml('href="https://jobs.example.com/modal" target="_blank" rel="noopener noreferrer"')
+            ->call('closeView')
+            ->assertSet('viewingId', null)
+            ->assertDontSee('Open application');
+    }
 }

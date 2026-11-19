@@ -5,6 +5,7 @@ namespace App\Livewire\Concerns;
 use App\Enums\DripEnergy;
 use App\Enums\DripMoney;
 use App\Enums\DripTag;
+use App\Support\Onboarding;
 use Illuminate\Database\Eloquent\Model;
 use ValueError;
 
@@ -39,6 +40,7 @@ trait SetsDripTags
         }
 
         $item->update(['drip_tag' => $dripTag]);
+        Onboarding::complete('milestone.drip');
     }
 
     public function setDripMoney(int $id, ?string $money): void

@@ -2,9 +2,11 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Enums\DripTag;
 use App\Models\TodoItem;
+use App\Support\Clock;
+use App\Support\Onboarding;
+use App\Support\WeekLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -29,6 +31,8 @@ class DripMatrix extends Component
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
             $this->week = Clock::currentWeek();
         }
+
+        Onboarding::complete('milestone.matrix');
     }
 
     public function previousWeek(): void
@@ -85,7 +89,7 @@ class DripMatrix extends Component
     {
         return view('livewire.drip-matrix', [
             'weekNumber' => $this->weekNumber(),
-            'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
+            'weekRange' => WeekLabel::range($this->weekStart()),
             'quadrants' => $this->quadrants(),
             'untagged' => $this->untagged(),
             'grid' => [

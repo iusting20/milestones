@@ -2,11 +2,14 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Enums\WeekBoardStatus;
 use App\Models\Project;
 use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
+use App\Support\Clock;
+use App\Support\Onboarding;
+use App\Support\WeekLabel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -151,6 +154,10 @@ class ClientWeekBoard extends Component
             'week' => $this->weekKey(),
         ]);
 
+        if ($statusEnum === WeekBoardStatus::Planned) {
+            Onboarding::complete('weekboard.card');
+        }
+
         $this->newTitles[$lane] = '';
     }
 
@@ -180,6 +187,10 @@ class ClientWeekBoard extends Component
             + ($statusEnum === WeekBoardStatus::Done ? ['week' => $this->weekKey()] : []));
 
         $this->syncMilestone($item, $previous);
+
+        if ($statusEnum === WeekBoardStatus::Done) {
+            Onboarding::complete('weekboard.done');
+        }
     }
 
     /**
@@ -232,6 +243,8 @@ class ClientWeekBoard extends Component
 
             $item->refresh()->update(['todo_item_id' => $todo->id]);
         });
+
+        Onboarding::complete('weekboard.start');
     }
 
     /**
@@ -387,7 +400,7 @@ class ClientWeekBoard extends Component
             'statuses' => WeekBoardStatus::cases(),
             'weekKey' => $weekKey,
             'weekNumber' => (int) substr($weekKey, -2),
-            'weekRange' => \App\Support\WeekLabel::range(WeekBoardItem::weekMonday($weekKey)),
+            'weekRange' => WeekLabel::range(WeekBoardItem::weekMonday($weekKey)),
             'isCurrentWeek' => $weekKey === Clock::currentWeek(),
         ]);
     }
@@ -406,7 +419,7 @@ class ClientWeekBoard extends Component
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Builder<Project>
+     * @return Builder<Project>
      */
     private function clientsQuery()
     {

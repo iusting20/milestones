@@ -7,6 +7,7 @@ use App\Livewire\Concerns\SetsDripTags;
 use App\Models\BacklogItem;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +89,8 @@ class WeekList extends Component
             'is_separator' => false,
             'position' => $max + 1,
         ]);
+
+        Onboarding::complete('milestone.week');
 
         $this->newTitle = '';
     }

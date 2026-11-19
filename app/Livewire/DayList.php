@@ -4,8 +4,8 @@ namespace App\Livewire;
 
 use App\Livewire\Concerns\EditsLoggingStart;
 use App\Livewire\Concerns\SetsDripTags;
-use App\Models\TaskLog;
 use App\Models\TodoItem;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +100,8 @@ class DayList extends Component
             'is_separator' => false,
             'position' => $max + 1,
         ]);
+
+        Onboarding::complete('milestone.create');
 
         $this->newTitle = '';
     }
@@ -358,6 +360,7 @@ class DayList extends Component
     public function startLogging(int $id): void
     {
         $this->todoItem($id)->startLogging();
+        Onboarding::complete('milestone.start');
     }
 
     public function finishLogging(int $id): void
@@ -369,6 +372,7 @@ class DayList extends Component
         }
 
         $item->finishLogging();
+        Onboarding::complete('milestone.finish');
     }
 
     public function delete(int $id): void

@@ -2,11 +2,12 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Enums\CommunicationType;
 use App\Models\Communication;
 use App\Models\Person;
 use App\Models\Project;
+use App\Support\Clock;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -207,6 +208,7 @@ class Comms extends Component
 
         $this->month = $occurredOn->format('Y-m');
         $this->adding = false;
+        Onboarding::complete('comms.entry');
         $this->addingPerson = false;
         $this->newPersonName = '';
     }

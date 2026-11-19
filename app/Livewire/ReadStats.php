@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Book;
 use App\Models\ReadingSession;
 use App\Support\Clock;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -19,6 +20,11 @@ class ReadStats extends Component
         'articles' => '#c084fc',
         '—' => '#8b8b8b',
     ];
+
+    public function mount(): void
+    {
+        Onboarding::complete('read.stats');
+    }
 
     public static function typeLabel(string $type): string
     {

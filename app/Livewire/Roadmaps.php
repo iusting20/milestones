@@ -2,9 +2,10 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Models\Project;
 use App\Models\RoadmapItem;
+use App\Support\Clock;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
@@ -167,6 +168,7 @@ class Roadmaps extends Component
         } else {
             $payload['completed_on'] = null;
             RoadmapItem::query()->create($payload);
+            Onboarding::complete('timeline.create');
         }
 
         $this->resetFormFields();
@@ -190,6 +192,7 @@ class Roadmaps extends Component
         $completedOn = $today->lt($start) ? $start : $today;
 
         $item->update(['completed_on' => $completedOn->toDateString()]);
+        Onboarding::complete('timeline.complete');
     }
 
     public function updateStartedOn(int $id, string $date): void
@@ -265,6 +268,7 @@ class Roadmaps extends Component
         }
 
         $item->update(['finish_on' => $finishOn->toDateString()]);
+        Onboarding::complete('timeline.finish');
     }
 
     public function deleteItem(int $id): void

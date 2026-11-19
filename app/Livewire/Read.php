@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Book;
 use App\Models\ReadingSession;
 use App\Support\Clock;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Livewire\Component;
 
@@ -122,6 +123,8 @@ class Read extends Component
             'position' => $position,
             'kind' => $this->kind,
         ]);
+
+        Onboarding::complete($this->isArticles() ? 'read.article' : 'read.book');
 
         $this->addingBook = false;
         $this->newBookTitle = '';
@@ -289,6 +292,8 @@ class Read extends Component
             'started_at' => Clock::now()->seconds(0)->utc(),
             'finished_at' => null,
         ]);
+
+        Onboarding::complete('read.start');
     }
 
     public function stopSession(int $id): void
@@ -305,6 +310,7 @@ class Read extends Component
         }
 
         $session->update(['finished_at' => $finished]);
+        Onboarding::complete('read.stop');
     }
 
     public function startEditSession(int $id): void
@@ -790,4 +796,3 @@ class Read extends Component
         return $hours.'h '.$remaining.'m';
     }
 }
- 

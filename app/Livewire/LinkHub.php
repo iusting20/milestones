@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Link;
 use App\Models\LinkGroup;
 use App\Models\Project;
+use App\Support\Onboarding;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -75,6 +76,10 @@ class LinkHub extends Component
                 abort(404);
             }
         }
+
+        if ($this->hub === 'assets') {
+            Onboarding::complete('links.assets');
+        }
     }
 
     public function selectProject(string $slug): void
@@ -119,6 +124,11 @@ class LinkHub extends Component
 
         $this->addingProject = false;
         $this->newProjectName = '';
+
+        if ($this->hub === 'partners') {
+            Onboarding::complete('links.project');
+        }
+
         $this->redirect(route('links.hub', ['hub' => $this->hub, 'slug' => $slug]), navigate: true);
     }
 
@@ -422,6 +432,8 @@ class LinkHub extends Component
             'icon' => $this->normalizedIcon($this->newLinkIcon),
             'position' => $max + 1,
         ]);
+
+        Onboarding::complete('links.link');
 
         $this->resetLinkForms();
     }

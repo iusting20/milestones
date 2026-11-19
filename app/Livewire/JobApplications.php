@@ -7,6 +7,7 @@ use App\Models\JobApplicationEvent;
 use App\Models\JobApplicationMessage;
 use App\Support\Clock;
 use App\Support\JobApplicationWriter;
+use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -342,6 +343,7 @@ class JobApplications extends Component
         $this->showCoverLetters = false;
         $this->viewingId = JobApplication::query()->findOrFail($id)->id;
         $this->resetMessageForm();
+        Onboarding::complete('gigs.view');
     }
 
     public function closeView(): void
@@ -400,6 +402,7 @@ class JobApplications extends Component
         $this->closeCoverLetter();
         $this->showForm = false;
         $this->showCoverLetters = true;
+        Onboarding::complete('gigs.letters');
     }
 
     public function closeCoverLetters(): void
@@ -515,6 +518,7 @@ class JobApplications extends Component
             } else {
                 [$app] = JobApplicationWriter::create($input, 'manual');
                 $this->flash = 'Added '.$app->label().'.';
+                Onboarding::complete('gigs.create');
             }
         } catch (ValidationException $e) {
             foreach ($e->errors() as $field => $messages) {

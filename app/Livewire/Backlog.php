@@ -2,10 +2,11 @@
 
 namespace App\Livewire;
 
-use App\Support\Clock;
 use App\Livewire\Concerns\SetsDripTags;
 use App\Models\BacklogItem;
 use App\Models\TodoItem;
+use App\Support\Clock;
+use App\Support\Onboarding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -53,6 +54,8 @@ class Backlog extends Component
             'is_separator' => false,
             'position' => $max + 1,
         ]);
+
+        Onboarding::complete('milestone.backlog');
 
         $this->newTitle = '';
     }

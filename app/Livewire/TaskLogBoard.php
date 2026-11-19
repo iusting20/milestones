@@ -9,7 +9,9 @@ use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
 use App\Support\Clock;
 use App\Support\IdleTimeline;
+use App\Support\Onboarding;
 use App\Support\ReechTimelog;
+use App\Support\WeekLabel;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -97,6 +99,8 @@ class TaskLogBoard extends Component
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
             $this->week = Clock::currentWeek();
         }
+
+        Onboarding::complete('milestone.log');
     }
 
     public function previousWeek(): void
@@ -523,7 +527,7 @@ class TaskLogBoard extends Component
             'activityModal' => $this->activityModal($logs),
             'reech' => $this->reechState,
             'weekNumber' => $this->weekNumber(),
-            'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
+            'weekRange' => WeekLabel::range($this->weekStart()),
             'hasLogs' => $hasEntries,
             'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
             'selectableDays' => $this->selectableDays(),
@@ -1135,6 +1139,7 @@ class TaskLogBoard extends Component
             ->where('hub', $hub)
             ->whereIn('project_id', $projects->pluck('id'))
             ->pluck('project_id', 'title');
+
         return function (TaskLog $log) use ($projects, $linkedProjectByTodo, $nameById, $assignedByTitle): ?string {
             $title = (string) $log->title;
             $name = null;

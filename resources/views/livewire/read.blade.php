@@ -434,15 +434,59 @@
                  x-on:keydown.window="handleKey($event)"
                  :class="readMode
                      ? (theme === 'dark'
-                         ? 'fixed inset-0 z-50 flex flex-col bg-[#0f0f11] p-3 sm:p-4 overflow-hidden'
+                         ? 'fixed inset-0 z-50 flex flex-col bg-black p-0 overflow-hidden'
                          : (theme === 'sepia'
-                             ? 'fixed inset-0 z-50 flex flex-col bg-[#efe6d1] p-3 sm:p-4 overflow-hidden'
-                             : 'fixed inset-0 z-50 flex flex-col bg-[#e8e4dc] p-3 sm:p-4 overflow-hidden'))
+                             ? 'fixed inset-0 z-50 flex flex-col bg-[#f4ecd8] p-0 overflow-hidden'
+                             : 'fixed inset-0 z-50 flex flex-col bg-[#fbfaf7] p-0 overflow-hidden'))
                      : 'w-full min-w-0 rounded-xl border border-zinc-800 bg-panel/40 p-3 sm:p-4'">
-            {{-- Single-Row Slim Reading Bar (Title + Bookmark Page + Dark/Light + Read Mode + Highlights + Timer) --}}
-            <div :class="readMode
-                     ? 'mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-sidebar/90 px-3 py-1.5 opacity-80 shadow-lg backdrop-blur transition-opacity hover:opacity-100'
-                     : 'sticky top-12 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-sidebar/95 px-3 py-2 shadow-md backdrop-blur'">
+            {{-- Minimalist Acrobat-Style Top Bar (only in Read Mode) --}}
+            <div x-show="readMode" x-cloak
+                 :class="theme === 'dark' ? 'border-zinc-900 bg-black/95 text-zinc-200' : (theme === 'sepia' ? 'border-[#dfd3b8] bg-[#efe6d1]/95 text-[#3b2f20]' : 'border-zinc-200 bg-white/95 text-zinc-800')"
+                 class="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5 sm:px-5">
+                <div class="flex min-w-0 items-center gap-2.5">
+                    <button type="button"
+                            x-on:click="toggleReadMode()"
+                            title="Exit Read Mode (Esc)"
+                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-current/15 hover:bg-current/10"
+                            aria-label="Exit Read Mode">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5M5.25 9.75V20.25h4.5v-6h4.5v6h4.5V9.75" />
+                        </svg>
+                    </button>
+                    <span class="truncate rounded-full border border-current/10 bg-current/5 px-3 py-1 text-xs font-medium">
+                        {{ $selected->title }}
+                        <span class="ml-1 opacity-50">PDF · p.<span x-text="page"></span></span>
+                    </span>
+                </div>
+
+                <div class="flex shrink-0 items-center gap-2">
+                    @if ($runningSession)
+                        <span class="font-mono text-xs font-semibold tabular-nums opacity-75"
+                              x-data="elapsedClock(@js($runningSession->started_at->utc()->toIso8601String()))"
+                              x-init="start()"
+                              x-text="display">00:00:00</span>
+                    @endif
+                    <button type="button"
+                            x-on:click="toggleReadMode()"
+                            class="rounded-lg border border-current/15 px-2.5 py-1 text-xs opacity-80 hover:opacity-100"
+                            title="Switch back to original PDF Page View">
+                        Page View
+                    </button>
+                    @if ($highlights->isNotEmpty())
+                        <a href="{{ route('read.highlights.export', $selected->id) }}"
+                           class="flex h-8 w-8 items-center justify-center rounded-lg border border-current/15 text-current no-underline opacity-80 hover:opacity-100"
+                           title="Export highlights as Markdown">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V3.75m0 0L7.5 8.25M12 3.75l4.5 4.5M4.5 15.75v3a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3" />
+                            </svg>
+                        </a>
+                    @endif
+                </div>
+            </div>
+
+            {{-- Single-Row Slim Reading Bar (Normal Page View) --}}
+            <div x-show="!readMode"
+                 class="sticky top-12 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-sidebar/95 px-3 py-2 shadow-md backdrop-blur">
                 {{-- Left: Back + Cover Thumb + Title --}}
                 <div class="flex min-w-0 flex-1 items-center gap-2.5">
                     <template x-if="readMode">
@@ -514,6 +558,19 @@
                             <span x-show="theme === 'dark'">🌙 Dark</span>
                             <span x-show="theme === 'sepia'" x-cloak>📜 Sepia</span>
                             <span x-show="theme === 'light'" x-cloak>☀ Light</span>
+                        </button>
+
+                        {{-- Highlighter Pen Mode Toggle (also available in Page View) --}}
+                        <button type="button"
+                                x-on:click="togglePenMode()"
+                                data-highlighter-pen
+                                :class="penMode ? 'border-amber-400 bg-amber-400/20 text-amber-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition"
+                                title="Highlighter Pen: drag across text to highlight instantly">
+                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z" />
+                            </svg>
+                            <span x-text="penMode ? 'Pen On' : 'Highlight'">Highlight</span>
                         </button>
 
                         {{-- Adobe-style Liquid / Reflow Read Mode Toggle --}}
@@ -766,12 +823,12 @@
                     @if ($selected->pdfUrl())
                         <div x-show="!fallbackIframe"
                              :class="[
-                                 readMode ? 'h-full' : 'h-[84vh]',
+                                 readMode ? 'h-full rounded-none border-0' : 'h-[84vh] rounded-lg border',
                                  theme === 'dark'
-                                     ? 'bg-[#111114] border-zinc-800'
-                                     : (theme === 'sepia' ? 'bg-[#f4ecd8] border-[#d8cbb0]' : 'bg-[#e6e2da] border-zinc-300'),
+                                     ? (readMode ? 'bg-black' : 'bg-[#111114] border-zinc-800')
+                                     : (theme === 'sepia' ? 'bg-[#f4ecd8] border-[#d8cbb0]' : (readMode ? 'bg-[#fbfaf7]' : 'bg-[#e6e2da] border-zinc-300')),
                              ]"
-                             class="relative flex flex-col items-center overflow-auto rounded-lg border p-3 sm:p-6">
+                             class="relative flex flex-col items-center overflow-auto p-3 sm:p-6">
                             {{-- Subtle zoom + page bar inside viewport (Page View only) --}}
                             <div x-show="!readMode" class="mb-3 flex w-full max-w-3xl items-center justify-between text-[11px]"
                                  :class="theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'">
@@ -836,37 +893,53 @@
                                 </div>
                             </div>
 
-                            {{-- Adobe Liquid / Reflow Read Mode (Fits screen cleanly, crisp serif typography, native selection highlighting) --}}
+                            {{-- Adobe Liquid / Reflow Read Mode (OLED Black, large crisp serif, instant Highlighter Pen + right-click) --}}
                             <div x-show="readMode && !speedRead.open && !loading"
                                  x-cloak
                                  x-ref="reflowWrap"
                                  x-on:mouseup="onTextSelect($event, 'reflow')"
                                  x-on:touchend="onTextSelect($event, 'reflow')"
+                                 x-on:contextmenu="onContextHighlight($event, 'reflow')"
                                  :class="[
-                                     theme === 'dark' ? 'text-[#e7e2d8]' : (theme === 'sepia' ? 'text-[#3b2f20]' : 'text-[#1c1b18]'),
+                                     theme === 'dark' ? 'text-[#f5f4f0]' : (theme === 'sepia' ? 'text-[#3b2f20]' : 'text-[#141414]'),
                                      readWidth === 'narrow' ? 'max-w-lg' : (readWidth === 'wide' ? 'max-w-4xl' : 'max-w-2xl'),
+                                     penMode ? 'cursor-text' : '',
                                  ]"
-                                 class="relative mx-auto w-full px-3 py-4 sm:px-8 sm:py-6">
+                                 class="relative mx-auto w-full px-3 py-2 sm:px-8 sm:py-5">
+                                {{-- Active Highlighter Pen banner --}}
+                                <div x-show="penMode" x-cloak
+                                     class="mb-4 flex items-center justify-between rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300">
+                                    <span>Highlighter pen active — drag across any text to highlight instantly</span>
+                                    <button type="button" x-on:click="penMode = false" class="ml-2 underline">Done</button>
+                                </div>
+
                                 <article :class="[
                                              readFont === 'sans' ? 'font-sans' : (readFont === 'mono' ? 'font-mono' : 'font-serif'),
-                                             'leading-[1.85] tracking-[0.01em] selection:bg-amber-400/35',
+                                             'leading-[1.58] tracking-[0.005em] selection:bg-amber-400/40',
                                          ]"
                                          :style="`font-size: ${readFontSize}px;`">
                                     <template x-for="(block, idx) in reflowBlocks" :key="idx">
-                                        <div :class="tts.speaking && tts.blockIndex === idx ? 'rounded-lg bg-emerald-400/10 px-2 -mx-2 transition-colors' : ''">
+                                        <div :class="tts.speaking && tts.blockIndex === idx ? 'rounded-lg bg-emerald-400/15 px-2 -mx-2 transition-colors' : ''">
                                             <h3 x-show="block.type === 'heading'"
                                                 x-html="renderHighlightedHtml(block.text)"
-                                                class="mb-4 mt-6 font-bold leading-snug tracking-tight"
-                                                :style="`font-size: ${Math.round(readFontSize * 1.35)}px;`"></h3>
+                                                class="mb-5 mt-6 font-bold leading-snug tracking-tight"
+                                                :style="`font-size: ${Math.round(readFontSize * 1.28)}px;`"></h3>
                                             <p x-show="block.type === 'paragraph'"
                                                x-html="renderHighlightedHtml(block.text)"
-                                               class="mb-4 indent-4 sm:indent-6"></p>
+                                               class="mb-5"></p>
                                         </div>
                                     </template>
                                     <p x-show="reflowBlocks.length === 0" class="py-12 text-center text-sm opacity-60">
                                         No reflowable text detected on this page — switch to Page View to inspect graphics.
                                     </p>
                                 </article>
+
+                                {{-- Subtle Acrobat-style page break bar between pages --}}
+                                <div class="my-6 flex items-center gap-3 opacity-60">
+                                    <span class="h-px flex-1 bg-current/25"></span>
+                                    <span class="font-mono text-[11px]">Page <span x-text="page"></span> <span x-show="numPages">/ <span x-text="numPages"></span></span></span>
+                                    <span class="h-px flex-1 bg-current/25"></span>
+                                </div>
 
                                 {{-- Floating Highlight Popover inside Liquid Read Mode --}}
                                 <div x-show="selection.open && readMode"
@@ -1062,6 +1135,104 @@
                         </ul>
                     </aside>
                 @endif
+            </div>
+
+            {{-- Acrobat-Style Bottom Action Dock (visible in Read Mode: Highlighter Pen, Aa, Speed, Listen, Highlights) --}}
+            <div x-show="readMode" x-cloak
+                 :class="theme === 'dark' ? 'border-zinc-800 bg-black/95 text-zinc-200' : (theme === 'sepia' ? 'border-[#dfd3b8] bg-[#efe6d1]/95 text-[#3b2f20]' : 'border-zinc-200 bg-white/95 text-zinc-800')"
+                 class="relative shrink-0 border-t px-2 py-2">
+                {{-- Floating Highlighter Color Swatch Bar when Pen Mode is ON --}}
+                <div x-show="penMode" x-cloak x-transition.opacity
+                     class="absolute -top-11 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1.5 text-xs text-zinc-200 shadow-xl backdrop-blur">
+                    <span class="text-[10px] uppercase tracking-wider text-zinc-400">Pen color</span>
+                    <button type="button" x-on:click="penColor = 'yellow'" :class="penColor === 'yellow' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-amber-300 transition" aria-label="Yellow pen"></button>
+                    <button type="button" x-on:click="penColor = 'green'" :class="penColor === 'green' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-emerald-400 transition" aria-label="Green pen"></button>
+                    <button type="button" x-on:click="penColor = 'blue'" :class="penColor === 'blue' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-sky-400 transition" aria-label="Blue pen"></button>
+                    <button type="button" x-on:click="penColor = 'rose'" :class="penColor === 'rose' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-rose-400 transition" aria-label="Rose pen"></button>
+                </div>
+
+                {{-- Floating Aa Typography & Theme Sheet --}}
+                <div x-show="showAaSheet" x-cloak x-transition.opacity
+                     x-on:click.outside="showAaSheet = false"
+                     class="absolute bottom-full left-1/2 mb-2 flex w-[min(22rem,92vw)] -translate-x-1/2 flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-900/95 p-3.5 text-xs text-zinc-100 shadow-2xl backdrop-blur">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Theme</span>
+                        <div class="flex gap-1.5">
+                            <button type="button" x-on:click="setTheme('dark')" :class="theme === 'dark' ? 'ring-2 ring-link' : ''" class="rounded bg-black px-2.5 py-1 text-zinc-100 border border-zinc-700">Dark</button>
+                            <button type="button" x-on:click="setTheme('sepia')" :class="theme === 'sepia' ? 'ring-2 ring-link' : ''" class="rounded bg-[#f4ecd8] px-2.5 py-1 text-[#3b2f20]">Sepia</button>
+                            <button type="button" x-on:click="setTheme('light')" :class="theme === 'light' ? 'ring-2 ring-link' : ''" class="rounded bg-white px-2.5 py-1 text-zinc-900">Light</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Text Size</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" x-on:click="smallerFont()" class="rounded border border-zinc-700 px-2.5 py-1 hover:border-zinc-500">A-</button>
+                            <span class="w-10 text-center font-mono tabular-nums" x-text="readFontSize + 'px'"></span>
+                            <button type="button" x-on:click="largerFont()" class="rounded border border-zinc-700 px-2.5 py-1 hover:border-zinc-500">A+</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Font & Width</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" x-on:click="cycleFont()" class="rounded border border-zinc-700 px-2.5 py-1 capitalize hover:border-zinc-500" x-text="readFont"></button>
+                            <button type="button" x-on:click="cycleWidth()" class="rounded border border-zinc-700 px-2.5 py-1 capitalize hover:border-zinc-500" x-text="readWidth"></button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Bottom Dock Icons (matching Acrobat Mobile's clean 5-icon footer) --}}
+                <div class="mx-auto grid max-w-xl grid-cols-5 items-center gap-1 text-[11px]">
+                    <button type="button"
+                            x-on:click="togglePenMode()"
+                            :class="penMode ? 'text-amber-300 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z" />
+                        </svg>
+                        <span>Highlight</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="showAaSheet = !showAaSheet"
+                            :class="showAaSheet ? 'text-link font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <span class="font-serif text-base font-bold leading-5">Aa</span>
+                        <span>Text</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="toggleSpeedRead()"
+                            :class="speedRead.open ? 'text-amber-300 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                        </svg>
+                        <span>Speed</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="toggleSpeech()"
+                            :class="tts.speaking ? 'text-emerald-400 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                        </svg>
+                        <span x-text="tts.speaking ? ('Stop ' + tts.rate + 'x') : 'Listen'">Listen</span>
+                    </button>
+
+                    <button type="button"
+                            wire:click="$toggle('showHighlights')"
+                            @class([
+                                'flex flex-col items-center gap-1 rounded-lg py-1 transition',
+                                'text-amber-300 font-semibold' => $showHighlights,
+                                'opacity-75 hover:opacity-100' => ! $showHighlights,
+                            ])>
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+                        </svg>
+                        <span>Notes{{ $highlights->isNotEmpty() ? ' ('.$highlights->count().')' : '' }}</span>
+                    </button>
+                </div>
             </div>
 
             {{-- Everything below hides cleanly in Adobe Read Mode --}}
@@ -1269,9 +1440,12 @@
                 loading: false,
                 fallbackIframe: false,
                 readMode: false,
+                penMode: false,
+                penColor: 'yellow',
+                showAaSheet: false,
                 reflowBlocks: [],
                 readFontSize: (() => {
-                    try { return Number(localStorage.getItem('read-font-size')) || 20; } catch (e) { return 20; }
+                    try { return Number(localStorage.getItem('read-font-size')) || 26; } catch (e) { return 26; }
                 })(),
                 readFont: (() => {
                     try { return localStorage.getItem('read-font') || 'serif'; } catch (e) { return 'serif'; }
@@ -1327,8 +1501,18 @@
                 toggleTheme() {
                     const order = ['dark', 'sepia', 'light'];
                     const next = order[(order.indexOf(this.theme) + 1) % order.length];
-                    this.theme = next;
+                    this.setTheme(next);
+                },
+
+                setTheme(name) {
+                    this.theme = name;
                     try { localStorage.setItem('read-theme', this.theme); } catch (e) {}
+                },
+
+                togglePenMode() {
+                    this.penMode = !this.penMode;
+                    this.showAaSheet = false;
+                    this.clearSelection();
                 },
 
                 toggleReadMode() {
@@ -1750,12 +1934,26 @@
                     this.renderPage(this.page);
                 },
 
-                onTextSelect(e, mode = 'canvas') {
+                async onTextSelect(e, mode = 'canvas') {
                     const sel = window.getSelection();
                     const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
                     if (text.length < 2 || !sel.rangeCount) {
                         return;
                     }
+
+                    // Instant 1-swipe highlighting when Highlighter Pen Mode is active
+                    if (this.penMode) {
+                        const color = this.penColor || 'yellow';
+                        const pageNum = this.page;
+                        try { sel.removeAllRanges(); } catch (err) {}
+                        await this.$wire.addHighlight(text, pageNum, color, null, null);
+                        this.highlights.push({ page: pageNum, quote: text, color });
+                        this.renderPage(this.page);
+                        this.toast = 'Highlighted (p. ' + pageNum + ')';
+                        setTimeout(() => { this.toast = ''; }, 2200);
+                        return;
+                    }
+
                     const range = sel.getRangeAt(0);
                     const rect = range.getBoundingClientRect();
                     const wrapEl = mode === 'reflow' ? this.$refs.reflowWrap : this.$refs.pageWrap;
@@ -1764,9 +1962,22 @@
 
                     this.selection.text = text;
                     this.selection.note = '';
+                    this.selection.tags = '';
                     this.selection.x = Math.min(Math.max(135, rect.left - wrapRect.left + rect.width / 2), wrapRect.width - 135);
                     this.selection.y = Math.max(80, rect.top - wrapRect.top - 8);
                     this.selection.open = true;
+                },
+
+                onContextHighlight(e, mode = 'reflow') {
+                    const sel = window.getSelection();
+                    const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+                    if (text.length >= 2) {
+                        e.preventDefault();
+                        const prevPen = this.penMode;
+                        this.penMode = false;
+                        this.onTextSelect(e, mode);
+                        this.penMode = prevPen;
+                    }
                 },
 
                 clearSelection() {

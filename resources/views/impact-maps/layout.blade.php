@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="{{ asset('favicon-20261108.ico') }}" type="image/x-icon" sizes="any">
+    <link rel="icon" href="{{ asset('favicon-32x32.png') }}?v=20261108" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=20261108" sizes="180x180">
+    <link rel="shortcut icon" href="{{ asset('favicon-20261108.ico') }}" type="image/x-icon">
     <title>@yield('title', 'Impact Maps')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap">

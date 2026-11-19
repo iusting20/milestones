@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/x-icon" sizes="any">
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}" type="image/x-icon">
+    <link rel="icon" href="{{ asset('favicon-20261108.ico') }}" type="image/x-icon" sizes="any">
+    <link rel="icon" href="{{ asset('favicon-32x32.png') }}?v=20261108" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=20261108" sizes="180x180">
+    <link rel="shortcut icon" href="{{ asset('favicon-20261108.ico') }}" type="image/x-icon">
     <title>{{ $title ?? \Illuminate\Support\Facades\View::yieldContent('title', 'Milestones') }}</title>
     @fonts
     @vite(['resources/css/app.css', 'resources/js/app.js'])

@@ -107,27 +107,27 @@
             </div>
         @endif
 
-        {{-- Global Highlights Vault (Search + Tags + Export across all books) --}}
+        {{-- Global Highlights Vault (Instapaper-Style Minimalist Notes Feed: Search + Tags + Export) --}}
         @if ($showHighlightsVault)
-            <div data-highlights-vault class="mb-4 rounded-xl border border-white/10 bg-panel p-4">
-                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div data-highlights-vault class="mb-4 rounded-xl border border-zinc-800 bg-black p-4 sm:p-5">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-900 pb-3">
                     <div class="flex items-center gap-3">
-                        <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Highlights Vault ({{ $vaultHighlights->count() }})</h2>
+                        <h2 class="text-sm font-semibold tracking-wide text-zinc-100">Notes & Highlights ({{ $vaultHighlights->count() }})</h2>
                         @if ($totalHighlightsCount > 0)
                             <a href="{{ route('read.highlights.export') }}"
-                               class="rounded border border-white/10 bg-sidebar px-2 py-0.5 text-[11px] text-link no-underline hover:border-link/40">
+                               class="rounded border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[11px] text-link no-underline hover:border-link/40">
                                 ↓ Export .md
                             </a>
                         @endif
                     </div>
-                    <button type="button" wire:click="$set('showHighlightsVault', false)" class="text-xs text-muted hover:text-body">Close</button>
+                    <button type="button" wire:click="$set('showHighlightsVault', false)" class="text-xs text-zinc-400 hover:text-zinc-100">Close</button>
                 </div>
 
                 <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input type="text"
                            wire:model.live.debounce.200ms="highlightSearch"
                            placeholder="Search quotes, notes, books, or #tags…"
-                           class="flex-1 rounded border border-white/10 bg-sidebar px-3 py-1.5 text-xs text-body placeholder:text-faint focus:border-link focus:outline-none" />
+                           class="flex-1 rounded border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-link focus:outline-none" />
                     @if ($highlightTagFilter !== '')
                         <button type="button" wire:click="$set('highlightTagFilter', '')"
                                 class="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-300">
@@ -144,7 +144,7 @@
                                     @class([
                                         'rounded px-2 py-0.5 text-[11px] transition',
                                         'bg-amber-400/20 text-amber-300 border border-amber-400/40' => $highlightTagFilter === $tag,
-                                        'bg-sidebar text-muted border border-white/10 hover:text-body' => $highlightTagFilter !== $tag,
+                                        'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-100' => $highlightTagFilter !== $tag,
                                     ])>
                                 #{{ $tag }}
                             </button>
@@ -152,60 +152,71 @@
                     </div>
                 @endif
 
-                <ul class="max-h-96 space-y-2 overflow-y-auto pr-1">
+                <ul class="max-h-[30rem] divide-y divide-zinc-900 overflow-y-auto pr-1">
                     @forelse ($vaultHighlights as $vh)
                         @php
-                            $vAccent = match ($vh->color) {
-                                'green' => 'border-l-emerald-400',
-                                'blue' => 'border-l-sky-400',
-                                'rose' => 'border-l-rose-400',
-                                default => 'border-l-amber-300',
+                            $dotColor = match ($vh->color) {
+                                'green' => 'bg-emerald-400',
+                                'blue' => 'bg-sky-400',
+                                'rose' => 'bg-rose-400',
+                                default => 'bg-amber-300',
                             };
                         @endphp
-                        <li wire:key="vault-hl-{{ $vh->id }}" class="rounded border border-white/10 border-l-2 {{ $vAccent }} bg-sidebar p-3 text-xs">
-                            <blockquote class="font-serif text-sm leading-relaxed text-body">“{{ $vh->quote }}”</blockquote>
-                            @if ($editingHighlightId === $vh->id)
-                                <form wire:submit="saveEditHighlight" class="mt-2 space-y-1.5">
-                                    <input type="text" wire:model="editHighlightNote" placeholder="Note (optional)"
-                                           class="w-full rounded border border-white/10 bg-panel px-2 py-1 text-xs text-body focus:border-link focus:outline-none" />
-                                    <input type="text" wire:model="editHighlightTags" placeholder="#tags (comma separated)"
-                                           class="w-full rounded border border-white/10 bg-panel px-2 py-1 text-xs text-amber-200 focus:border-link focus:outline-none" />
-                                    <div class="flex gap-2">
-                                        <button type="submit" class="rounded bg-check px-2 py-0.5 text-[11px] font-medium text-white">Save</button>
-                                        <button type="button" wire:click="$set('editingHighlightId', null)" class="text-[11px] text-muted hover:text-body">Cancel</button>
+                        <li wire:key="vault-hl-{{ $vh->id }}" class="py-4 first:pt-2">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-2 w-2 shrink-0 rounded-full {{ $dotColor }}"></span>
+                                        <span class="truncate font-serif text-sm font-bold text-zinc-100">{{ $vh->book?->title }}</span>
                                     </div>
-                                </form>
-                            @else
-                                @if ($vh->note)
-                                    <p class="mt-1 text-muted">{{ $vh->note }}</p>
-                                @endif
-                            @endif
-                            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                    <span class="font-semibold text-body">{{ $vh->book?->title }}</span>
-                                    @if ($vh->page_number)
-                                        <button type="button"
-                                                wire:click="openHighlightedBook({{ $vh->book_id }}, {{ $vh->page_number }})"
-                                                class="font-mono text-link hover:underline">p. {{ $vh->page_number }}</button>
-                                    @endif
-                                    @foreach ($vh->tagList() as $tag)
-                                        <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
-                                    @endforeach
-                                    @if ($vh->is_mastered)
-                                        <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">mastered</span>
-                                    @endif
+                                    <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-500">
+                                        @if ($vh->book?->author)
+                                            <span>{{ $vh->book->author }}</span>
+                                        @endif
+                                        @if ($vh->page_number)
+                                            <span>·</span>
+                                            <button type="button"
+                                                    wire:click="openHighlightedBook({{ $vh->book_id }}, {{ $vh->page_number }})"
+                                                    class="font-mono text-link hover:underline">p. {{ $vh->page_number }}</button>
+                                        @endif
+                                        <span>·</span>
+                                        <span>{{ $vh->created_at?->diffForHumans(short: true) }}</span>
+                                        @foreach ($vh->tagList() as $tag)
+                                            <span class="text-amber-300/90">#{{ $tag }}</span>
+                                        @endforeach
+                                        @if ($vh->is_mastered)
+                                            <span class="text-emerald-400">· mastered</span>
+                                        @endif
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <button type="button" wire:click="toggleMasteredHighlight({{ $vh->id }})" class="text-muted hover:text-body">
+                                <div class="flex shrink-0 items-center gap-2.5 text-[11px] text-zinc-500">
+                                    <button type="button" wire:click="toggleMasteredHighlight({{ $vh->id }})" class="hover:text-zinc-200">
                                         {{ $vh->is_mastered ? 'unmaster' : 'master' }}
                                     </button>
-                                    <button type="button" wire:click="startEditHighlight({{ $vh->id }})" class="text-muted hover:text-body">edit</button>
-                                    <button type="button" wire:click="deleteHighlight({{ $vh->id }})" class="text-muted hover:text-red-400">remove</button>
+                                    <button type="button" wire:click="startEditHighlight({{ $vh->id }})" class="hover:text-zinc-200">edit</button>
+                                    <button type="button" wire:click="deleteHighlight({{ $vh->id }})" class="hover:text-red-400">remove</button>
                                 </div>
                             </div>
+
+                            <blockquote class="mt-2.5 font-serif text-base leading-relaxed text-zinc-100 sm:text-lg">{{ $vh->quote }}</blockquote>
+
+                            @if ($editingHighlightId === $vh->id)
+                                <form wire:submit="saveEditHighlight" class="mt-2.5 space-y-1.5">
+                                    <input type="text" wire:model="editHighlightNote" placeholder="Note (optional)"
+                                           class="w-full rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-100 focus:border-link focus:outline-none" />
+                                    <input type="text" wire:model="editHighlightTags" placeholder="#tags (comma separated)"
+                                           class="w-full rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-amber-200 focus:border-link focus:outline-none" />
+                                    <div class="flex gap-2">
+                                        <button type="submit" class="rounded bg-check px-2.5 py-1 text-[11px] font-medium text-white">Save</button>
+                                        <button type="button" wire:click="$set('editingHighlightId', null)" class="text-[11px] text-zinc-400 hover:text-zinc-100">Cancel</button>
+                                    </div>
+                                </form>
+                            @elseif ($vh->note)
+                                <p class="mt-2 border-l-2 border-zinc-800 pl-3 text-xs text-zinc-400">{{ $vh->note }}</p>
+                            @endif
                         </li>
                     @empty
-                        <li class="rounded border border-dashed border-white/15 py-6 text-center text-xs text-muted">
+                        <li class="py-8 text-center text-xs text-zinc-500">
                             No matching highlights yet. Open any book and drag-select a passage to save one.
                         </li>
                     @endforelse
@@ -432,6 +443,8 @@
                  x-init="init()"
                  x-on:reader-jump-page.window="goToPage($event.detail.page)"
                  x-on:keydown.window="handleKey($event)"
+                 x-on:mouseup.window="onWindowPointerUp($event)"
+                 x-on:touchend.window="onWindowPointerUp($event)"
                  :class="readMode
                      ? (theme === 'dark'
                          ? 'fixed inset-0 z-50 flex flex-col bg-black p-0 overflow-hidden'
@@ -897,9 +910,7 @@
                             <div x-show="readMode && !speedRead.open && !loading"
                                  x-cloak
                                  x-ref="reflowWrap"
-                                 x-on:mouseup="onTextSelect($event, 'reflow')"
-                                 x-on:touchend="onTextSelect($event, 'reflow')"
-                                 x-on:contextmenu="onContextHighlight($event, 'reflow')"
+                                 x-on:contextmenu="onContextHighlight($event)"
                                  :class="[
                                      theme === 'dark' ? 'text-[#f5f4f0]' : (theme === 'sepia' ? 'text-[#3b2f20]' : 'text-[#141414]'),
                                      readWidth === 'narrow' ? 'max-w-lg' : (readWidth === 'wide' ? 'max-w-4xl' : 'max-w-2xl'),
@@ -940,87 +951,19 @@
                                     <span class="font-mono text-[11px]">Page <span x-text="page"></span> <span x-show="numPages">/ <span x-text="numPages"></span></span></span>
                                     <span class="h-px flex-1 bg-current/25"></span>
                                 </div>
-
-                                {{-- Floating Highlight Popover inside Liquid Read Mode --}}
-                                <div x-show="selection.open && readMode"
-                                     x-cloak
-                                     x-transition.opacity.duration.120ms
-                                     :style="`left:${selection.x}px;top:${selection.y}px;`"
-                                     class="absolute z-40 w-64 -translate-x-1/2 -translate-y-full rounded-lg border border-zinc-700 bg-zinc-900/95 p-2.5 text-xs text-zinc-100 shadow-2xl backdrop-blur">
-                                    <div class="mb-2 flex items-center justify-between gap-2">
-                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Highlight p.<span x-text="page"></span></span>
-                                        <div class="flex items-center gap-1.5">
-                                            <button type="button" x-on:click="selection.color = 'yellow'" :class="selection.color === 'yellow' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-amber-300" aria-label="Yellow"></button>
-                                            <button type="button" x-on:click="selection.color = 'green'" :class="selection.color === 'green' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-emerald-400" aria-label="Green"></button>
-                                            <button type="button" x-on:click="selection.color = 'blue'" :class="selection.color === 'blue' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-sky-400" aria-label="Blue"></button>
-                                            <button type="button" x-on:click="selection.color = 'rose'" :class="selection.color === 'rose' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-rose-400" aria-label="Rose"></button>
-                                        </div>
-                                    </div>
-                                    <input type="text"
-                                           x-model="selection.note"
-                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
-                                           placeholder="Add a note (optional)…"
-                                           class="mb-1.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
-                                    <input type="text"
-                                           x-model="selection.tags"
-                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
-                                           placeholder="#tags (e.g. stoicism, strategy)"
-                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
-                                    <div class="flex items-center justify-between">
-                                        <button type="button" x-on:click="clearSelection()" class="text-[11px] text-zinc-400 hover:text-zinc-200">Cancel</button>
-                                        <button type="button" x-on:click="saveSelectionHighlight()"
-                                                class="rounded bg-amber-400 px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-amber-300">
-                                            Save Highlight
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
 
                             {{-- Page Canvas + Selectable Text Layer (Page View) --}}
                             <div wire:ignore
                                  x-show="!readMode"
                                  x-ref="pageWrap"
-                                 x-on:mouseup="onTextSelect($event, 'canvas')"
+                                 x-on:contextmenu="onContextHighlight($event)"
                                  class="relative mx-auto shadow-2xl"
                                  :style="pageWidth ? `width:${pageWidth}px;height:${pageHeight}px;` : ''">
                                 <canvas x-ref="canvas"
                                         class="block rounded-sm transition-[filter] duration-200"
                                         :style="theme === 'dark' ? 'filter: invert(0.90) hue-rotate(180deg) contrast(0.96);' : ''"></canvas>
                                 <div x-ref="textLayer" class="pdf-text-layer"></div>
-
-                                {{-- Floating Highlight Popover on Text Selection --}}
-                                <div x-show="selection.open && !readMode"
-                                     x-cloak
-                                     x-transition.opacity.duration.120ms
-                                     :style="`left:${selection.x}px;top:${selection.y}px;`"
-                                     class="absolute z-40 w-64 -translate-x-1/2 -translate-y-full rounded-lg border border-zinc-700 bg-zinc-900/95 p-2.5 text-xs text-zinc-100 shadow-2xl backdrop-blur">
-                                    <div class="mb-2 flex items-center justify-between gap-2">
-                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Highlight p.<span x-text="page"></span></span>
-                                        <div class="flex items-center gap-1.5">
-                                            <button type="button" x-on:click="selection.color = 'yellow'" :class="selection.color === 'yellow' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-amber-300" aria-label="Yellow"></button>
-                                            <button type="button" x-on:click="selection.color = 'green'" :class="selection.color === 'green' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-emerald-400" aria-label="Green"></button>
-                                            <button type="button" x-on:click="selection.color = 'blue'" :class="selection.color === 'blue' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-sky-400" aria-label="Blue"></button>
-                                            <button type="button" x-on:click="selection.color = 'rose'" :class="selection.color === 'rose' ? 'ring-2 ring-white' : ''" class="h-4 w-4 rounded-full bg-rose-400" aria-label="Rose"></button>
-                                        </div>
-                                    </div>
-                                    <input type="text"
-                                           x-model="selection.note"
-                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
-                                           placeholder="Add a note (optional)…"
-                                           class="mb-1.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
-                                    <input type="text"
-                                           x-model="selection.tags"
-                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
-                                           placeholder="#tags (e.g. stoicism, strategy)"
-                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
-                                    <div class="flex items-center justify-between">
-                                        <button type="button" x-on:click="clearSelection()" class="text-[11px] text-zinc-400 hover:text-zinc-200">Cancel</button>
-                                        <button type="button" x-on:click="saveSelectionHighlight()"
-                                                class="rounded bg-amber-400 px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-amber-300">
-                                            Save Highlight
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
 
                             {{-- Bottom Prev / Next Page Bar --}}
@@ -1135,6 +1078,69 @@
                         </ul>
                     </aside>
                 @endif
+            </div>
+
+            {{-- Instapaper-Style Fixed Translucent Glass Selection Pill (Works in BOTH Page View & Read Mode, never clipped) --}}
+            <div x-show="selection.open"
+                 x-cloak
+                 x-transition.opacity.duration.120ms
+                 x-on:mousedown.stop
+                 x-on:mouseup.stop
+                 x-on:touchend.stop
+                 data-highlight-pill
+                 :style="`left:${selection.x}px;top:${selection.y}px;`"
+                 class="fixed z-[60] -translate-x-1/2 -translate-y-full rounded-2xl border border-white/15 bg-zinc-900/95 px-2.5 py-2 text-xs text-zinc-100 shadow-2xl backdrop-blur-md">
+                <div class="flex items-center gap-2">
+                    {{-- 1-Click Color Highlight Dots --}}
+                    <button type="button" x-on:click="quickHighlight('yellow')" class="h-5 w-5 rounded-full bg-amber-300 transition hover:scale-110" title="Highlight Yellow"></button>
+                    <button type="button" x-on:click="quickHighlight('green')" class="h-5 w-5 rounded-full bg-emerald-400 transition hover:scale-110" title="Highlight Green"></button>
+                    <button type="button" x-on:click="quickHighlight('blue')" class="h-5 w-5 rounded-full bg-sky-400 transition hover:scale-110" title="Highlight Blue"></button>
+                    <button type="button" x-on:click="quickHighlight('rose')" class="h-5 w-5 rounded-full bg-rose-400 transition hover:scale-110" title="Highlight Rose"></button>
+
+                    <span class="h-4 w-px bg-white/15" aria-hidden="true"></span>
+
+                    {{-- Expand Note + #tags --}}
+                    <button type="button"
+                            x-on:click="selection.showNote = !selection.showNote"
+                            :class="selection.showNote ? 'text-amber-300' : 'text-zinc-300 hover:text-white'"
+                            class="rounded px-1.5 py-0.5 text-[11px] font-medium transition"
+                            title="Add note & #tags">
+                        + Note
+                    </button>
+
+                    {{-- Copy Quote --}}
+                    <button type="button"
+                            x-on:click="copySelectedQuote()"
+                            class="rounded px-1.5 py-0.5 text-[11px] text-zinc-300 transition hover:text-white"
+                            title="Copy quote">
+                        Copy
+                    </button>
+
+                    <button type="button"
+                            x-on:click="clearSelection()"
+                            class="rounded px-1 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+                            aria-label="Close">✕</button>
+                </div>
+
+                {{-- Optional Note & #tags Drawer inside Pill --}}
+                <div x-show="selection.showNote" x-cloak class="mt-2 w-60 space-y-1.5 border-t border-white/10 pt-2">
+                    <input type="text"
+                           x-model="selection.note"
+                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                           placeholder="Add a note…"
+                           class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                    <input type="text"
+                           x-model="selection.tags"
+                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                           placeholder="#tags (e.g. stoicism, strategy)"
+                           class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                    <div class="flex justify-end">
+                        <button type="button" x-on:click="saveSelectionHighlight()"
+                                class="rounded bg-amber-400 px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-amber-300">
+                            Save Highlight
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {{-- Acrobat-Style Bottom Action Dock (visible in Read Mode: Highlighter Pen, Aa, Speed, Listen, Highlights) --}}
@@ -1477,7 +1483,7 @@
                 activeBookId: cfg.activeBookId,
                 highlights: cfg.highlights || [],
                 toast: '',
-                selection: { open: false, text: '', color: 'yellow', note: '', tags: '', x: 0, y: 0 },
+                selection: { open: false, showNote: false, text: '', color: 'yellow', note: '', tags: '', x: 0, y: 0 },
                 _pdfDoc: null,
                 _pdfjs: null,
                 _rendering: false,
@@ -1934,54 +1940,83 @@
                     this.renderPage(this.page);
                 },
 
-                async onTextSelect(e, mode = 'canvas') {
+                onWindowPointerUp(e) {
+                    if (e.target?.closest?.('[data-highlight-pill]')) {
+                        return;
+                    }
+                    setTimeout(() => this.captureSelection(false), 15);
+                },
+
+                onContextHighlight(e) {
+                    const sel = window.getSelection();
+                    const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+                    if (text.length >= 2) {
+                        e.preventDefault();
+                        this.captureSelection(true);
+                    }
+                },
+
+                async captureSelection(forcePopover = false) {
                     const sel = window.getSelection();
                     const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
                     if (text.length < 2 || !sel.rangeCount) {
                         return;
                     }
 
+                    const anchor = sel.anchorNode;
+                    const inReflow = this.$refs.reflowWrap && anchor && this.$refs.reflowWrap.contains(anchor);
+                    const inCanvas = this.$refs.pageWrap && anchor && this.$refs.pageWrap.contains(anchor);
+                    if (!inReflow && !inCanvas) {
+                        return;
+                    }
+
                     // Instant 1-swipe highlighting when Highlighter Pen Mode is active
-                    if (this.penMode) {
+                    if (this.penMode && !forcePopover) {
                         const color = this.penColor || 'yellow';
                         const pageNum = this.page;
                         try { sel.removeAllRanges(); } catch (err) {}
-                        await this.$wire.addHighlight(text, pageNum, color, null, null);
-                        this.highlights.push({ page: pageNum, quote: text, color });
-                        this.renderPage(this.page);
-                        this.toast = 'Highlighted (p. ' + pageNum + ')';
-                        setTimeout(() => { this.toast = ''; }, 2200);
+                        await this.persistHighlight(text, pageNum, color, null, null);
                         return;
                     }
 
                     const range = sel.getRangeAt(0);
                     const rect = range.getBoundingClientRect();
-                    const wrapEl = mode === 'reflow' ? this.$refs.reflowWrap : this.$refs.pageWrap;
-                    const wrapRect = wrapEl?.getBoundingClientRect();
-                    if (!wrapRect || rect.width === 0) return;
+                    if (!rect || (rect.width === 0 && rect.height === 0)) {
+                        return;
+                    }
 
                     this.selection.text = text;
+                    this.selection.color = this.penColor || 'yellow';
                     this.selection.note = '';
                     this.selection.tags = '';
-                    this.selection.x = Math.min(Math.max(135, rect.left - wrapRect.left + rect.width / 2), wrapRect.width - 135);
-                    this.selection.y = Math.max(80, rect.top - wrapRect.top - 8);
+                    this.selection.showNote = false;
+                    this.selection.x = Math.min(Math.max(150, rect.left + rect.width / 2), window.innerWidth - 150);
+                    this.selection.y = Math.max(72, rect.top - 10);
                     this.selection.open = true;
                 },
 
-                onContextHighlight(e, mode = 'reflow') {
-                    const sel = window.getSelection();
-                    const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
-                    if (text.length >= 2) {
-                        e.preventDefault();
-                        const prevPen = this.penMode;
-                        this.penMode = false;
-                        this.onTextSelect(e, mode);
-                        this.penMode = prevPen;
-                    }
+                async quickHighlight(color) {
+                    if (!this.selection.text) return;
+                    const quote = this.selection.text;
+                    const pageNum = this.page;
+                    this.penColor = color;
+                    this.clearSelection();
+                    await this.persistHighlight(quote, pageNum, color, null, null);
+                },
+
+                async copySelectedQuote() {
+                    if (!this.selection.text) return;
+                    try {
+                        await navigator.clipboard.writeText(this.selection.text);
+                        this.toast = 'Copied quote';
+                        setTimeout(() => { this.toast = ''; }, 2000);
+                    } catch (e) {}
+                    this.clearSelection();
                 },
 
                 clearSelection() {
                     this.selection.open = false;
+                    this.selection.showNote = false;
                     this.selection.text = '';
                     this.selection.note = '';
                     this.selection.tags = '';
@@ -1991,17 +2026,22 @@
                 async saveSelectionHighlight() {
                     if (!this.selection.text) return;
                     const quote = this.selection.text;
-                    const color = this.selection.color;
+                    const color = this.selection.color || this.penColor || 'yellow';
                     const note = this.selection.note;
                     const tags = this.selection.tags;
                     const pageNum = this.page;
 
                     this.clearSelection();
-                    await this.$wire.addHighlight(quote, pageNum, color, note, tags);
-                    this.highlights.push({ page: pageNum, quote, color });
-                    this.renderPage(this.page);
+                    await this.persistHighlight(quote, pageNum, color, note, tags);
+                },
 
-                    this.toast = 'Saved highlight (p. ' + pageNum + ')';
+                async persistHighlight(quote, pageNum, color, note, tags) {
+                    await this.$wire.addHighlight(quote, pageNum, color, note, tags);
+                    this.highlights = [...this.highlights, { page: pageNum, quote, color }];
+                    if (!this.readMode && this._pdfDoc) {
+                        this.renderPage(this.page);
+                    }
+                    this.toast = 'Highlighted (p. ' + pageNum + ')';
                     setTimeout(() => { this.toast = ''; }, 2400);
                 },
 

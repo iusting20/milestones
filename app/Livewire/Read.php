@@ -3,17 +3,31 @@
 namespace App\Livewire;
 
 use App\Models\Book;
+use App\Models\BookHighlight;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Read extends Component
 {
+    use WithFileUploads;
+
     public string $kind = Book::KIND_BOOK;
 
     public ?int $selectedBookId = null;
+
+    public bool $readerOpen = false;
+
+    public bool $showPdfToolbar = false;
+
+    public bool $showHighlights = false;
+
+    public string $readerCurrentPage = '';
 
     public bool $showFinished = false;
 
@@ -25,7 +39,15 @@ class Read extends Component
 
     public string $newBookAuthor = '';
 
+    public string $newBookPublisher = '';
+
     public string $newBookTotalPages = '';
+
+    public $newBookPdf = null;
+
+    public $newBookCover = null;
+
+    public ?string $newBookGeneratedCover = null;
 
     public ?int $editingBookId = null;
 
@@ -33,9 +55,17 @@ class Read extends Component
 
     public string $editBookAuthor = '';
 
+    public string $editBookPublisher = '';
+
     public string $editBookTotalPages = '';
 
     public string $editBookStatus = Book::STATUS_READING;
+
+    public $editBookPdf = null;
+
+    public $editBookCover = null;
+
+    public ?string $editBookGeneratedCover = null;
 
     public bool $addingSession = false;
 
@@ -67,6 +97,10 @@ class Read extends Component
 
         // No book is selected on first load / refresh.
         $this->selectedBookId = $selectedBookId;
+        if ($selectedBookId !== null) {
+            $page = $this->catalog()->whereKey($selectedBookId)->value('current_page');
+            $this->readerCurrentPage = $page ? (string) $page : '';
+        }
     }
 
     public function isArticles(): bool
@@ -76,9 +110,132 @@ class Read extends Component
 
     public function selectBook(int $id): void
     {
-        $this->findBook($id);
-        $this->selectedBookId = $id;
+        $book = $this->findBook($id);
+
+        if ($this->selectedBookId !== null && $this->selectedBookId !== $book->id) {
+            $this->stopRunningSessionFor($this->selectedBookId);
+        }
+
+        $this->selectedBookId = $book->id;
+        $this->readerOpen = true;
+        $this->readerCurrentPage = $book->current_page ? (string) $book->current_page : '';
         $this->cancelForms();
+
+        if (! $this->runningSessionFor($book->id)) {
+            ReadingSession::query()->create([
+                'book_id' => $book->id,
+                'started_at' => Clock::now()->seconds(0)->utc(),
+                'finished_at' => null,
+            ]);
+            Onboarding::complete('read.start');
+        }
+
+        $this->dispatch('read-live-totals', totals: $this->liveTotals($book->id));
+        $this->dispatch('book-reader-opened');
+    }
+
+    public function closeReader(): void
+    {
+        if ($this->selectedBookId !== null) {
+            $this->stopRunningSessionFor($this->selectedBookId);
+        }
+
+        $this->selectedBookId = null;
+        $this->readerOpen = false;
+        $this->readerCurrentPage = '';
+        $this->cancelForms();
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
+    }
+
+    public function saveCurrentPage(): void
+    {
+        if (! $this->selectedBookId) {
+            return;
+        }
+
+        $book = $this->findBook($this->selectedBookId);
+        $raw = trim($this->readerCurrentPage);
+
+        if ($raw === '') {
+            $book->update(['current_page' => null]);
+            $this->readerCurrentPage = '';
+
+            return;
+        }
+
+        if (! ctype_digit($raw) || (int) $raw < 1) {
+            $this->readerCurrentPage = $book->current_page ? (string) $book->current_page : '';
+
+            return;
+        }
+
+        $page = (int) $raw;
+        if ($book->total_pages !== null && $book->total_pages > 0 && $page > $book->total_pages) {
+            $page = $book->total_pages;
+        }
+
+        $book->update(['current_page' => $page]);
+        $this->readerCurrentPage = (string) $page;
+        $this->dispatch('reader-jump-page', page: $page);
+    }
+
+    public function jumpToPage(int $page): void
+    {
+        if (! $this->selectedBookId || $page < 1) {
+            return;
+        }
+
+        $book = $this->findBook($this->selectedBookId);
+        if ($book->total_pages !== null && $book->total_pages > 0 && $page > $book->total_pages) {
+            $page = $book->total_pages;
+        }
+
+        $book->update(['current_page' => $page]);
+        $this->readerCurrentPage = (string) $page;
+        $this->dispatch('reader-jump-page', page: $page);
+    }
+
+    public function addHighlight(string $quote, ?int $pageNumber = null, string $color = 'yellow', ?string $note = null): void
+    {
+        if (! $this->selectedBookId) {
+            return;
+        }
+
+        $book = $this->findBook($this->selectedBookId);
+        $cleanQuote = trim(preg_replace('/\s+/u', ' ', $quote) ?? '');
+        if ($cleanQuote === '') {
+            return;
+        }
+
+        $safeColor = in_array($color, BookHighlight::COLORS, true) ? $color : 'yellow';
+        $cleanNote = $note !== null && trim($note) !== '' ? trim($note) : null;
+
+        BookHighlight::query()->create([
+            'book_id' => $book->id,
+            'page_number' => $pageNumber !== null && $pageNumber > 0 ? $pageNumber : ($book->current_page ?: 1),
+            'quote' => mb_substr($cleanQuote, 0, 2000),
+            'note' => $cleanNote !== null ? mb_substr($cleanNote, 0, 1000) : null,
+            'color' => $safeColor,
+        ]);
+    }
+
+    public function deleteHighlight(int $id): void
+    {
+        $highlight = BookHighlight::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
+
+        $highlight->delete();
+    }
+
+    public function openPdfUpload(): void
+    {
+        if (! $this->selectedBookId) {
+            return;
+        }
+
+        $this->startEditBook($this->selectedBookId);
     }
 
     public function startAddBook(): void
@@ -87,7 +244,11 @@ class Read extends Component
         $this->addingBook = true;
         $this->newBookTitle = '';
         $this->newBookAuthor = '';
+        $this->newBookPublisher = '';
         $this->newBookTotalPages = '';
+        $this->newBookPdf = null;
+        $this->newBookCover = null;
+        $this->newBookGeneratedCover = null;
     }
 
     public function addBook(): void
@@ -107,6 +268,18 @@ class Read extends Component
             }
         }
 
+        if ($this->newBookPdf !== null || $this->newBookCover !== null) {
+            $this->validate([
+                'newBookPdf' => ['nullable', 'file', 'mimes:pdf', 'max:51200'],
+                'newBookCover' => ['nullable', 'image', 'max:5120'],
+            ]);
+        }
+
+        $pdfPath = $this->newBookPdf !== null
+            ? $this->newBookPdf->store('books/pdfs', 'public')
+            : null;
+        $coverPath = $this->storeBookCover($this->newBookCover, $this->newBookGeneratedCover);
+
         $min = $this->catalog()->min('position');
         if ($min === null) {
             $position = 1;
@@ -118,10 +291,13 @@ class Read extends Component
         $book = $this->catalog()->create([
             'title' => $title,
             'author' => trim($this->newBookAuthor) !== '' ? trim($this->newBookAuthor) : null,
+            'publisher' => trim($this->newBookPublisher) !== '' ? trim($this->newBookPublisher) : null,
             'total_pages' => $this->isArticles() ? null : $pages,
             'status' => Book::STATUS_READING,
             'position' => $position,
             'kind' => $this->kind,
+            'pdf_path' => $pdfPath,
+            'cover_path' => $coverPath,
         ]);
 
         Onboarding::complete($this->isArticles() ? 'read.article' : 'read.book');
@@ -129,8 +305,13 @@ class Read extends Component
         $this->addingBook = false;
         $this->newBookTitle = '';
         $this->newBookAuthor = '';
+        $this->newBookPublisher = '';
         $this->newBookTotalPages = '';
+        $this->newBookPdf = null;
+        $this->newBookCover = null;
+        $this->newBookGeneratedCover = null;
         $this->selectedBookId = $book->id;
+        $this->dispatch('read-live-totals', totals: $this->liveTotals($book->id));
     }
 
     public function startEditBook(int $id): void
@@ -140,8 +321,12 @@ class Read extends Component
         $this->editingBookId = $book->id;
         $this->editBookTitle = $book->title;
         $this->editBookAuthor = $book->author ?? '';
+        $this->editBookPublisher = $book->publisher ?? '';
         $this->editBookTotalPages = $book->total_pages !== null ? (string) $book->total_pages : '';
         $this->editBookStatus = $book->status;
+        $this->editBookPdf = null;
+        $this->editBookCover = null;
+        $this->editBookGeneratedCover = null;
     }
 
     public function saveEditBook(): void
@@ -172,14 +357,43 @@ class Read extends Component
             }
         }
 
-        $book->update([
+        if ($this->editBookPdf !== null || $this->editBookCover !== null) {
+            $this->validate([
+                'editBookPdf' => ['nullable', 'file', 'mimes:pdf', 'max:51200'],
+                'editBookCover' => ['nullable', 'image', 'max:5120'],
+            ]);
+        }
+
+        $updates = [
             'title' => $title,
             'author' => trim($this->editBookAuthor) !== '' ? trim($this->editBookAuthor) : null,
+            'publisher' => trim($this->editBookPublisher) !== '' ? trim($this->editBookPublisher) : null,
             'total_pages' => $pages,
             'status' => $this->editBookStatus,
-        ]);
+        ];
+
+        if ($this->editBookPdf !== null) {
+            $newPdfPath = $this->editBookPdf->store('books/pdfs', 'public');
+            if ($book->pdf_path) {
+                Storage::disk('public')->delete($book->pdf_path);
+            }
+            $updates['pdf_path'] = $newPdfPath;
+        }
+
+        $newCoverPath = $this->storeBookCover($this->editBookCover, $this->editBookGeneratedCover);
+        if ($newCoverPath !== null) {
+            if ($book->cover_path) {
+                Storage::disk('public')->delete($book->cover_path);
+            }
+            $updates['cover_path'] = $newCoverPath;
+        }
+
+        $book->update($updates);
 
         $this->editingBookId = null;
+        $this->editBookPdf = null;
+        $this->editBookCover = null;
+        $this->editBookGeneratedCover = null;
     }
 
     public function markBookFinished(int $id): void
@@ -211,6 +425,15 @@ class Read extends Component
     {
         $book = $this->findBook($id);
         $wasSelected = $this->selectedBookId === $book->id;
+
+        if ($book->pdf_path) {
+            Storage::disk('public')->delete($book->pdf_path);
+        }
+
+        if ($book->cover_path) {
+            Storage::disk('public')->delete($book->cover_path);
+        }
+
         $book->delete();
 
         if ($wasSelected) {
@@ -219,6 +442,7 @@ class Read extends Component
         }
 
         $this->cancelForms();
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
     }
 
     public function startAddSession(): void
@@ -273,6 +497,7 @@ class Read extends Component
 
         $this->addingSession = false;
         $this->resetSessionForm();
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
     }
 
     public function startSessionNow(): void
@@ -294,6 +519,7 @@ class Read extends Component
         ]);
 
         Onboarding::complete('read.start');
+        $this->dispatch('read-live-totals', totals: $this->liveTotals($book->id));
     }
 
     public function stopSession(int $id): void
@@ -311,6 +537,7 @@ class Read extends Component
 
         $session->update(['finished_at' => $finished]);
         Onboarding::complete('read.stop');
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
     }
 
     public function startEditSession(int $id): void
@@ -367,6 +594,7 @@ class Read extends Component
         ]);
 
         $this->editingSessionId = null;
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
     }
 
     /**
@@ -446,6 +674,7 @@ class Read extends Component
     {
         $this->findSession($id)->delete();
         $this->cancelForms();
+        $this->dispatch('read-live-totals', totals: $this->liveTotals());
     }
 
     public function cancelForms(): void
@@ -454,8 +683,15 @@ class Read extends Component
         $this->addingBook = false;
         $this->newBookTitle = '';
         $this->newBookAuthor = '';
+        $this->newBookPublisher = '';
         $this->newBookTotalPages = '';
+        $this->newBookPdf = null;
+        $this->newBookCover = null;
+        $this->newBookGeneratedCover = null;
         $this->editingBookId = null;
+        $this->editBookPdf = null;
+        $this->editBookCover = null;
+        $this->editBookGeneratedCover = null;
         $this->addingSession = false;
         $this->editingSessionId = null;
         $this->resetSessionForm();
@@ -474,7 +710,14 @@ class Read extends Component
         $finishedBooks = $all->filter(fn (Book $book) => $book->isFinished())->values();
         $selected = $all->firstWhere('id', $this->selectedBookId);
 
+        $lastReadBook = $books
+            ->filter(fn (Book $b) => $b->latestSession !== null)
+            ->sortByDesc(fn (Book $b) => $b->latestSession->started_at->timestamp)
+            ->first();
+        $lastReadBookId = $lastReadBook?->id;
+
         $sessions = collect();
+        $highlights = collect();
         $bookTotals = [
             'sessionCount' => 0,
             'totalMinutes' => 0,
@@ -493,6 +736,12 @@ class Read extends Component
             $sessions = ReadingSession::query()
                 ->where('book_id', $selected->id)
                 ->orderByDesc('started_at')
+                ->orderByDesc('id')
+                ->get();
+
+            $highlights = BookHighlight::query()
+                ->where('book_id', $selected->id)
+                ->orderBy('page_number')
                 ->orderByDesc('id')
                 ->get();
 
@@ -521,7 +770,9 @@ class Read extends Component
             'books' => $books,
             'finishedBooks' => $finishedBooks,
             'selected' => $selected,
+            'lastReadBookId' => $lastReadBookId,
             'sessions' => $sessions,
+            'highlights' => $highlights,
             'bookTotals' => $bookTotals,
             'pageTotals' => $pageTotals,
             'liveTotals' => $liveTotals,
@@ -630,6 +881,36 @@ class Read extends Component
         }
     }
 
+    private function storeBookCover(mixed $uploadedCover, ?string $generatedCoverDataUrl): ?string
+    {
+        if ($uploadedCover !== null) {
+            return $uploadedCover->store('books/covers', 'public');
+        }
+
+        if ($generatedCoverDataUrl === null || trim($generatedCoverDataUrl) === '') {
+            return null;
+        }
+
+        if (! preg_match('/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+\/=\r\n]+)$/', trim($generatedCoverDataUrl), $matches)) {
+            return null;
+        }
+
+        $bytes = base64_decode($matches[2], true);
+        if ($bytes === false || $bytes === '' || strlen($bytes) > 2 * 1024 * 1024) {
+            return null;
+        }
+
+        if (@getimagesizefromstring($bytes) === false) {
+            return null;
+        }
+
+        $extension = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+        $path = 'books/covers/'.Str::uuid()->toString().'.'.$extension;
+        Storage::disk('public')->put($path, $bytes);
+
+        return $path;
+    }
+
     private function catalog()
     {
         return Book::query()->ofKind($this->kind);
@@ -655,6 +936,22 @@ class Read extends Component
             ->whereNull('finished_at')
             ->orderByDesc('started_at')
             ->first();
+    }
+
+    private function stopRunningSessionFor(int $bookId): void
+    {
+        $running = $this->runningSessionFor($bookId);
+        if (! $running) {
+            return;
+        }
+
+        $finished = Clock::now()->seconds(0)->utc();
+        if ($finished->lte($running->started_at)) {
+            $finished = $running->started_at->clone()->addMinute();
+        }
+
+        $running->update(['finished_at' => $finished]);
+        Onboarding::complete('read.stop');
     }
 
     private function parseDateTimeLocal(string $value, string $field): ?Carbon

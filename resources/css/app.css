@@ -261,4 +261,26 @@
     .has-parent-tip:focus-visible::before {
         opacity: 1;
     }
+
+    .pdf-text-layer {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        line-height: 1;
+        text-size-adjust: none;
+        forced-color-adjust: none;
+    }
+
+    .pdf-text-layer span {
+        position: absolute;
+        color: transparent;
+        white-space: pre;
+        cursor: text;
+        transform-origin: 0% 0%;
+        border-radius: 2px;
+    }
+
+    .pdf-text-layer ::selection {
+        background: rgba(250, 204, 21, 0.38);
+    }
 }

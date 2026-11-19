@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 class Book extends Model
 {
@@ -22,18 +23,24 @@ class Book extends Model
     protected $fillable = [
         'title',
         'author',
+        'publisher',
         'total_pages',
+        'current_page',
         'status',
         'position',
         'type',
         'kind',
         'started_on',
+        'pdf_path',
+        'cover_path',
+        'spine_path',
     ];
 
     protected function casts(): array
     {
         return [
             'total_pages' => 'integer',
+            'current_page' => 'integer',
             'position' => 'integer',
             'started_on' => 'date',
         ];
@@ -56,6 +63,11 @@ class Book extends Model
     public function latestSession(): HasOne
     {
         return $this->hasOne(ReadingSession::class)->latestOfMany('started_at');
+    }
+
+    public function highlights(): HasMany
+    {
+        return $this->hasMany(BookHighlight::class);
     }
 
     public function isReading(): bool
@@ -90,5 +102,32 @@ class Book extends Model
     public function scopeOfKind(Builder $query, string $kind): Builder
     {
         return $query->where('kind', $kind);
+    }
+
+    public function pdfUrl(): ?string
+    {
+        if (! $this->pdf_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->pdf_path);
+    }
+
+    public function coverUrl(): ?string
+    {
+        if (! $this->cover_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->cover_path);
+    }
+
+    public function spineUrl(): ?string
+    {
+        if (! $this->spine_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->spine_path);
     }
 }

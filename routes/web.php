@@ -9,6 +9,10 @@ use App\Livewire\LinkHub;
 use App\Livewire\Read;
 use App\Livewire\ReadStats;
 use App\Livewire\TaskLogBoard;
+use App\Models\ReadingSession;
+use App\Support\Clock;
+use App\Support\Onboarding;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [LoginController::class, 'create'])->name('login');
@@ -40,6 +44,30 @@ Route::get('/read', Read::class)->name('read');
 Route::get('/read/articles', Read::class)->name('read.articles');
 
 Route::get('/read/stats', ReadStats::class)->name('read.stats');
+
+Route::post('/read/sessions/stop-active', function (Request $request) {
+    $bookId = (int) $request->input('book_id');
+    if ($bookId <= 0) {
+        return response()->noContent();
+    }
+
+    $running = ReadingSession::query()
+        ->where('book_id', $bookId)
+        ->whereNull('finished_at')
+        ->orderByDesc('started_at')
+        ->first();
+
+    if ($running) {
+        $finished = Clock::now()->seconds(0)->utc();
+        if ($finished->lte($running->started_at)) {
+            $finished = $running->started_at->clone()->addMinute();
+        }
+        $running->update(['finished_at' => $finished]);
+        Onboarding::complete('read.stop');
+    }
+
+    return response()->noContent();
+})->name('read.sessions.stop-active');
 
 // Secret, unlinked job-applications dashboard: unguessable path (JOBS_PAGE_TOKEN) + the normal login.
 if (filled(config('jobs.page_token'))) {

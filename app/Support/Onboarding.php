@@ -63,18 +63,6 @@ class Onboarding
         $state->save();
     }
 
-    public static function reopen(): void
-    {
-        $state = OnboardingState::current();
-
-        if ($state->dismissed_at === null) {
-            return;
-        }
-
-        $state->dismissed_at = null;
-        $state->save();
-    }
-
     private static function notify(): void
     {
         foreach (debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 12) as $frame) {

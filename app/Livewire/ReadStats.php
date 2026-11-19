@@ -6,6 +6,7 @@ use App\Models\Book;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
+use App\Support\ReechTimelog;
 use Carbon\Carbon;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -18,6 +19,8 @@ class ReadStats extends Component
         'B' => '#ffe600',
         'C' => '#58a6ff',
         'articles' => '#c084fc',
+        'content' => '#ff6d00',
+        'engagement' => '#ff6d00',
         '—' => '#8b8b8b',
     ];
 
@@ -31,6 +34,8 @@ class ReadStats extends Component
         return match ($type) {
             '—' => 'No type',
             'articles' => 'Articles',
+            'content' => 'Content',
+            'engagement' => 'Engagement',
             default => 'Type '.$type,
         };
     }
@@ -94,6 +99,8 @@ class ReadStats extends Component
             }
         }
 
+        self::addReechMinutes($days, $weekStart, $weekEnd, $now, $tz);
+
         $totals = array_fill_keys($types, 0);
         foreach ($days as $i => $day) {
             foreach ($types as $t) {
@@ -107,9 +114,9 @@ class ReadStats extends Component
                 foreach ($day['bookSeconds'][$t] as $bookId => $secs) {
                     $m = intdiv((int) $secs, 60);
                     if ($m > 0) {
-                        $info = $bookInfo[$bookId] ?? null;
+                        $info = is_int($bookId) ? ($bookInfo[$bookId] ?? null) : null;
                         $list[] = [
-                            'title' => $info?->title ?? 'Deleted book',
+                            'title' => $info?->title ?? (is_string($bookId) ? $bookId : 'Deleted book'),
                             'minutes' => $m,
                             'startedToday' => $info?->isStartedToday($now) ?? false,
                             'finished' => $info?->isFinished() ?? false,
@@ -148,6 +155,50 @@ class ReadStats extends Component
         return ['days' => $days, 'totals' => $totals, 'books' => $books, 'articles' => $articles];
     }
 
+    /**
+     * Finished Reech content and engagement sessions, split across local days like reading time.
+     *
+     * @param  array<int, array<string, mixed>>  $days
+     */
+    private static function addReechMinutes(array &$days, Carbon $weekStart, Carbon $weekEnd, Carbon $now, string $tz): void
+    {
+        $byTitle = [];
+        foreach ((array) config('reech_timelog.titles', []) as $type => $title) {
+            if (isset(self::TYPE_COLORS[$type]) && is_string($title)) {
+                $byTitle[$title] = $type;
+            }
+        }
+
+        $reech = ReechTimelog::forDays($weekStart->toDateString(), $weekEnd->copy()->subDay()->toDateString());
+
+        foreach ($reech['logs'] as $log) {
+            $type = $byTitle[$log->title] ?? null;
+            if ($type === null || $log->started_at === null || $log->finished_at === null) {
+                continue;
+            }
+
+            $start = $log->started_at->copy()->timezone($tz);
+            $end = $log->finished_at->copy()->timezone($tz);
+            if ($end->gt($now)) {
+                $end = $now->copy();
+            }
+
+            for ($i = 0; $i < 7; $i++) {
+                $dayStart = $weekStart->copy()->addDays($i);
+                $dayEnd = $dayStart->copy()->addDay();
+                $from = $start->gt($dayStart) ? $start : $dayStart;
+                $to = $end->lt($dayEnd) ? $end : $dayEnd;
+                if ($to->gt($from)) {
+                    $secs = $from->diffInSeconds($to);
+                    $days[$i]['seconds'][$type] += $secs;
+                    $articleTitle = $log->getAttribute('reech_article_title');
+                    $label = is_string($articleTitle) && $articleTitle !== '' ? $articleTitle : $log->title;
+                    $days[$i]['bookSeconds'][$type][$label] = ($days[$i]['bookSeconds'][$type][$label] ?? 0) + $secs;
+                }
+            }
+        }
+    }
+
     public static function categoryFor(?Book $book): string
     {
         if ($book?->kind === Book::KIND_ARTICLE) {
@@ -173,9 +224,11 @@ class ReadStats extends Component
         $data = self::weekBreakdown();
         $types = array_keys(self::TYPE_COLORS);
 
-        // Only show the "no type" series when it actually has time.
-        if ($data['totals']['—'] === 0) {
-            $types = array_values(array_diff($types, ['—']));
+        // Hide empty series that are not book types: untyped reading, and Reech when it logged nothing.
+        foreach (['—', 'content', 'engagement'] as $optional) {
+            if ($data['totals'][$optional] === 0) {
+                $types = array_values(array_diff($types, [$optional]));
+            }
         }
 
         $maxDay = 0;

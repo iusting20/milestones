@@ -43,23 +43,24 @@ class OnboardingTest extends TestCase
             ->call('toggleOpen')
             ->call('askSkip')
             ->assertSet('confirmingSkip', true)
-            ->assertSee('Skip hides this list')
+            ->assertSee('Skip removes the ? from the header.')
             ->call('skip')
             ->assertSet('open', false)
-            ->assertSet('confirmingSkip', false);
+            ->assertSet('confirmingSkip', false)
+            ->assertDontSee('aria-label="Onboarding,', false);
 
         $this->assertNotNull(OnboardingState::current()->dismissed_at);
+
+        $this->get(route('milestones'))
+            ->assertDontSee('aria-label="Onboarding,', false);
 
         Livewire::test(OnboardingDock::class)
             ->call('resetTour');
 
         $this->assertNotNull(OnboardingState::current()->dismissed_at);
 
-        Livewire::test(OnboardingDock::class)
-            ->call('toggleOpen')
-            ->assertSet('open', true);
-
-        $this->assertNull(OnboardingState::current()->dismissed_at);
+        $this->get(route('milestones'))
+            ->assertDontSee('aria-label="Onboarding,', false);
     }
 
     public function test_creating_a_day_task_marks_the_tour_step(): void

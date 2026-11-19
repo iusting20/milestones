@@ -120,6 +120,10 @@ class ReechTimelog
                     'started_at' => $started,
                     'finished_at' => $finished,
                 ]);
+                $articleTitle = trim((string) ($s['article_title'] ?? ''));
+                if ($articleTitle !== '') {
+                    $log->setAttribute('reech_article_title', $articleTitle);
+                }
 
                 return $log;
             })

@@ -25,7 +25,6 @@ class OnboardingDock extends Component
             return;
         }
 
-        Onboarding::reopen();
         $this->confirmingSkip = false;
         $this->open = true;
 
@@ -88,8 +87,9 @@ class OnboardingDock extends Component
 
     public function render()
     {
+        $state = OnboardingState::current();
         $groups = OnboardingCatalog::groups();
-        $completed = OnboardingState::current()->completed ?? [];
+        $completed = $state->completed ?? [];
         $total = 0;
         $done = 0;
 
@@ -115,6 +115,7 @@ class OnboardingDock extends Component
             'circumference' => $circumference,
             'offset' => $offset,
             'activeGroup' => OnboardingCatalog::activeGroupKey(),
+            'dismissed' => $state->dismissed_at !== null,
         ]);
     }
 }

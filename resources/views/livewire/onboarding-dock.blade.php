@@ -1,4 +1,5 @@
-<div class="shrink-0">
+<div @class(['shrink-0' => ! $dismissed, 'hidden' => $dismissed])>
+    @unless ($dismissed)
     <button type="button"
             wire:click="toggleOpen"
             class="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-sm text-body transition hover:bg-panel"
@@ -13,6 +14,7 @@
         </svg>
         <span class="relative text-sm leading-none">?</span>
     </button>
+    @endunless
 
     @if ($open)
         @teleport('body')
@@ -100,7 +102,7 @@
                 @if ($confirmingSkip)
                     <div class="absolute inset-0 z-10 flex items-center justify-center bg-black/50 px-6">
                         <div class="w-full max-w-xs rounded-lg border border-white/10 bg-sidebar p-4" role="dialog" aria-labelledby="skip-title">
-                            <p id="skip-title" class="text-sm text-body">Skip hides this list until you open the ? again.</p>
+                            <p id="skip-title" class="text-sm text-body">Skip removes the ? from the header.</p>
                             <div class="mt-4 flex items-center justify-end gap-3">
                                 <button type="button" wire:click="close" class="text-xs text-muted hover:text-body">Cancel</button>
                                 <button type="button" wire:click="skip" class="rounded bg-mark px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-black">Skip</button>

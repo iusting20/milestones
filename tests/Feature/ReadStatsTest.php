@@ -8,6 +8,7 @@ use App\Models\ReadingSession;
 use App\Support\Clock;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ReadStatsTest extends TestCase
@@ -45,5 +46,63 @@ class ReadStatsTest extends TestCase
         $this->assertSame([90, 45], array_column($data['books'], 'minutes'));
         $this->assertSame([['title' => 'A book', 'minutes' => 90, 'startedToday' => false, 'finished' => false]], $data['days'][0]['books']['A']);
         $this->assertSame([], $data['days'][0]['books']['C']);
+    }
+
+    public function test_week_breakdown_includes_reech_content_and_engagement(): void
+    {
+        $tz = Clock::timezone();
+        $monday = Carbon::parse('2026-11-09 00:00', $tz);
+        $now = $monday->copy()->setTime(23, 0);
+
+        config([
+            'reech_timelog.url' => 'https://reech.test/api/work-sessions',
+            'reech_timelog.token' => 'test-reech-token',
+        ]);
+
+        Book::query()->create(['title' => 'The Hacker\'s Renaissance', 'status' => Book::STATUS_FINISHED, 'position' => 1, 'kind' => Book::KIND_ARTICLE]);
+
+        Http::fake([
+            'https://reech.test/api/work-sessions*' => Http::response([
+                'sessions' => [
+                    ['id' => 7, 'type' => 'content', 'article_title' => 'Product manager is a "tool builder"', 'started_at' => $monday->copy()->setTime(9, 0)->toIso8601String(), 'ended_at' => $monday->copy()->setTime(10, 15)->toIso8601String()],
+                    ['id' => 8, 'type' => 'engagement', 'article_title' => 'Product manager is a "tool builder"', 'started_at' => $monday->copy()->setTime(11, 0)->toIso8601String(), 'ended_at' => $monday->copy()->setTime(11, 20)->toIso8601String()],
+                ],
+            ]),
+        ]);
+
+        $data = ReadStats::weekBreakdown($now);
+
+        $this->assertSame(75, $data['days'][0]['minutes']['content']);
+        $this->assertSame(20, $data['days'][0]['minutes']['engagement']);
+        $this->assertSame(75, $data['totals']['content']);
+        $this->assertSame(20, $data['totals']['engagement']);
+        $this->assertSame('Product manager is a "tool builder"', $data['days'][0]['books']['content'][0]['title']);
+        $this->assertSame('Product manager is a "tool builder"', $data['days'][0]['books']['engagement'][0]['title']);
+    }
+
+    public function test_reech_sessions_keep_the_article_title_they_were_logged_with(): void
+    {
+        $tz = Clock::timezone();
+        $monday = Carbon::parse('2026-11-09 00:00', $tz);
+        $tuesday = $monday->copy()->addDay();
+
+        config([
+            'reech_timelog.url' => 'https://reech.test/api/work-sessions',
+            'reech_timelog.token' => 'test-reech-token',
+        ]);
+
+        Http::fake([
+            'https://reech.test/api/work-sessions*' => Http::response([
+                'sessions' => [
+                    ['id' => 7, 'type' => 'content', 'article_title' => 'First piece', 'started_at' => $monday->copy()->setTime(9, 0)->toIso8601String(), 'ended_at' => $monday->copy()->setTime(10, 0)->toIso8601String()],
+                    ['id' => 8, 'type' => 'engagement', 'article_title' => 'Second piece', 'started_at' => $tuesday->copy()->setTime(9, 0)->toIso8601String(), 'ended_at' => $tuesday->copy()->setTime(9, 30)->toIso8601String()],
+                ],
+            ]),
+        ]);
+
+        $data = ReadStats::weekBreakdown($tuesday->copy()->setTime(23, 0));
+
+        $this->assertSame('First piece', $data['days'][0]['books']['content'][0]['title']);
+        $this->assertSame('Second piece', $data['days'][1]['books']['engagement'][0]['title']);
     }
 }

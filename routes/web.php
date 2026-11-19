@@ -9,11 +9,14 @@ use App\Livewire\LinkHub;
 use App\Livewire\Read;
 use App\Livewire\ReadStats;
 use App\Livewire\TaskLogBoard;
+use App\Models\Book;
+use App\Models\BookHighlight;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 Route::get('/login', [LoginController::class, 'create'])->name('login');
 Route::post('/login', [LoginController::class, 'store'])
@@ -44,6 +47,58 @@ Route::get('/read', Read::class)->name('read');
 Route::get('/read/articles', Read::class)->name('read.articles');
 
 Route::get('/read/stats', ReadStats::class)->name('read.stats');
+
+Route::get('/read/highlights/export/{book?}', function (?int $book = null) {
+    $query = BookHighlight::query()
+        ->with('book')
+        ->orderBy('book_id')
+        ->orderBy('page_number')
+        ->orderBy('id');
+
+    $filename = 'reading-highlights.md';
+    if ($book !== null) {
+        $bookModel = Book::query()->findOrFail($book);
+        $query->where('book_id', $bookModel->id);
+        $filename = Str::slug($bookModel->title).'-highlights.md';
+    }
+
+    $grouped = $query->get()->groupBy('book_id');
+    $lines = ['# Reading Highlights', ''];
+
+    foreach ($grouped as $items) {
+        $b = $items->first()?->book;
+        if (! $b) {
+            continue;
+        }
+        $heading = '## '.$b->title.($b->author ? ' — '.$b->author : '');
+        $lines[] = $heading;
+        $lines[] = '';
+
+        foreach ($items as $h) {
+            $lines[] = '> '.$h->quote;
+            $meta = [];
+            if ($h->page_number) {
+                $meta[] = 'p. '.$h->page_number;
+            }
+            foreach ($h->tagList() as $tag) {
+                $meta[] = '#'.$tag;
+            }
+            if ($meta !== []) {
+                $lines[] = '> — *'.implode(' · ', $meta).'*';
+            }
+            if ($h->note) {
+                $lines[] = '';
+                $lines[] = '**Note:** '.$h->note;
+            }
+            $lines[] = '';
+        }
+    }
+
+    return response(implode("\n", $lines), 200, [
+        'Content-Type' => 'text/markdown; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+    ]);
+})->name('read.highlights.export');
 
 Route::post('/read/sessions/stop-active', function (Request $request) {
     $bookId = (int) $request->input('book_id');

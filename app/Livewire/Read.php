@@ -27,6 +27,20 @@ class Read extends Component
 
     public bool $showHighlights = false;
 
+    public bool $showHighlightsVault = false;
+
+    public bool $showDailyReview = false;
+
+    public string $highlightSearch = '';
+
+    public string $highlightTagFilter = '';
+
+    public ?int $editingHighlightId = null;
+
+    public string $editHighlightNote = '';
+
+    public string $editHighlightTags = '';
+
     public string $readerCurrentPage = '';
 
     public bool $showFinished = false;
@@ -195,7 +209,7 @@ class Read extends Component
         $this->dispatch('reader-jump-page', page: $page);
     }
 
-    public function addHighlight(string $quote, ?int $pageNumber = null, string $color = 'yellow', ?string $note = null): void
+    public function addHighlight(string $quote, ?int $pageNumber = null, string $color = 'yellow', ?string $note = null, ?string $tags = null): void
     {
         if (! $this->selectedBookId) {
             return;
@@ -216,7 +230,32 @@ class Read extends Component
             'quote' => mb_substr($cleanQuote, 0, 2000),
             'note' => $cleanNote !== null ? mb_substr($cleanNote, 0, 1000) : null,
             'color' => $safeColor,
+            'tags' => BookHighlight::normalizeTags($tags),
         ]);
+    }
+
+    public function reviewHighlight(int $id, bool $mastered = false): void
+    {
+        $highlight = BookHighlight::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
+
+        $highlight->update([
+            'last_reviewed_at' => Clock::now()->utc(),
+            'is_mastered' => $mastered ? true : $highlight->is_mastered,
+        ]);
+    }
+
+    public function openHighlightedBook(int $bookId, ?int $pageNumber = null): void
+    {
+        $this->showHighlightsVault = false;
+        $this->showDailyReview = false;
+        $this->selectBook($bookId);
+
+        if ($pageNumber !== null && $pageNumber > 0) {
+            $this->jumpToPage($pageNumber);
+        }
     }
 
     public function deleteHighlight(int $id): void
@@ -227,6 +266,60 @@ class Read extends Component
             ->firstOrFail();
 
         $highlight->delete();
+
+        if ($this->editingHighlightId === $id) {
+            $this->editingHighlightId = null;
+            $this->editHighlightNote = '';
+            $this->editHighlightTags = '';
+        }
+    }
+
+    public function startEditHighlight(int $id): void
+    {
+        $highlight = BookHighlight::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
+
+        $this->editingHighlightId = $highlight->id;
+        $this->editHighlightNote = $highlight->note ?? '';
+        $this->editHighlightTags = $highlight->tags ?? '';
+    }
+
+    public function saveEditHighlight(): void
+    {
+        if (! $this->editingHighlightId) {
+            return;
+        }
+
+        $highlight = BookHighlight::query()
+            ->whereKey($this->editingHighlightId)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
+
+        $cleanNote = trim($this->editHighlightNote) !== '' ? mb_substr(trim($this->editHighlightNote), 0, 1000) : null;
+
+        $highlight->update([
+            'note' => $cleanNote,
+            'tags' => BookHighlight::normalizeTags($this->editHighlightTags),
+        ]);
+
+        $this->editingHighlightId = null;
+        $this->editHighlightNote = '';
+        $this->editHighlightTags = '';
+    }
+
+    public function toggleMasteredHighlight(int $id): void
+    {
+        $highlight = BookHighlight::query()
+            ->whereKey($id)
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->firstOrFail();
+
+        $highlight->update([
+            'is_mastered' => ! $highlight->is_mastered,
+            'last_reviewed_at' => Clock::now()->utc(),
+        ]);
     }
 
     public function openPdfUpload(): void
@@ -766,6 +859,51 @@ class Read extends Component
 
         $liveTotals = $this->liveTotals($selected?->id);
 
+        $allCatalogHighlights = BookHighlight::query()
+            ->whereHas('book', fn ($q) => $q->where('kind', $this->kind))
+            ->with('book:id,title,author')
+            ->orderByDesc('id')
+            ->get();
+
+        $totalHighlightsCount = $allCatalogHighlights->count();
+
+        $allHighlightTags = $allCatalogHighlights
+            ->flatMap(fn (BookHighlight $h) => $h->tagList())
+            ->unique()
+            ->sort()
+            ->values();
+
+        $dailyReviewHighlights = $allCatalogHighlights
+            ->reject(fn (BookHighlight $h) => $h->is_mastered)
+            ->sortBy(fn (BookHighlight $h) => $h->last_reviewed_at?->timestamp ?? 0)
+            ->take(5)
+            ->values();
+
+        $vaultHighlights = collect();
+        if ($this->showHighlightsVault) {
+            $search = strtolower(trim($this->highlightSearch));
+            $tagFilter = strtolower(ltrim(trim($this->highlightTagFilter), '#'));
+
+            $vaultHighlights = $allCatalogHighlights->filter(function (BookHighlight $h) use ($search, $tagFilter): bool {
+                if ($tagFilter !== '' && ! in_array($tagFilter, $h->tagList(), true)) {
+                    return false;
+                }
+                if ($search !== '') {
+                    $haystack = strtolower(implode(' ', array_filter([
+                        $h->quote,
+                        $h->note,
+                        $h->tags,
+                        $h->book?->title,
+                        $h->book?->author,
+                    ])));
+
+                    return str_contains($haystack, $search);
+                }
+
+                return true;
+            })->values();
+        }
+
         return view('livewire.read', [
             'books' => $books,
             'finishedBooks' => $finishedBooks,
@@ -773,6 +911,10 @@ class Read extends Component
             'lastReadBookId' => $lastReadBookId,
             'sessions' => $sessions,
             'highlights' => $highlights,
+            'totalHighlightsCount' => $totalHighlightsCount,
+            'allHighlightTags' => $allHighlightTags,
+            'dailyReviewHighlights' => $dailyReviewHighlights,
+            'vaultHighlights' => $vaultHighlights,
             'bookTotals' => $bookTotals,
             'pageTotals' => $pageTotals,
             'liveTotals' => $liveTotals,

@@ -26,12 +26,192 @@
                     <span class="font-semibold text-body tabular-nums" x-text="formatMinutes(todayMinutes())">{{ $pageTotals['todayDuration'] }}</span>
                 </div>
                 <a href="{{ route('read.stats') }}" class="px-1.5 text-sm font-semibold text-mark no-underline hover:opacity-80">Stats</a>
+                @if ($dailyReviewHighlights->isNotEmpty())
+                    <button type="button"
+                            wire:click="$toggle('showDailyReview')"
+                            data-daily-review-toggle
+                            @class([
+                                'rounded border px-2.5 py-1 text-xs transition',
+                                'border-amber-400/50 bg-amber-400/15 text-amber-300' => $showDailyReview,
+                                'border-white/10 text-muted hover:bg-panel hover:text-body' => ! $showDailyReview,
+                            ])>
+                        Daily Review ({{ $dailyReviewHighlights->count() }})
+                    </button>
+                @endif
+                <button type="button"
+                        wire:click="$toggle('showHighlightsVault')"
+                        data-vault-toggle
+                        @class([
+                            'rounded border px-2.5 py-1 text-xs transition',
+                            'border-link/50 bg-link/15 text-link' => $showHighlightsVault,
+                            'border-white/10 text-muted hover:bg-panel hover:text-body' => ! $showHighlightsVault,
+                        ])>
+                    Highlights{{ $totalHighlightsCount > 0 ? ' ('.$totalHighlightsCount.')' : '' }}
+                </button>
                 <button type="button" wire:click="startAddBook"
                         class="rounded border border-white/10 px-2.5 py-1 text-xs text-link hover:bg-panel">
                     + {{ $isArticles ? 'Article' : 'Book' }}
                 </button>
             </div>
         </div>
+
+        {{-- Readwise-Style Daily Highlight Review Panel --}}
+        @if ($showDailyReview)
+            <div data-daily-review-panel class="mb-4 rounded-xl border border-amber-400/20 bg-panel p-4">
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">Daily Highlight Review</span>
+                    <button type="button" wire:click="$set('showDailyReview', false)" class="text-xs text-muted hover:text-body">Close</button>
+                </div>
+                @if ($dailyReviewHighlights->isNotEmpty())
+                    @php $reviewItem = $dailyReviewHighlights->first(); @endphp
+                    <div wire:key="review-card-{{ $reviewItem->id }}" class="rounded-lg border border-white/10 bg-sidebar p-4">
+                        <blockquote class="font-serif text-base leading-relaxed text-body sm:text-lg">“{{ $reviewItem->quote }}”</blockquote>
+                        @if ($reviewItem->note)
+                            <p class="mt-2 text-xs text-muted">{{ $reviewItem->note }}</p>
+                        @endif
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3 text-xs">
+                            <div class="flex flex-wrap items-center gap-2 text-muted">
+                                <span class="font-semibold text-body">{{ $reviewItem->book?->title }}</span>
+                                @if ($reviewItem->book?->author)
+                                    <span>· {{ $reviewItem->book->author }}</span>
+                                @endif
+                                @if ($reviewItem->page_number)
+                                    <span class="font-mono text-faint">p. {{ $reviewItem->page_number }}</span>
+                                @endif
+                                @foreach ($reviewItem->tagList() as $tag)
+                                    <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
+                                @endforeach
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        wire:click="openHighlightedBook({{ $reviewItem->book_id }}, {{ $reviewItem->page_number ?: 1 }})"
+                                        class="rounded border border-white/10 px-2.5 py-1 text-xs text-link hover:bg-panel">
+                                    Open p. {{ $reviewItem->page_number ?: 1 }} →
+                                </button>
+                                <button type="button"
+                                        wire:click="reviewHighlight({{ $reviewItem->id }}, false)"
+                                        class="rounded border border-white/10 px-2.5 py-1 text-xs text-muted hover:text-body">
+                                    Keep reviewing
+                                </button>
+                                <button type="button"
+                                        wire:click="reviewHighlight({{ $reviewItem->id }}, true)"
+                                        class="rounded bg-check px-2.5 py-1 text-xs font-medium text-white hover:opacity-90">
+                                    Mastered ✓
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <p class="py-4 text-center text-sm text-muted">All caught up! Every highlight in your library is mastered.</p>
+                @endif
+            </div>
+        @endif
+
+        {{-- Global Highlights Vault (Search + Tags + Export across all books) --}}
+        @if ($showHighlightsVault)
+            <div data-highlights-vault class="mb-4 rounded-xl border border-white/10 bg-panel p-4">
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Highlights Vault ({{ $vaultHighlights->count() }})</h2>
+                        @if ($totalHighlightsCount > 0)
+                            <a href="{{ route('read.highlights.export') }}"
+                               class="rounded border border-white/10 bg-sidebar px-2 py-0.5 text-[11px] text-link no-underline hover:border-link/40">
+                                ↓ Export .md
+                            </a>
+                        @endif
+                    </div>
+                    <button type="button" wire:click="$set('showHighlightsVault', false)" class="text-xs text-muted hover:text-body">Close</button>
+                </div>
+
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input type="text"
+                           wire:model.live.debounce.200ms="highlightSearch"
+                           placeholder="Search quotes, notes, books, or #tags…"
+                           class="flex-1 rounded border border-white/10 bg-sidebar px-3 py-1.5 text-xs text-body placeholder:text-faint focus:border-link focus:outline-none" />
+                    @if ($highlightTagFilter !== '')
+                        <button type="button" wire:click="$set('highlightTagFilter', '')"
+                                class="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-300">
+                            #{{ $highlightTagFilter }} ✕
+                        </button>
+                    @endif
+                </div>
+
+                @if ($allHighlightTags->isNotEmpty())
+                    <div class="mb-3 flex flex-wrap gap-1.5">
+                        @foreach ($allHighlightTags as $tag)
+                            <button type="button"
+                                    wire:click="$set('highlightTagFilter', '{{ $highlightTagFilter === $tag ? '' : $tag }}')"
+                                    @class([
+                                        'rounded px-2 py-0.5 text-[11px] transition',
+                                        'bg-amber-400/20 text-amber-300 border border-amber-400/40' => $highlightTagFilter === $tag,
+                                        'bg-sidebar text-muted border border-white/10 hover:text-body' => $highlightTagFilter !== $tag,
+                                    ])>
+                                #{{ $tag }}
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+
+                <ul class="max-h-96 space-y-2 overflow-y-auto pr-1">
+                    @forelse ($vaultHighlights as $vh)
+                        @php
+                            $vAccent = match ($vh->color) {
+                                'green' => 'border-l-emerald-400',
+                                'blue' => 'border-l-sky-400',
+                                'rose' => 'border-l-rose-400',
+                                default => 'border-l-amber-300',
+                            };
+                        @endphp
+                        <li wire:key="vault-hl-{{ $vh->id }}" class="rounded border border-white/10 border-l-2 {{ $vAccent }} bg-sidebar p-3 text-xs">
+                            <blockquote class="font-serif text-sm leading-relaxed text-body">“{{ $vh->quote }}”</blockquote>
+                            @if ($editingHighlightId === $vh->id)
+                                <form wire:submit="saveEditHighlight" class="mt-2 space-y-1.5">
+                                    <input type="text" wire:model="editHighlightNote" placeholder="Note (optional)"
+                                           class="w-full rounded border border-white/10 bg-panel px-2 py-1 text-xs text-body focus:border-link focus:outline-none" />
+                                    <input type="text" wire:model="editHighlightTags" placeholder="#tags (comma separated)"
+                                           class="w-full rounded border border-white/10 bg-panel px-2 py-1 text-xs text-amber-200 focus:border-link focus:outline-none" />
+                                    <div class="flex gap-2">
+                                        <button type="submit" class="rounded bg-check px-2 py-0.5 text-[11px] font-medium text-white">Save</button>
+                                        <button type="button" wire:click="$set('editingHighlightId', null)" class="text-[11px] text-muted hover:text-body">Cancel</button>
+                                    </div>
+                                </form>
+                            @else
+                                @if ($vh->note)
+                                    <p class="mt-1 text-muted">{{ $vh->note }}</p>
+                                @endif
+                            @endif
+                            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <span class="font-semibold text-body">{{ $vh->book?->title }}</span>
+                                    @if ($vh->page_number)
+                                        <button type="button"
+                                                wire:click="openHighlightedBook({{ $vh->book_id }}, {{ $vh->page_number }})"
+                                                class="font-mono text-link hover:underline">p. {{ $vh->page_number }}</button>
+                                    @endif
+                                    @foreach ($vh->tagList() as $tag)
+                                        <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
+                                    @endforeach
+                                    @if ($vh->is_mastered)
+                                        <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">mastered</span>
+                                    @endif
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" wire:click="toggleMasteredHighlight({{ $vh->id }})" class="text-muted hover:text-body">
+                                        {{ $vh->is_mastered ? 'unmaster' : 'master' }}
+                                    </button>
+                                    <button type="button" wire:click="startEditHighlight({{ $vh->id }})" class="text-muted hover:text-body">edit</button>
+                                    <button type="button" wire:click="deleteHighlight({{ $vh->id }})" class="text-muted hover:text-red-400">remove</button>
+                                </div>
+                            </div>
+                        </li>
+                    @empty
+                        <li class="rounded border border-dashed border-white/15 py-6 text-center text-xs text-muted">
+                            No matching highlights yet. Open any book and drag-select a passage to save one.
+                        </li>
+                    @endforelse
+                </ul>
+            </div>
+        @endif
 
         @if ($addingBook)
             <form wire:submit="addBook"
@@ -253,7 +433,11 @@
                  x-on:reader-jump-page.window="goToPage($event.detail.page)"
                  x-on:keydown.window="handleKey($event)"
                  :class="readMode
-                     ? (theme === 'dark' ? 'fixed inset-0 z-50 flex flex-col bg-[#0f0f11] p-3 sm:p-4 overflow-hidden' : 'fixed inset-0 z-50 flex flex-col bg-[#e8e4dc] p-3 sm:p-4 overflow-hidden')
+                     ? (theme === 'dark'
+                         ? 'fixed inset-0 z-50 flex flex-col bg-[#0f0f11] p-3 sm:p-4 overflow-hidden'
+                         : (theme === 'sepia'
+                             ? 'fixed inset-0 z-50 flex flex-col bg-[#efe6d1] p-3 sm:p-4 overflow-hidden'
+                             : 'fixed inset-0 z-50 flex flex-col bg-[#e8e4dc] p-3 sm:p-4 overflow-hidden'))
                      : 'w-full min-w-0 rounded-xl border border-zinc-800 bg-panel/40 p-3 sm:p-4'">
             {{-- Single-Row Slim Reading Bar (Title + Bookmark Page + Dark/Light + Read Mode + Highlights + Timer) --}}
             <div :class="readMode
@@ -321,14 +505,15 @@
                     @endunless
 
                     @if ($selected->pdfUrl())
-                        {{-- Dark / Light Reading Mode Toggle (defaults to Dark) --}}
+                        {{-- Dark / Sepia / Light Reading Theme Cycle (defaults to Dark) --}}
                         <button type="button"
                                 x-on:click="toggleTheme()"
                                 data-theme-toggle
                                 class="rounded border border-white/10 bg-panel px-2 py-1 text-xs text-body transition hover:border-zinc-500"
-                                title="Toggle Dark / Light reading mode">
-                            <span x-show="theme === 'dark'">☀ Light</span>
-                            <span x-show="theme === 'light'" x-cloak>🌙 Dark</span>
+                                title="Cycle Dark / Sepia / Light reading theme">
+                            <span x-show="theme === 'dark'">🌙 Dark</span>
+                            <span x-show="theme === 'sepia'" x-cloak>📜 Sepia</span>
+                            <span x-show="theme === 'light'" x-cloak>☀ Light</span>
                         </button>
 
                         {{-- Adobe-style Liquid / Reflow Read Mode Toggle --}}
@@ -342,10 +527,40 @@
                             <span x-show="readMode" x-cloak>Page View</span>
                         </button>
 
-                        {{-- Font size controls (visible in Liquid Read Mode) --}}
-                        <div x-show="readMode" x-cloak class="flex items-center gap-0.5 rounded border border-white/10 bg-panel px-1 py-0.5 text-xs text-muted">
-                            <button type="button" x-on:click="smallerFont()" class="px-1.5 py-0.5 hover:text-body" title="Smaller text">A-</button>
-                            <button type="button" x-on:click="largerFont()" class="px-1.5 py-0.5 hover:text-body" title="Larger text">A+</button>
+                        {{-- Instapaper Typography + Speed Read + Listen Controls (visible in Liquid Read Mode) --}}
+                        <div x-show="readMode" x-cloak class="flex flex-wrap items-center gap-1">
+                            <div class="flex items-center gap-0.5 rounded border border-white/10 bg-panel px-1 py-0.5 text-xs text-muted">
+                                <button type="button" x-on:click="smallerFont()" class="px-1.5 py-0.5 hover:text-body" title="Smaller text">A-</button>
+                                <button type="button" x-on:click="largerFont()" class="px-1.5 py-0.5 hover:text-body" title="Larger text">A+</button>
+                                <span class="h-3 w-px bg-white/10" aria-hidden="true"></span>
+                                <button type="button" x-on:click="cycleFont()" class="px-1.5 py-0.5 text-[11px] capitalize hover:text-body" title="Switch font (Serif / Sans / Mono)" x-text="readFont"></button>
+                                <button type="button" x-on:click="cycleWidth()" class="px-1.5 py-0.5 text-[11px] capitalize hover:text-body" title="Column width" x-text="readWidth"></button>
+                            </div>
+
+                            <button type="button"
+                                    x-on:click="toggleSpeedRead()"
+                                    data-speed-read-toggle
+                                    :class="speedRead.open ? 'border-amber-400/50 bg-amber-400/15 text-amber-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                    class="rounded border px-2 py-1 text-xs transition"
+                                    title="Instapaper-style RSVP Speed Reader">
+                                ⚡ Speed
+                            </button>
+
+                            <button type="button"
+                                    x-on:click="toggleSpeech()"
+                                    data-tts-toggle
+                                    :class="tts.speaking ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                    class="rounded border px-2 py-1 text-xs transition"
+                                    title="Read aloud (Text-to-Speech)">
+                                <span x-show="!tts.speaking">🔊 Listen</span>
+                                <span x-show="tts.speaking" x-cloak>⏹ Stop</span>
+                            </button>
+                            <button type="button"
+                                    x-show="tts.speaking"
+                                    x-cloak
+                                    x-on:click="cycleSpeechRate()"
+                                    class="rounded border border-white/10 bg-panel px-1.5 py-1 text-[11px] font-mono text-emerald-300"
+                                    x-text="tts.rate + 'x'"></button>
                         </div>
                     @endif
 
@@ -552,7 +767,9 @@
                         <div x-show="!fallbackIframe"
                              :class="[
                                  readMode ? 'h-full' : 'h-[84vh]',
-                                 theme === 'dark' ? 'bg-[#111114] border-zinc-800' : 'bg-[#e6e2da] border-zinc-300',
+                                 theme === 'dark'
+                                     ? 'bg-[#111114] border-zinc-800'
+                                     : (theme === 'sepia' ? 'bg-[#f4ecd8] border-[#d8cbb0]' : 'bg-[#e6e2da] border-zinc-300'),
                              ]"
                              class="relative flex flex-col items-center overflow-auto rounded-lg border p-3 sm:p-6">
                             {{-- Subtle zoom + page bar inside viewport (Page View only) --}}
@@ -576,18 +793,67 @@
                             {{-- Loading indicator --}}
                             <div x-show="loading" class="py-24 text-sm text-muted">Loading page…</div>
 
+                            {{-- Instapaper-Style RSVP Speed Reader Overlay (in Read Mode) --}}
+                            <div x-show="readMode && speedRead.open && !loading"
+                                 x-cloak
+                                 class="my-auto flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-zinc-950/90 px-6 py-10 text-center shadow-2xl">
+                                <div class="flex w-full items-center justify-between text-xs text-zinc-400">
+                                    <span>RSVP Speed Reader · p.<span x-text="page"></span></span>
+                                    <span class="font-mono tabular-nums" x-text="(speedRead.index + 1) + ' / ' + Math.max(1, speedRead.words.length)"></span>
+                                </div>
+
+                                {{-- Fixed ORP Reticle + Word Display --}}
+                                <div class="relative flex h-24 w-full items-center justify-center border-y border-zinc-800 font-serif text-4xl tracking-wide sm:text-5xl">
+                                    <span class="pointer-events-none absolute top-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-rose-500/70"></span>
+                                    <span class="pointer-events-none absolute bottom-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-rose-500/70"></span>
+                                    <span class="flex w-full items-baseline justify-center">
+                                        <span class="w-1/2 text-right text-zinc-100" x-text="speedWordParts().left"></span>
+                                        <span class="font-bold text-rose-400" x-text="speedWordParts().pivot"></span>
+                                        <span class="w-1/2 text-left text-zinc-100" x-text="speedWordParts().right"></span>
+                                    </span>
+                                </div>
+
+                                {{-- Progress Bar --}}
+                                <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
+                                    <div class="h-full bg-amber-400 transition-all duration-100"
+                                         :style="`width: ${speedRead.words.length ? Math.round(((speedRead.index + 1) / speedRead.words.length) * 100) : 0}%;`"></div>
+                                </div>
+
+                                {{-- Controls & WPM Slider --}}
+                                <div class="flex flex-wrap items-center justify-center gap-3 text-xs">
+                                    <button type="button" x-on:click="toggleSpeedPlay()"
+                                            class="rounded bg-amber-400 px-4 py-1.5 font-semibold text-zinc-950 hover:bg-amber-300">
+                                        <span x-show="!speedRead.playing">▶ Play (Space)</span>
+                                        <span x-show="speedRead.playing" x-cloak>⏸ Pause</span>
+                                    </button>
+                                    <button type="button" x-on:click="restartSpeedRead()"
+                                            class="rounded border border-zinc-700 px-2.5 py-1.5 text-zinc-300 hover:border-zinc-500">↺ Restart</button>
+                                    <label class="flex items-center gap-2 text-zinc-300">
+                                        <input type="range" min="180" max="650" step="20" x-model.number="speedRead.wpm" x-on:input="updateWpm()" class="w-28 accent-amber-400" />
+                                        <span class="w-16 font-mono tabular-nums" x-text="speedRead.wpm + ' WPM'"></span>
+                                    </label>
+                                    <button type="button" x-on:click="closeSpeedRead()" class="text-zinc-400 hover:text-zinc-100">Close</button>
+                                </div>
+                            </div>
+
                             {{-- Adobe Liquid / Reflow Read Mode (Fits screen cleanly, crisp serif typography, native selection highlighting) --}}
-                            <div x-show="readMode && !loading"
+                            <div x-show="readMode && !speedRead.open && !loading"
                                  x-cloak
                                  x-ref="reflowWrap"
                                  x-on:mouseup="onTextSelect($event, 'reflow')"
                                  x-on:touchend="onTextSelect($event, 'reflow')"
-                                 :class="theme === 'dark' ? 'text-[#e7e2d8]' : 'text-[#1c1b18]'"
-                                 class="relative mx-auto w-full max-w-2xl px-3 py-4 sm:px-8 sm:py-6">
-                                <article class="font-serif leading-[1.85] tracking-[0.01em] selection:bg-amber-400/35"
+                                 :class="[
+                                     theme === 'dark' ? 'text-[#e7e2d8]' : (theme === 'sepia' ? 'text-[#3b2f20]' : 'text-[#1c1b18]'),
+                                     readWidth === 'narrow' ? 'max-w-lg' : (readWidth === 'wide' ? 'max-w-4xl' : 'max-w-2xl'),
+                                 ]"
+                                 class="relative mx-auto w-full px-3 py-4 sm:px-8 sm:py-6">
+                                <article :class="[
+                                             readFont === 'sans' ? 'font-sans' : (readFont === 'mono' ? 'font-mono' : 'font-serif'),
+                                             'leading-[1.85] tracking-[0.01em] selection:bg-amber-400/35',
+                                         ]"
                                          :style="`font-size: ${readFontSize}px;`">
                                     <template x-for="(block, idx) in reflowBlocks" :key="idx">
-                                        <div>
+                                        <div :class="tts.speaking && tts.blockIndex === idx ? 'rounded-lg bg-emerald-400/10 px-2 -mx-2 transition-colors' : ''">
                                             <h3 x-show="block.type === 'heading'"
                                                 x-html="renderHighlightedHtml(block.text)"
                                                 class="mb-4 mt-6 font-bold leading-snug tracking-tight"
@@ -621,7 +887,12 @@
                                            x-model="selection.note"
                                            x-on:keydown.enter.prevent="saveSelectionHighlight()"
                                            placeholder="Add a note (optional)…"
-                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                                           class="mb-1.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                                    <input type="text"
+                                           x-model="selection.tags"
+                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                                           placeholder="#tags (e.g. stoicism, strategy)"
+                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
                                     <div class="flex items-center justify-between">
                                         <button type="button" x-on:click="clearSelection()" class="text-[11px] text-zinc-400 hover:text-zinc-200">Cancel</button>
                                         <button type="button" x-on:click="saveSelectionHighlight()"
@@ -663,7 +934,12 @@
                                            x-model="selection.note"
                                            x-on:keydown.enter.prevent="saveSelectionHighlight()"
                                            placeholder="Add a note (optional)…"
-                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                                           class="mb-1.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                                    <input type="text"
+                                           x-model="selection.tags"
+                                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                                           placeholder="#tags (e.g. stoicism, strategy)"
+                                           class="mb-2 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
                                     <div class="flex items-center justify-between">
                                         <button type="button" x-on:click="clearSelection()" class="text-[11px] text-zinc-400 hover:text-zinc-200">Cancel</button>
                                         <button type="button" x-on:click="saveSelectionHighlight()"
@@ -716,12 +992,27 @@
                     <aside data-highlights-panel
                            :class="readMode ? 'h-full w-80 shrink-0 overflow-y-auto' : 'max-h-[84vh] w-full shrink-0 overflow-y-auto lg:w-80'"
                            class="rounded-lg border border-zinc-800 bg-sidebar p-3.5">
-                        <div class="mb-3 flex items-center justify-between">
+                        <div class="mb-3 flex items-center justify-between gap-2">
                             <h3 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                                 Highlights ({{ $highlights->count() }})
                             </h3>
-                            <button type="button" wire:click="$set('showHighlights', false)"
-                                    class="text-xs text-muted hover:text-body">Close</button>
+                            <div class="flex items-center gap-2">
+                                @if ($highlights->isNotEmpty())
+                                    <button type="button"
+                                            x-on:click="copyHighlightsMarkdown(@js(route('read.highlights.export', $selected->id)))"
+                                            class="rounded border border-white/10 bg-panel px-1.5 py-0.5 text-[10px] text-muted hover:border-link/40 hover:text-body"
+                                            title="Copy Markdown to clipboard">
+                                        Copy MD
+                                    </button>
+                                    <a href="{{ route('read.highlights.export', $selected->id) }}"
+                                       class="rounded border border-white/10 bg-panel px-1.5 py-0.5 text-[10px] text-link no-underline hover:border-link/40"
+                                       title="Download Markdown for Obsidian / Notion">
+                                        ↓ .md
+                                    </a>
+                                @endif
+                                <button type="button" wire:click="$set('showHighlights', false)"
+                                        class="text-xs text-muted hover:text-body">Close</button>
+                            </div>
                         </div>
                         <ul class="space-y-2.5">
                             @forelse ($highlights as $highlight)
@@ -754,6 +1045,13 @@
                                     <blockquote class="font-serif text-sm leading-relaxed text-body">“{{ $highlight->quote }}”</blockquote>
                                     @if ($highlight->note)
                                         <p class="mt-1.5 border-t border-white/5 pt-1.5 text-[11px] text-muted">{{ $highlight->note }}</p>
+                                    @endif
+                                    @if ($highlight->tagList() !== [])
+                                        <div class="mt-1.5 flex flex-wrap gap-1">
+                                            @foreach ($highlight->tagList() as $tag)
+                                                <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
+                                            @endforeach
+                                        </div>
                                     @endif
                                 </li>
                             @empty
@@ -975,14 +1273,37 @@
                 readFontSize: (() => {
                     try { return Number(localStorage.getItem('read-font-size')) || 20; } catch (e) { return 20; }
                 })(),
+                readFont: (() => {
+                    try { return localStorage.getItem('read-font') || 'serif'; } catch (e) { return 'serif'; }
+                })(),
+                readWidth: (() => {
+                    try { return localStorage.getItem('read-width') || 'medium'; } catch (e) { return 'medium'; }
+                })(),
                 theme: (() => {
                     try { return localStorage.getItem('read-theme') || 'dark'; } catch (e) { return 'dark'; }
                 })(),
+                speedRead: {
+                    open: false,
+                    playing: false,
+                    words: [],
+                    index: 0,
+                    wpm: (() => {
+                        try { return Number(localStorage.getItem('read-wpm')) || 320; } catch (e) { return 320; }
+                    })(),
+                    timer: null,
+                },
+                tts: {
+                    speaking: false,
+                    blockIndex: -1,
+                    rate: (() => {
+                        try { return Number(localStorage.getItem('read-tts-rate')) || 1; } catch (e) { return 1; }
+                    })(),
+                },
                 stopUrl: cfg.stopUrl,
                 activeBookId: cfg.activeBookId,
                 highlights: cfg.highlights || [],
                 toast: '',
-                selection: { open: false, text: '', color: 'yellow', note: '', x: 0, y: 0 },
+                selection: { open: false, text: '', color: 'yellow', note: '', tags: '', x: 0, y: 0 },
                 _pdfDoc: null,
                 _pdfjs: null,
                 _rendering: false,
@@ -1004,11 +1325,15 @@
                 },
 
                 toggleTheme() {
-                    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                    const order = ['dark', 'sepia', 'light'];
+                    const next = order[(order.indexOf(this.theme) + 1) % order.length];
+                    this.theme = next;
                     try { localStorage.setItem('read-theme', this.theme); } catch (e) {}
                 },
 
                 toggleReadMode() {
+                    this.stopSpeech();
+                    this.closeSpeedRead();
                     this.readMode = !this.readMode;
                     this.clearSelection();
                     if (!this.readMode && this._pdfDoc) {
@@ -1024,6 +1349,162 @@
                 smallerFont() {
                     this.readFontSize = Math.max(14, this.readFontSize - 2);
                     try { localStorage.setItem('read-font-size', String(this.readFontSize)); } catch (e) {}
+                },
+
+                cycleFont() {
+                    const order = ['serif', 'sans', 'mono'];
+                    this.readFont = order[(order.indexOf(this.readFont) + 1) % order.length];
+                    try { localStorage.setItem('read-font', this.readFont); } catch (e) {}
+                },
+
+                cycleWidth() {
+                    const order = ['narrow', 'medium', 'wide'];
+                    this.readWidth = order[(order.indexOf(this.readWidth) + 1) % order.length];
+                    try { localStorage.setItem('read-width', this.readWidth); } catch (e) {}
+                },
+
+                toggleSpeedRead() {
+                    if (this.speedRead.open) {
+                        this.closeSpeedRead();
+                        return;
+                    }
+                    this.stopSpeech();
+                    this.syncSpeedWords();
+                    this.speedRead.open = true;
+                },
+
+                syncSpeedWords() {
+                    const allText = (this.reflowBlocks || []).map((b) => b.text).join(' ');
+                    this.speedRead.words = allText.split(/\s+/).filter(Boolean);
+                    this.speedRead.index = 0;
+                },
+
+                speedWordParts() {
+                    const w = this.speedRead.words[this.speedRead.index] || 'Ready';
+                    const len = w.length;
+                    const pivotIdx = len <= 1 ? 0 : (len <= 5 ? 1 : (len <= 9 ? 2 : (len <= 13 ? 3 : 4)));
+                    return {
+                        left: w.slice(0, pivotIdx),
+                        pivot: w.charAt(pivotIdx),
+                        right: w.slice(pivotIdx + 1),
+                    };
+                },
+
+                toggleSpeedPlay() {
+                    if (this.speedRead.playing) {
+                        this.pauseSpeedRead();
+                        return;
+                    }
+                    if (!this.speedRead.words.length) {
+                        this.syncSpeedWords();
+                    }
+                    if (!this.speedRead.words.length) return;
+                    this.speedRead.playing = true;
+                    this.scheduleSpeedTick();
+                },
+
+                scheduleSpeedTick() {
+                    clearTimeout(this.speedRead.timer);
+                    if (!this.speedRead.playing) return;
+                    const word = this.speedRead.words[this.speedRead.index] || '';
+                    const baseMs = Math.max(80, Math.round(60000 / Math.max(150, this.speedRead.wpm)));
+                    const pauseMult = /[.!?]$/.test(word) ? 1.85 : (/[,;:]$/.test(word) ? 1.35 : 1);
+                    this.speedRead.timer = setTimeout(async () => {
+                        if (!this.speedRead.playing) return;
+                        if (this.speedRead.index < this.speedRead.words.length - 1) {
+                            this.speedRead.index++;
+                            this.scheduleSpeedTick();
+                        } else if (this.numPages && this.page < this.numPages) {
+                            this.page++;
+                            this.$wire.set('readerCurrentPage', String(this.page), false);
+                            this.$wire.saveCurrentPage();
+                            await this.renderPage(this.page);
+                            this.syncSpeedWords();
+                            this.scheduleSpeedTick();
+                        } else {
+                            this.pauseSpeedRead();
+                        }
+                    }, Math.round(baseMs * pauseMult));
+                },
+
+                pauseSpeedRead() {
+                    this.speedRead.playing = false;
+                    clearTimeout(this.speedRead.timer);
+                    this.speedRead.timer = null;
+                },
+
+                restartSpeedRead() {
+                    this.pauseSpeedRead();
+                    this.speedRead.index = 0;
+                },
+
+                closeSpeedRead() {
+                    this.pauseSpeedRead();
+                    this.speedRead.open = false;
+                },
+
+                updateWpm() {
+                    try { localStorage.setItem('read-wpm', String(this.speedRead.wpm)); } catch (e) {}
+                },
+
+                toggleSpeech() {
+                    if (this.tts.speaking) {
+                        this.stopSpeech();
+                        return;
+                    }
+                    if (!('speechSynthesis' in window) || !this.reflowBlocks.length) return;
+                    this.closeSpeedRead();
+                    this.tts.speaking = true;
+                    this.speakBlock(0);
+                },
+
+                speakBlock(idx) {
+                    if (!this.tts.speaking || idx >= this.reflowBlocks.length) {
+                        this.stopSpeech();
+                        return;
+                    }
+                    window.speechSynthesis.cancel();
+                    this.tts.blockIndex = idx;
+                    const utter = new SpeechSynthesisUtterance(this.reflowBlocks[idx].text);
+                    utter.rate = this.tts.rate;
+                    utter.onend = () => {
+                        if (this.tts.speaking) {
+                            this.speakBlock(idx + 1);
+                        }
+                    };
+                    utter.onerror = () => {
+                        this.stopSpeech();
+                    };
+                    window.speechSynthesis.speak(utter);
+                },
+
+                stopSpeech() {
+                    this.tts.speaking = false;
+                    this.tts.blockIndex = -1;
+                    try { window.speechSynthesis?.cancel(); } catch (e) {}
+                },
+
+                cycleSpeechRate() {
+                    const rates = [1, 1.25, 1.5, 2];
+                    this.tts.rate = rates[(rates.indexOf(this.tts.rate) + 1) % rates.length];
+                    try { localStorage.setItem('read-tts-rate', String(this.tts.rate)); } catch (e) {}
+                    if (this.tts.speaking && this.tts.blockIndex >= 0) {
+                        this.speakBlock(this.tts.blockIndex);
+                    }
+                },
+
+                async copyHighlightsMarkdown(url) {
+                    try {
+                        const res = await fetch(url, { credentials: 'same-origin' });
+                        if (!res.ok) return;
+                        const md = await res.text();
+                        await navigator.clipboard.writeText(md);
+                        this.toast = 'Copied Markdown to clipboard';
+                        setTimeout(() => { this.toast = ''; }, 2400);
+                    } catch (e) {
+                        this.toast = 'Could not copy — use ↓ .md';
+                        setTimeout(() => { this.toast = ''; }, 2400);
+                    }
                 },
 
                 buildReflowBlocks(textContent, pageHeightPt) {
@@ -1292,6 +1773,7 @@
                     this.selection.open = false;
                     this.selection.text = '';
                     this.selection.note = '';
+                    this.selection.tags = '';
                     try { window.getSelection()?.removeAllRanges(); } catch (e) {}
                 },
 
@@ -1300,10 +1782,11 @@
                     const quote = this.selection.text;
                     const color = this.selection.color;
                     const note = this.selection.note;
+                    const tags = this.selection.tags;
                     const pageNum = this.page;
 
                     this.clearSelection();
-                    await this.$wire.addHighlight(quote, pageNum, color, note);
+                    await this.$wire.addHighlight(quote, pageNum, color, note, tags);
                     this.highlights.push({ page: pageNum, quote, color });
                     this.renderPage(this.page);
 
@@ -1315,12 +1798,22 @@
                     const tag = document.activeElement?.tagName;
                     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
 
+                    if (e.key === ' ' && this.speedRead.open) {
+                        e.preventDefault();
+                        this.toggleSpeedPlay();
+                        return;
+                    }
+
                     if (e.key === 'Escape') {
                         if (this.selection.open) {
                             this.clearSelection();
+                        } else if (this.speedRead.open) {
+                            this.closeSpeedRead();
                         } else if (this.readMode) {
+                            this.stopSpeech();
                             this.readMode = false;
                         } else if (this.$wire.readerOpen) {
+                            this.stopSpeech();
                             this.$wire.closeReader();
                         }
                         return;

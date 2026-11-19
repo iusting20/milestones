@@ -348,4 +348,147 @@ class ReadBookShelfReaderTest extends TestCase
 
         $this->assertDatabaseMissing('book_highlights', ['id' => $highlight->id]);
     }
+
+    public function test_highlights_vault_tags_daily_review_and_markdown_export_work(): void
+    {
+        $book = Book::query()->create([
+            'title' => 'Letters from a Stoic',
+            'author' => 'Seneca',
+            'total_pages' => 440,
+            'pdf_path' => 'books/pdfs/seneca-moral-letters.pdf',
+            'status' => Book::STATUS_READING,
+            'position' => 1,
+        ]);
+
+        Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->assertSeeHtml('data-speed-read-toggle')
+            ->assertSeeHtml('data-tts-toggle')
+            ->call('addHighlight', 'We suffer more often in imagination than in reality.', 28, 'green', 'Classic Seneca', '#Stoicism, Anxiety');
+
+        $highlight = BookHighlight::query()->where('book_id', $book->id)->first();
+        $this->assertNotNull($highlight);
+        $this->assertSame(['stoicism', 'anxiety'], $highlight->tagList());
+
+        // Global Highlights Vault search + tag filter + openHighlightedBook
+        Livewire::test(Read::class)
+            ->set('showHighlightsVault', true)
+            ->assertSee('We suffer more often in imagination than in reality.')
+            ->set('highlightTagFilter', 'stoicism')
+            ->assertSee('We suffer more often in imagination than in reality.')
+            ->set('highlightSearch', 'nonexistent')
+            ->assertDontSee('We suffer more often in imagination than in reality.')
+            ->set('highlightSearch', 'imagination')
+            ->assertSee('We suffer more often in imagination than in reality.')
+            ->call('openHighlightedBook', $book->id, 28)
+            ->assertSet('selectedBookId', $book->id)
+            ->assertSet('readerOpen', true)
+            ->assertSet('readerCurrentPage', '28');
+
+        // Daily Review: keep reviewing, then master
+        Livewire::test(Read::class)
+            ->set('showDailyReview', true)
+            ->assertSee('Daily Highlight Review')
+            ->assertSee('We suffer more often in imagination than in reality.')
+            ->call('reviewHighlight', $highlight->id, false);
+
+        $this->assertNotNull($highlight->fresh()->last_reviewed_at);
+        $this->assertFalse($highlight->fresh()->is_mastered);
+
+        Livewire::test(Read::class)
+            ->set('showDailyReview', true)
+            ->call('reviewHighlight', $highlight->id, true);
+
+        $this->assertTrue($highlight->fresh()->is_mastered);
+
+        // Markdown Export (per book + full library)
+        $this->get(route('read.highlights.export', $book->id))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/markdown; charset=UTF-8')
+            ->assertSee('## Letters from a Stoic — Seneca', false)
+            ->assertSee('> We suffer more often in imagination than in reality.', false)
+            ->assertSee('#stoicism', false)
+            ->assertSee('**Note:** Classic Seneca', false);
+    }
+
+    public function test_unauthenticated_export_and_beacon_routes_redirect_to_login(): void
+    {
+        $this->authenticate = false;
+        $this->flushSession();
+
+        $this->get(route('read.highlights.export'))
+            ->assertRedirect(route('login'))
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+
+        $this->post(route('read.sessions.stop-active'), ['book_id' => 1])
+            ->assertRedirect(route('login'))
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
+    public function test_highlight_editing_unmastering_sanitization_and_full_library_export(): void
+    {
+        $bookA = Book::query()->create(['title' => 'Meditations', 'author' => 'Marcus Aurelius', 'status' => Book::STATUS_READING, 'position' => 1]);
+        $bookB = Book::query()->create(['title' => 'The Republic', 'author' => 'Plato', 'status' => Book::STATUS_READING, 'position' => 2]);
+
+        // Empty quote rejected, invalid color sanitized to yellow
+        Livewire::test(Read::class, ['selectedBookId' => $bookA->id])
+            ->call('addHighlight', '   ', 1, 'yellow')
+            ->call('addHighlight', 'Waste no more time arguing.', 12, 'neon-invalid', 'Original note', '#Stoic, #Action');
+
+        $this->assertSame(1, BookHighlight::query()->count());
+        $hlA = BookHighlight::query()->firstOrFail();
+        $this->assertSame('yellow', $hlA->color);
+
+        // Edit note & tags, master, then unmaster
+        Livewire::test(Read::class)
+            ->set('showHighlightsVault', true)
+            ->call('startEditHighlight', $hlA->id)
+            ->set('editHighlightNote', 'Updated reflection')
+            ->set('editHighlightTags', '#discipline, #focus')
+            ->call('saveEditHighlight')
+            ->call('toggleMasteredHighlight', $hlA->id);
+
+        $hlA->refresh();
+        $this->assertSame('Updated reflection', $hlA->note);
+        $this->assertSame(['discipline', 'focus'], $hlA->tagList());
+        $this->assertTrue($hlA->is_mastered);
+
+        Livewire::test(Read::class)
+            ->call('toggleMasteredHighlight', $hlA->id);
+        $this->assertFalse($hlA->fresh()->is_mastered);
+
+        // Add highlight on second book and verify full-library Markdown export
+        BookHighlight::query()->create([
+            'book_id' => $bookB->id,
+            'page_number' => 77,
+            'quote' => 'Justice is doing one’s own work.',
+            'color' => 'blue',
+            'tags' => 'justice',
+        ]);
+
+        $this->get(route('read.highlights.export'))
+            ->assertOk()
+            ->assertSee('## Meditations — Marcus Aurelius', false)
+            ->assertSee('## The Republic — Plato', false)
+            ->assertSee('> Waste no more time arguing.', false)
+            ->assertSee('> Justice is doing one’s own work.', false);
+    }
+
+    public function test_article_and_book_highlights_are_strictly_isolated(): void
+    {
+        $book = Book::query()->create(['title' => 'Book One', 'kind' => Book::KIND_BOOK, 'status' => Book::STATUS_READING, 'position' => 1]);
+        $article = Book::query()->create(['title' => 'Article One', 'kind' => Book::KIND_ARTICLE, 'status' => Book::STATUS_READING, 'position' => 1]);
+
+        BookHighlight::query()->create(['book_id' => $book->id, 'page_number' => 5, 'quote' => 'Book quote only', 'color' => 'yellow']);
+        BookHighlight::query()->create(['book_id' => $article->id, 'page_number' => 1, 'quote' => 'Article quote only', 'color' => 'green']);
+
+        Livewire::test(Read::class)
+            ->set('showHighlightsVault', true)
+            ->assertSee('Book quote only')
+            ->assertDontSee('Article quote only');
+
+        Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE])
+            ->set('showHighlightsVault', true)
+            ->assertSee('Article quote only')
+            ->assertDontSee('Book quote only');
+    }
 }

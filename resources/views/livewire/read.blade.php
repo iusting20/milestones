@@ -1,88 +1,365 @@
-<div class="mx-auto flex max-w-6xl flex-col gap-6 px-3 py-6 sm:px-4 lg:flex-row"
+<div class="mx-auto flex max-w-6xl flex-col gap-6 px-3 py-6 sm:px-4"
      x-data="readLiveTotals(@js($liveTotals))"
      x-init="start()"
-     x-on:read-live-totals.window="applyTotals($event.detail.totals)">
-    {{-- Books sidebar --}}
-    <aside class="w-full shrink-0 lg:w-72">
-        <div class="mb-4 grid grid-cols-2 gap-2 text-xs text-muted">
-            <div class="rounded border border-white/10 bg-sidebar px-2 py-1.5">
-                <div class="uppercase tracking-wide text-[10px] text-faint">This week</div>
-                <div class="font-semibold text-body tabular-nums" x-text="formatMinutes(weekMinutes())">{{ $pageTotals['weekDuration'] }}</div>
+     x-on:read-live-totals.window="applyTotals($event.detail.totals)"
+     x-on:book-reader-opened.window="window.scrollTo({ top: 0, behavior: 'smooth' })">
+    {{-- Book Stack Section (hidden when focused directly inside a book) --}}
+    @unless ($readerOpen && $selected)
+    <section class="w-full" x-data="{ hovered: null }">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-xl font-bold text-body">{{ $isArticles ? 'Articles' : 'Books' }}</h1>
+                @if ($isArticles)
+                    <a href="{{ route('read') }}" class="text-xs text-faint no-underline hover:text-muted">books</a>
+                @else
+                    <a href="{{ route('read.articles') }}" class="text-xs text-faint no-underline hover:text-muted">articles</a>
+                @endif
             </div>
-            <div class="rounded border border-white/10 bg-sidebar px-2 py-1.5">
-                <div class="uppercase tracking-wide text-[10px] text-faint">Today</div>
-                <div class="font-semibold text-body tabular-nums" x-text="formatMinutes(todayMinutes())">{{ $pageTotals['todayDuration'] }}</div>
+
+            <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                <div class="flex items-center gap-2 rounded border border-white/10 bg-sidebar px-2.5 py-1">
+                    <span class="uppercase tracking-wide text-[10px] text-faint">This week</span>
+                    <span class="font-semibold text-body tabular-nums" x-text="formatMinutes(weekMinutes())">{{ $pageTotals['weekDuration'] }}</span>
+                </div>
+                <div class="flex items-center gap-2 rounded border border-white/10 bg-sidebar px-2.5 py-1">
+                    <span class="uppercase tracking-wide text-[10px] text-faint">Today</span>
+                    <span class="font-semibold text-body tabular-nums" x-text="formatMinutes(todayMinutes())">{{ $pageTotals['todayDuration'] }}</span>
+                </div>
+                <a href="{{ route('read.stats') }}" class="px-1.5 text-sm font-semibold text-mark no-underline hover:opacity-80">Stats</a>
+                @if ($dailyReviewHighlights->isNotEmpty())
+                    <button type="button"
+                            wire:click="$toggle('showDailyReview')"
+                            data-daily-review-toggle
+                            @class([
+                                'rounded border px-2.5 py-1 text-xs transition',
+                                'border-amber-400/50 bg-amber-400/15 text-amber-300' => $showDailyReview,
+                                'border-white/10 text-muted hover:bg-panel hover:text-body' => ! $showDailyReview,
+                            ])>
+                        Daily Review ({{ $dailyReviewHighlights->count() }})
+                    </button>
+                @endif
+                <button type="button"
+                        wire:click="$toggle('showHighlightsVault')"
+                        data-vault-toggle
+                        @class([
+                            'rounded border px-2.5 py-1 text-xs transition',
+                            'border-link/50 bg-link/15 text-link' => $showHighlightsVault,
+                            'border-white/10 text-muted hover:bg-panel hover:text-body' => ! $showHighlightsVault,
+                        ])>
+                    Highlights{{ $totalHighlightsCount > 0 ? ' ('.$totalHighlightsCount.')' : '' }}
+                </button>
+                <button type="button" wire:click="startAddBook"
+                        class="rounded border border-white/10 px-2.5 py-1 text-xs text-link hover:bg-panel">
+                    + {{ $isArticles ? 'Article' : 'Book' }}
+                </button>
             </div>
         </div>
 
-        <div class="mb-3 flex items-center justify-between gap-2">
-            <h1 class="text-xl font-bold text-body">{{ $isArticles ? 'Articles' : 'Books' }}</h1>
-            <a href="{{ route('read.stats') }}" class="ml-auto text-sm font-semibold text-mark no-underline hover:opacity-80">Stats</a>
-            <button type="button" wire:click="startAddBook"
-                    class="rounded border border-white/10 px-2 py-1 text-xs text-link hover:bg-panel">
-                + {{ $isArticles ? 'Article' : 'Book' }}
-            </button>
-        </div>
+        {{-- Readwise-Style Daily Highlight Review Panel --}}
+        @if ($showDailyReview)
+            <div data-daily-review-panel class="mb-4 rounded-xl border border-amber-400/20 bg-panel p-4">
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">Daily Highlight Review</span>
+                    <button type="button" wire:click="$set('showDailyReview', false)" class="text-xs text-muted hover:text-body">Close</button>
+                </div>
+                @if ($dailyReviewHighlights->isNotEmpty())
+                    @php $reviewItem = $dailyReviewHighlights->first(); @endphp
+                    <div wire:key="review-card-{{ $reviewItem->id }}" class="rounded-lg border border-white/10 bg-sidebar p-4">
+                        <blockquote class="font-serif text-base leading-relaxed text-body sm:text-lg">“{{ $reviewItem->quote }}”</blockquote>
+                        @if ($reviewItem->note)
+                            <p class="mt-2 text-xs text-muted">{{ $reviewItem->note }}</p>
+                        @endif
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-3 text-xs">
+                            <div class="flex flex-wrap items-center gap-2 text-muted">
+                                <span class="font-semibold text-body">{{ $reviewItem->book?->title }}</span>
+                                @if ($reviewItem->book?->author)
+                                    <span>· {{ $reviewItem->book->author }}</span>
+                                @endif
+                                @if ($reviewItem->page_number)
+                                    <span class="font-mono text-faint">p. {{ $reviewItem->page_number }}</span>
+                                @endif
+                                @foreach ($reviewItem->tagList() as $tag)
+                                    <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
+                                @endforeach
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        wire:click="openHighlightedBook({{ $reviewItem->book_id }}, {{ $reviewItem->page_number ?: 1 }})"
+                                        class="rounded border border-white/10 px-2.5 py-1 text-xs text-link hover:bg-panel">
+                                    Open p. {{ $reviewItem->page_number ?: 1 }} →
+                                </button>
+                                <button type="button"
+                                        wire:click="reviewHighlight({{ $reviewItem->id }}, false)"
+                                        class="rounded border border-white/10 px-2.5 py-1 text-xs text-muted hover:text-body">
+                                    Keep reviewing
+                                </button>
+                                <button type="button"
+                                        wire:click="reviewHighlight({{ $reviewItem->id }}, true)"
+                                        class="rounded bg-check px-2.5 py-1 text-xs font-medium text-white hover:opacity-90">
+                                    Mastered ✓
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <p class="py-4 text-center text-sm text-muted">All caught up! Every highlight in your library is mastered.</p>
+                @endif
+            </div>
+        @endif
+
+        {{-- Global Highlights Vault (Instapaper-Style Minimalist Notes Feed: Search + Tags + Export) --}}
+        @if ($showHighlightsVault)
+            <div data-highlights-vault class="mb-4 rounded-xl border border-zinc-800 bg-black p-4 sm:p-5">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-900 pb-3">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-sm font-semibold tracking-wide text-zinc-100">Notes & Highlights ({{ $vaultHighlights->count() }})</h2>
+                        @if ($totalHighlightsCount > 0)
+                            <a href="{{ route('read.highlights.export') }}"
+                               class="rounded border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[11px] text-link no-underline hover:border-link/40">
+                                ↓ Export .md
+                            </a>
+                        @endif
+                    </div>
+                    <button type="button" wire:click="$set('showHighlightsVault', false)" class="text-xs text-zinc-400 hover:text-zinc-100">Close</button>
+                </div>
+
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input type="text"
+                           wire:model.live.debounce.200ms="highlightSearch"
+                           placeholder="Search quotes, notes, books, or #tags…"
+                           class="flex-1 rounded border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-link focus:outline-none" />
+                    @if ($highlightTagFilter !== '')
+                        <button type="button" wire:click="$set('highlightTagFilter', '')"
+                                class="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-300">
+                            #{{ $highlightTagFilter }} ✕
+                        </button>
+                    @endif
+                </div>
+
+                @if ($allHighlightTags->isNotEmpty())
+                    <div class="mb-3 flex flex-wrap gap-1.5">
+                        @foreach ($allHighlightTags as $tag)
+                            <button type="button"
+                                    wire:click="$set('highlightTagFilter', '{{ $highlightTagFilter === $tag ? '' : $tag }}')"
+                                    @class([
+                                        'rounded px-2 py-0.5 text-[11px] transition',
+                                        'bg-amber-400/20 text-amber-300 border border-amber-400/40' => $highlightTagFilter === $tag,
+                                        'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-100' => $highlightTagFilter !== $tag,
+                                    ])>
+                                #{{ $tag }}
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+
+                <ul class="max-h-[30rem] divide-y divide-zinc-900 overflow-y-auto pr-1">
+                    @forelse ($vaultHighlights as $vh)
+                        @php
+                            $dotColor = match ($vh->color) {
+                                'green' => 'bg-emerald-400',
+                                'blue' => 'bg-sky-400',
+                                'rose' => 'bg-rose-400',
+                                default => 'bg-amber-300',
+                            };
+                        @endphp
+                        <li wire:key="vault-hl-{{ $vh->id }}" class="py-4 first:pt-2">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-2 w-2 shrink-0 rounded-full {{ $dotColor }}"></span>
+                                        <span class="truncate font-serif text-sm font-bold text-zinc-100">{{ $vh->book?->title }}</span>
+                                    </div>
+                                    <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-500">
+                                        @if ($vh->book?->author)
+                                            <span>{{ $vh->book->author }}</span>
+                                        @endif
+                                        @if ($vh->page_number)
+                                            <span>·</span>
+                                            <button type="button"
+                                                    wire:click="openHighlightedBook({{ $vh->book_id }}, {{ $vh->page_number }})"
+                                                    class="font-mono text-link hover:underline">p. {{ $vh->page_number }}</button>
+                                        @endif
+                                        <span>·</span>
+                                        <span>{{ $vh->created_at?->diffForHumans(short: true) }}</span>
+                                        @foreach ($vh->tagList() as $tag)
+                                            <span class="text-amber-300/90">#{{ $tag }}</span>
+                                        @endforeach
+                                        @if ($vh->is_mastered)
+                                            <span class="text-emerald-400">· mastered</span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-2.5 text-[11px] text-zinc-500">
+                                    <button type="button" wire:click="toggleMasteredHighlight({{ $vh->id }})" class="hover:text-zinc-200">
+                                        {{ $vh->is_mastered ? 'unmaster' : 'master' }}
+                                    </button>
+                                    <button type="button" wire:click="startEditHighlight({{ $vh->id }})" class="hover:text-zinc-200">edit</button>
+                                    <button type="button" wire:click="deleteHighlight({{ $vh->id }})" class="hover:text-red-400">remove</button>
+                                </div>
+                            </div>
+
+                            <blockquote class="mt-2.5 font-serif text-base leading-relaxed text-zinc-100 sm:text-lg">{{ $vh->quote }}</blockquote>
+
+                            @if ($editingHighlightId === $vh->id)
+                                <form wire:submit="saveEditHighlight" class="mt-2.5 space-y-1.5">
+                                    <input type="text" wire:model="editHighlightNote" placeholder="Note (optional)"
+                                           class="w-full rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-100 focus:border-link focus:outline-none" />
+                                    <input type="text" wire:model="editHighlightTags" placeholder="#tags (comma separated)"
+                                           class="w-full rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-amber-200 focus:border-link focus:outline-none" />
+                                    <div class="flex gap-2">
+                                        <button type="submit" class="rounded bg-check px-2.5 py-1 text-[11px] font-medium text-white">Save</button>
+                                        <button type="button" wire:click="$set('editingHighlightId', null)" class="text-[11px] text-zinc-400 hover:text-zinc-100">Cancel</button>
+                                    </div>
+                                </form>
+                            @elseif ($vh->note)
+                                <p class="mt-2 border-l-2 border-zinc-800 pl-3 text-xs text-zinc-400">{{ $vh->note }}</p>
+                            @endif
+                        </li>
+                    @empty
+                        <li class="py-8 text-center text-xs text-zinc-500">
+                            No matching highlights yet. Open any book and drag-select a passage to save one.
+                        </li>
+                    @endforelse
+                </ul>
+            </div>
+        @endif
 
         @if ($addingBook)
-            <form wire:submit="addBook" class="mb-3 space-y-2 rounded border border-white/10 bg-panel p-3">
-                <input type="text" wire:model="newBookTitle" placeholder="{{ $isArticles ? 'Name' : 'Title' }}" required
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                @error('newBookTitle') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                <input type="text" wire:model="newBookAuthor" placeholder="Author (optional)"
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                @unless ($isArticles)
-                <input type="number" min="0" wire:model="newBookTotalPages" placeholder="Total pages (optional)"
-                       class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                @error('newBookTotalPages') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                @endunless
-                <div class="flex gap-2">
-                    <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Add</button>
-                    <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+            <form wire:submit="addBook"
+                  x-data="pdfCoverExtractor('newBookGeneratedCover')"
+                  class="mb-4 space-y-3 rounded-lg border border-white/10 bg-panel p-4">
+                <div class="grid gap-2.5 sm:grid-cols-4">
+                    <div>
+                        <input type="text" wire:model="newBookTitle" placeholder="{{ $isArticles ? 'Name' : 'Title' }}" required
+                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                        @error('newBookTitle') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <input type="text" wire:model="newBookAuthor" placeholder="Author (optional)"
+                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                    </div>
+                    <div>
+                        <input type="text" wire:model="newBookPublisher" placeholder="Publisher (e.g. Penguin, Oxford)"
+                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                    </div>
+                    @unless ($isArticles)
+                    <div>
+                        <input type="number" min="0" wire:model="newBookTotalPages" placeholder="Total pages (optional)"
+                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                        @error('newBookTotalPages') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                    </div>
+                    @endunless
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">PDF File (optional — auto-extracts Page 1 cover)</label>
+                        <input type="file"
+                               accept="application/pdf,.pdf"
+                               wire:model="newBookPdf"
+                               x-on:change="extract($event)"
+                               class="w-full rounded border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-muted file:mr-2.5 file:rounded file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-xs file:text-body hover:file:bg-white/15" />
+                        @error('newBookPdf') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        <p x-show="status" x-cloak x-text="status" class="mt-1 text-[11px] text-muted"></p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Cover Image (optional override)</label>
+                        <input type="file"
+                               accept="image/*"
+                               wire:model="newBookCover"
+                               class="w-full rounded border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-muted file:mr-2.5 file:rounded file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-xs file:text-body hover:file:bg-white/15" />
+                        @error('newBookCover') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <template x-if="preview">
+                        <img :src="preview" alt="Extracted cover preview" class="h-14 w-10 rounded border border-zinc-700 object-cover" />
+                    </template>
+                    <button type="submit"
+                            wire:loading.attr="disabled"
+                            wire:target="newBookPdf,newBookCover,addBook"
+                            class="rounded bg-check px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                        <span wire:loading.remove wire:target="newBookPdf,newBookCover">Add</span>
+                        <span wire:loading wire:target="newBookPdf,newBookCover">Uploading…</span>
+                    </button>
+                    <button type="button" wire:click="cancelForms" class="text-sm text-muted hover:text-body">Cancel</button>
                 </div>
             </form>
         @endif
 
-        <ul class="space-y-1" x-data="bookSortList()">
-            @forelse ($books as $book)
-                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" class="relative">
-                    <span data-drag-handle aria-label="Drag to reorder"
-                          class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-center text-faint hover:text-muted"
-                          style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
-                        @include('livewire.partials.drag-handle')
-                    </span>
-                    <button type="button" wire:click="selectBook({{ $book->id }})"
-                            @class([
-                                'flex w-full items-center gap-3 rounded border py-2 pl-3 pr-10 text-left text-sm transition',
-                                'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
-                                'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
-                            ])>
-                        <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => false])</span>
-                        <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
-                            @if ($book->author)
-                                <span>{{ $book->author }}</span>
-                            @endif
-                            @if ($book->readingSessions->isNotEmpty())
-                                <span class="text-mark">● live</span>
-                            @endif
+        {{-- Recessed Bookcase Bay + Page-Wide Vertical Book Stack (Physical Spines) --}}
+        <div class="relative w-full rounded-xl border border-white/[0.06] bg-gradient-to-b from-[#131110] via-[#171412] to-[#110f0d] px-4 pt-6 pb-4 shadow-[inset_0_12px_36px_rgba(0,0,0,0.85),inset_24px_0_32px_-16px_rgba(0,0,0,0.75),inset_-24px_0_32px_-16px_rgba(0,0,0,0.75)] sm:px-8">
+            <ul class="flex w-full flex-col items-center gap-[1px]" x-data="bookSortList()">
+                @forelse ($books as $book)
+                    @php
+                        $stackLayouts = [
+                            'w-full',
+                            'w-[98%] -translate-x-1',
+                            'w-[96.5%] translate-x-1',
+                            'w-[99%] -translate-x-0.5',
+                            'w-[97.5%] translate-x-0.5',
+                        ];
+                        $stackLayout = $stackLayouts[$book->id % count($stackLayouts)];
+                        $isLastRead = $lastReadBookId === $book->id;
+                        $hoverParts = array_values(array_filter([
+                            $book->title,
+                            $book->author,
+                            $book->publisher,
+                            ($book->current_page && $book->total_pages) ? 'p. '.$book->current_page.' / '.$book->total_pages : ($book->total_pages ? number_format($book->total_pages).' pages' : null),
+                            $book->latestSession ? 'Last read '.\App\Livewire\Read::relativeDay($book->latestSession->started_at) : null,
+                        ]));
+                        $hoverSummary = implode(' · ', $hoverParts);
+                    @endphp
+                    <li wire:key="book-{{ $book->id }}"
+                        data-sort-item="{{ $book->id }}"
+                        x-on:mouseenter="hovered = @js($hoverSummary)"
+                        x-on:mouseleave="hovered = null"
+                        class="group relative {{ $stackLayout }}">
+                        <span data-drag-handle
+                              x-on:click.stop
+                              aria-label="Drag to reorder"
+                              class="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded bg-black/70 text-zinc-200 opacity-0 backdrop-blur-sm transition hover:bg-black hover:text-white group-hover:opacity-100"
+                              style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
+                            @include('livewire.partials.drag-handle')
                         </span>
-                        </span>
-                        @if ($book->type)
-                            <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
+                        @include('livewire.partials.book-cover-card', [
+                            'book' => $book,
+                            'selectedId' => $selected?->id,
+                            'finished' => false,
+                        ])
+                        @if ($isLastRead)
+                            {{-- Crimson silk ribbon bookmark peeking from the most-recently-read spine --}}
+                            <span data-silk-ribbon
+                                  title="Last read"
+                                  aria-label="Last read bookmark"
+                                  class="pointer-events-none absolute -bottom-3 left-9 z-30 block h-4 w-2.5 bg-gradient-to-b from-[#991b1b] via-[#b91c1c] to-[#7f1d1d] shadow-[0_3px_6px_rgba(0,0,0,0.75)]"
+                                  style="clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);"></span>
                         @endif
-                    </button>
-                </li>
-            @empty
-                <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-sm text-muted">
-                    @if ($finishedBooks->isNotEmpty())
-                        No open {{ $isArticles ? 'articles' : 'books' }}.
-                    @else
-                        No {{ $isArticles ? 'articles' : 'books' }} yet. Add one to start tracking.
-                    @endif
-                </li>
-            @endforelse
-        </ul>
+                    </li>
+                @empty
+                    <li class="w-full rounded-lg border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
+                        @if ($finishedBooks->isNotEmpty())
+                            No open {{ $isArticles ? 'articles' : 'books' }}.
+                        @else
+                            No {{ $isArticles ? 'articles' : 'books' }} yet. Add one to start tracking.
+                        @endif
+                    </li>
+                @endforelse
+            </ul>
+
+            @if ($books->isNotEmpty())
+                {{-- Warm walnut wooden shelf plank anchoring the vertical book stack --}}
+                <div class="mt-0.5 h-4 w-full rounded-sm border-t border-amber-200/20 bg-gradient-to-b from-[#6b4423] via-[#472b14] to-[#241409] shadow-[0_14px_30px_rgba(0,0,0,0.85)]"
+                     aria-hidden="true"></div>
+            @endif
+
+            {{-- Quiet hover status line beneath the wooden plank --}}
+            <div class="mt-2.5 flex min-h-[1.25rem] items-center justify-center text-center text-xs text-muted">
+                <span x-show="hovered" x-cloak x-text="hovered" x-transition.opacity.duration.150ms class="truncate"></span>
+            </div>
+        </div>
+
         <script>
             function bookSortList() {
                 return {
@@ -98,6 +375,7 @@
                             this.$el._bookSortable = window.Sortable.create(this.$el, {
                                 draggable: '[data-sort-item]',
                                 handle: '[data-drag-handle]',
+                                direction: 'vertical',
                                 animation: 150,
                                 ghostClass: 'opacity-40',
                                 forceFallback: true,
@@ -117,7 +395,7 @@
         </script>
 
         @if ($finishedBooks->isNotEmpty())
-            <div class="mt-3">
+            <div class="mt-4">
                 <button type="button" wire:click="$toggle('showFinished')"
                         class="flex items-center gap-1 text-xs text-muted no-underline hover:text-body"
                         aria-expanded="{{ $showFinished ? 'true' : 'false' }}">
@@ -125,63 +403,280 @@
                     Finished ({{ $finishedBooks->count() }})
                 </button>
                 @if ($showFinished)
-                    <ul class="mt-1 space-y-1" data-finished-list>
+                    <ul class="mt-2 flex w-full flex-col items-center gap-[3px]" data-finished-list>
                         @foreach ($finishedBooks as $book)
-                            <li wire:key="finished-book-{{ $book->id }}" data-finished-item="{{ $book->id }}">
-                                <button type="button" wire:click="selectBook({{ $book->id }})"
-                                        @class([
-                                            'flex w-full items-center gap-3 rounded border py-2 px-3 text-left text-sm transition',
-                                            'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
-                                            'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
-                                        ])>
-                                    <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => true])</span>
-                                    <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
-                                        @if ($book->author)
-                                            <span>{{ $book->author }}</span>
-                                        @endif
-                                        @if ($book->readingSessions->isNotEmpty())
-                                            <span class="text-mark">● live</span>
-                                        @endif
-                                    </span>
-                                    </span>
-                                    @if ($book->type)
-                                        <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
-                                    @endif
-                                </button>
+                            <li wire:key="finished-book-{{ $book->id }}" data-finished-item="{{ $book->id }}" class="w-full">
+                                @include('livewire.partials.book-cover-card', [
+                                    'book' => $book,
+                                    'selectedId' => $selected?->id,
+                                    'finished' => true,
+                                ])
                             </li>
                         @endforeach
                     </ul>
                 @endif
             </div>
         @endif
-        @if ($isArticles)
-            <a href="{{ route('read') }}" class="mt-6 inline-block text-xs text-faint no-underline hover:text-muted">books</a>
-        @else
-            <a href="{{ route('read.articles') }}" class="mt-6 inline-block text-xs text-faint no-underline hover:text-muted">articles</a>
-        @endif
-    </aside>
+    </section>
+    @endunless
 
-    {{-- Book detail --}}
-    <div class="min-w-0 flex-1">
-        @if (! $selected)
-            {{-- Nothing shown until a book is selected. --}}
-        @else
-            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 class="text-2xl font-bold text-body">@include('livewire.partials.read-item-name', ['title' => $selected->title, 'startedToday' => $selected->isStartedToday(), 'finished' => $selected->isFinished()])</h2>
-                    <p class="mt-1 text-sm text-muted">
-                        @php
-                            $metaParts = array_values(array_filter([
-                                $selected->author ? e($selected->author) : null,
-                                $selected->total_pages ? e($selected->total_pages).' pages' : null,
-                                $selected->isFinished() ? '<span class="uppercase tracking-wide text-check">'.e($selected->status).'</span>' : null,
-                            ]));
-                        @endphp
-                        {!! implode(' <span class="text-faint">·</span> ', $metaParts) !!}
-                    </p>
+    {{-- Focused Inline Reader + Single-Row Slim Reading Bar + Adobe Read Mode + Highlights --}}
+    @if ($selected)
+        @php
+            $initialPage = $selected->current_page ?: 1;
+            $highlightsJson = $highlights->map(fn ($h) => [
+                'id' => $h->id,
+                'page' => $h->page_number,
+                'quote' => $h->quote,
+                'color' => $h->color,
+            ])->values()->all();
+        @endphp
+        <section wire:key="reader-shell-{{ $selected->id }}"
+                 x-data="pdfBookReader({
+                     pdfUrl: @js($selected->pdfUrl()),
+                     initialPage: @js($initialPage),
+                     bookId: @js($selected->id),
+                     stopUrl: @js(route('read.sessions.stop-active')),
+                     activeBookId: @js($runningSession && $readerOpen ? $selected->id : null),
+                     highlights: @js($highlightsJson),
+                 })"
+                 x-init="init()"
+                 x-on:reader-jump-page.window="goToPage($event.detail.page)"
+                 x-on:keydown.window="handleKey($event)"
+                 x-on:mouseup.window="onWindowPointerUp($event)"
+                 x-on:touchend.window="onWindowPointerUp($event)"
+                 :class="readMode
+                     ? (theme === 'dark'
+                         ? 'fixed inset-0 z-50 flex flex-col bg-black p-0 overflow-hidden'
+                         : (theme === 'sepia'
+                             ? 'fixed inset-0 z-50 flex flex-col bg-[#f4ecd8] p-0 overflow-hidden'
+                             : 'fixed inset-0 z-50 flex flex-col bg-[#fbfaf7] p-0 overflow-hidden'))
+                     : 'w-full min-w-0 rounded-xl border border-zinc-800 bg-panel/40 p-3 sm:p-4'">
+            {{-- Minimalist Acrobat-Style Top Bar (only in Read Mode) --}}
+            <div x-show="readMode" x-cloak
+                 :class="theme === 'dark' ? 'border-zinc-900 bg-black/95 text-zinc-200' : (theme === 'sepia' ? 'border-[#dfd3b8] bg-[#efe6d1]/95 text-[#3b2f20]' : 'border-zinc-200 bg-white/95 text-zinc-800')"
+                 class="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5 sm:px-5">
+                <div class="flex min-w-0 items-center gap-2.5">
+                    <button type="button"
+                            x-on:click="toggleReadMode()"
+                            title="Exit Read Mode (Esc)"
+                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-current/15 hover:bg-current/10"
+                            aria-label="Exit Read Mode">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5M5.25 9.75V20.25h4.5v-6h4.5v6h4.5V9.75" />
+                        </svg>
+                    </button>
+                    <span class="truncate rounded-full border border-current/10 bg-current/5 px-3 py-1 text-xs font-medium">
+                        {{ $selected->title }}
+                        <span class="ml-1 opacity-50">PDF · p.<span x-text="page"></span></span>
+                    </span>
                 </div>
-                <div class="flex flex-wrap items-center justify-end gap-2">
+
+                <div class="flex shrink-0 items-center gap-2">
+                    @if ($runningSession)
+                        <span class="font-mono text-xs font-semibold tabular-nums opacity-75"
+                              x-data="elapsedClock(@js($runningSession->started_at->utc()->toIso8601String()))"
+                              x-init="start()"
+                              x-text="display">00:00:00</span>
+                    @endif
+                    <button type="button"
+                            x-on:click="toggleReadMode()"
+                            class="rounded-lg border border-current/15 px-2.5 py-1 text-xs opacity-80 hover:opacity-100"
+                            title="Switch back to original PDF Page View">
+                        Page View
+                    </button>
+                    @if ($highlights->isNotEmpty())
+                        <a href="{{ route('read.highlights.export', $selected->id) }}"
+                           class="flex h-8 w-8 items-center justify-center rounded-lg border border-current/15 text-current no-underline opacity-80 hover:opacity-100"
+                           title="Export highlights as Markdown">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V3.75m0 0L7.5 8.25M12 3.75l4.5 4.5M4.5 15.75v3a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3" />
+                            </svg>
+                        </a>
+                    @endif
+                </div>
+            </div>
+
+            {{-- Single-Row Slim Reading Bar (Normal Page View) --}}
+            <div x-show="!readMode"
+                 class="sticky top-12 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-sidebar/95 px-3 py-2 shadow-md backdrop-blur">
+                {{-- Left: Back + Cover Thumb + Title --}}
+                <div class="flex min-w-0 flex-1 items-center gap-2.5">
+                    <template x-if="readMode">
+                        <button type="button"
+                                x-on:click="readMode = false"
+                                title="Exit Read Mode (Esc)"
+                                class="shrink-0 rounded border border-zinc-700 bg-panel px-2.5 py-1 text-xs font-medium text-body transition hover:border-zinc-500">
+                            ✕ Exit Read Mode
+                        </button>
+                    </template>
+                    <button type="button"
+                            x-show="!readMode"
+                            wire:click="closeReader"
+                            title="Close reader and stop active session (Esc)"
+                            class="shrink-0 rounded border border-zinc-700 bg-panel px-2.5 py-1 text-xs font-medium text-body transition hover:border-zinc-500">
+                        ← Close Reader
+                    </button>
+                    <span class="hidden h-4 w-px shrink-0 bg-white/10 sm:inline-block" aria-hidden="true"></span>
+                    @if ($selected->coverUrl())
+                        <img src="{{ $selected->coverUrl() }}"
+                             alt="{{ $selected->title }} cover"
+                             class="hidden aspect-[2/3] w-6 shrink-0 rounded-sm border border-white/15 object-cover sm:block" />
+                    @endif
+                    <div class="min-w-0 flex-1">
+                        <div class="flex min-w-0 items-baseline gap-2">
+                            <h2 class="truncate font-serif text-base font-bold text-body sm:text-lg">@include('livewire.partials.read-item-name', ['title' => $selected->title, 'startedToday' => $selected->isStartedToday(), 'finished' => $selected->isFinished(), 'truncate' => true])</h2>
+                            @if ($selected->author)
+                                <span class="hidden truncate text-xs text-muted lg:inline">{{ $selected->author }}</span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Right: Page Nav + Theme + Read Mode + Highlights + Timer + Actions --}}
+                <div class="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+                    @unless ($isArticles)
+                        <form wire:submit="saveCurrentPage" class="flex items-center gap-1 rounded border border-white/10 bg-panel px-1.5 py-0.5 text-xs text-muted">
+                            @if ($selected->pdfUrl())
+                                <button type="button" x-on:click="prevPage()" :disabled="page <= 1"
+                                        class="px-1 text-zinc-400 hover:text-body disabled:opacity-30" title="Previous page (←)">‹</button>
+                            @endif
+                            <label for="reader-page-{{ $selected->id }}" class="text-[10px] uppercase tracking-wide text-faint">p.</label>
+                            <input id="reader-page-{{ $selected->id }}"
+                                   type="number"
+                                   min="1"
+                                   @if ($selected->total_pages) max="{{ $selected->total_pages }}" @endif
+                                   wire:model="readerCurrentPage"
+                                   wire:change="saveCurrentPage"
+                                   placeholder="1"
+                                   aria-label="Current page"
+                                   class="w-11 bg-transparent text-center font-mono text-xs text-body tabular-nums focus:outline-none" />
+                            @if ($selected->total_pages)
+                                <span class="text-[11px] tabular-nums text-faint">/ {{ $selected->total_pages }}</span>
+                            @endif
+                            @if ($selected->pdfUrl())
+                                <button type="button" x-on:click="nextPage()" :disabled="numPages > 0 && page >= numPages"
+                                        class="px-1 text-zinc-400 hover:text-body disabled:opacity-30" title="Next page (→)">›</button>
+                            @endif
+                        </form>
+                    @endunless
+
+                    @if ($selected->pdfUrl())
+                        {{-- Dark / Sepia / Light Reading Theme Cycle (defaults to Dark) --}}
+                        <button type="button"
+                                x-on:click="toggleTheme()"
+                                data-theme-toggle
+                                class="rounded border border-white/10 bg-panel px-2 py-1 text-xs text-body transition hover:border-zinc-500"
+                                title="Cycle Dark / Sepia / Light reading theme">
+                            <span x-show="theme === 'dark'">🌙 Dark</span>
+                            <span x-show="theme === 'sepia'" x-cloak>📜 Sepia</span>
+                            <span x-show="theme === 'light'" x-cloak>☀ Light</span>
+                        </button>
+
+                        {{-- Highlighter Pen Mode Toggle (also available in Page View) --}}
+                        <button type="button"
+                                x-on:click="togglePenMode()"
+                                data-highlighter-pen
+                                :class="penMode ? 'border-amber-400 bg-amber-400/20 text-amber-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition"
+                                title="Highlighter Pen: drag across text to highlight instantly">
+                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z" />
+                            </svg>
+                            <span x-text="penMode ? 'Pen On' : 'Highlight'">Highlight</span>
+                        </button>
+
+                        {{-- Adobe-style Liquid / Reflow Read Mode Toggle --}}
+                        <button type="button"
+                                x-on:click="toggleReadMode()"
+                                data-read-mode-toggle
+                                :class="readMode ? 'border-link/50 bg-link/15 text-link' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                class="rounded border px-2 py-1 text-xs transition"
+                                title="Toggle Adobe-style reflow Read Mode (R)">
+                            <span x-show="!readMode">Read Mode</span>
+                            <span x-show="readMode" x-cloak>Page View</span>
+                        </button>
+
+                        {{-- Instapaper Typography + Speed Read + Listen Controls (visible in Liquid Read Mode) --}}
+                        <div x-show="readMode" x-cloak class="flex flex-wrap items-center gap-1">
+                            <div class="flex items-center gap-0.5 rounded border border-white/10 bg-panel px-1 py-0.5 text-xs text-muted">
+                                <button type="button" x-on:click="smallerFont()" class="px-1.5 py-0.5 hover:text-body" title="Smaller text">A-</button>
+                                <button type="button" x-on:click="largerFont()" class="px-1.5 py-0.5 hover:text-body" title="Larger text">A+</button>
+                                <span class="h-3 w-px bg-white/10" aria-hidden="true"></span>
+                                <button type="button" x-on:click="cycleFont()" class="px-1.5 py-0.5 text-[11px] capitalize hover:text-body" title="Switch font (Serif / Sans / Mono)" x-text="readFont"></button>
+                                <button type="button" x-on:click="cycleWidth()" class="px-1.5 py-0.5 text-[11px] capitalize hover:text-body" title="Column width" x-text="readWidth"></button>
+                            </div>
+
+                            <button type="button"
+                                    x-on:click="toggleSpeedRead()"
+                                    data-speed-read-toggle
+                                    :class="speedRead.open ? 'border-amber-400/50 bg-amber-400/15 text-amber-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                    class="rounded border px-2 py-1 text-xs transition"
+                                    title="Instapaper-style RSVP Speed Reader">
+                                ⚡ Speed
+                            </button>
+
+                            <button type="button"
+                                    x-on:click="toggleSpeech()"
+                                    data-tts-toggle
+                                    :class="tts.speaking ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-300' : 'border-white/10 bg-panel text-muted hover:text-body'"
+                                    class="rounded border px-2 py-1 text-xs transition"
+                                    title="Read aloud (Text-to-Speech)">
+                                <span x-show="!tts.speaking">🔊 Listen</span>
+                                <span x-show="tts.speaking" x-cloak>⏹ Stop</span>
+                            </button>
+                            <button type="button"
+                                    x-show="tts.speaking"
+                                    x-cloak
+                                    x-on:click="cycleSpeechRate()"
+                                    class="rounded border border-white/10 bg-panel px-1.5 py-1 text-[11px] font-mono text-emerald-300"
+                                    x-text="tts.rate + 'x'"></button>
+                        </div>
+                    @endif
+
+                    {{-- Saved Highlights Drawer Toggle --}}
+                    <button type="button"
+                            wire:click="$toggle('showHighlights')"
+                            data-highlights-toggle
+                            @class([
+                                'rounded border px-2 py-1 text-xs transition',
+                                'border-amber-400/50 bg-amber-400/15 text-amber-300' => $showHighlights,
+                                'border-white/10 bg-panel text-muted hover:text-body' => ! $showHighlights,
+                            ])
+                            title="Show saved highlights">
+                        Highlights{{ $highlights->isNotEmpty() ? ' ('.$highlights->count().')' : '' }}
+                    </button>
+
+                    <div class="flex items-center gap-2 rounded border border-white/10 bg-panel px-2.5 py-1">
+                        <span class="hidden text-[10px] uppercase tracking-wider text-faint xl:inline">Total time read</span>
+                        <span class="text-xs font-semibold text-body tabular-nums" x-text="formatMinutes(bookMinutes())">{{ $bookTotals['totalDuration'] }}</span>
+                        @if ($runningSession)
+                            <span class="h-3 w-px bg-white/15" aria-hidden="true"></span>
+                            <span class="font-mono text-xs font-semibold tabular-nums text-link"
+                                  wire:key="docked-running-{{ $runningSession->id }}"
+                                  x-data="elapsedClock(@js($runningSession->started_at->utc()->toIso8601String()))"
+                                  x-init="start()"
+                                  x-text="display">00:00:00</span>
+                        @endif
+                    </div>
+
+                    @if ($runningSession)
+                        <button type="button" wire:click="stopSession({{ $runningSession->id }})"
+                                class="rounded bg-mark px-2.5 py-1 text-xs font-medium text-black transition hover:opacity-90">
+                            Stop session
+                        </button>
+                    @else
+                        <button type="button" wire:click="startSessionNow"
+                                class="rounded bg-check px-2.5 py-1 text-xs font-medium text-white transition hover:opacity-90">
+                            Start session now
+                        </button>
+                    @endif
+
+                    <button type="button" x-show="!readMode" wire:click="startAddSession"
+                            class="rounded border border-white/10 px-2 py-1 text-xs text-link transition hover:bg-panel">
+                        + Log session
+                    </button>
+
                     @if ($editMode)
                         @if ($selected->isReading())
                             <button type="button" wire:click="markBookFinished({{ $selected->id }})"
@@ -197,10 +692,12 @@
                                 wire:confirm="Delete this {{ $isArticles ? 'article' : 'book' }} and all its sessions?"
                                 class="rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">Delete</button>
                     @endif
+
                     <button type="button"
+                            x-show="!readMode"
                             wire:click="$toggle('editMode')"
                             @class([
-                                'flex h-8 w-8 items-center justify-center rounded text-muted transition hover:bg-white/5 hover:text-body',
+                                'flex h-7 w-7 items-center justify-center rounded text-muted transition hover:bg-white/5 hover:text-body',
                                 'bg-white/10 text-link' => $editMode,
                             ])
                             aria-label="{{ $editMode ? 'Hide edit controls' : 'Show edit controls' }}"
@@ -214,37 +711,540 @@
             </div>
 
             @if ($editingBookId === $selected->id)
-                <form wire:submit="saveEditBook" class="mb-4 flex flex-col gap-2 rounded border border-white/10 bg-panel p-3 sm:flex-row sm:flex-wrap sm:items-end">
-                    <div class="sm:w-48">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">{{ $isArticles ? 'Name' : 'Title' }}</label>
-                        <input type="text" wire:model="editBookTitle"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                <form wire:submit="saveEditBook"
+                      x-show="!readMode"
+                      x-data="pdfCoverExtractor('editBookGeneratedCover')"
+                      class="mb-4 space-y-3 rounded-lg border border-white/10 bg-panel p-3.5">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                        <div class="sm:w-48">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">{{ $isArticles ? 'Name' : 'Title' }}</label>
+                            <input type="text" wire:model="editBookTitle"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                            @error('editBookTitle') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+                        <div class="sm:w-40">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Author</label>
+                            <input type="text" wire:model="editBookAuthor"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                        </div>
+                        <div class="sm:w-40">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Publisher</label>
+                            <input type="text" wire:model="editBookPublisher" placeholder="e.g. Penguin, Oxford"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                        </div>
+                        @unless ($isArticles)
+                        <div class="sm:w-28">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
+                            <input type="number" min="0" wire:model="editBookTotalPages"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                            @error('editBookTotalPages') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+                        @endunless
+                        <div class="sm:w-32">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Status</label>
+                            <select wire:model="editBookStatus"
+                                    class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none">
+                                <option value="reading">reading</option>
+                                <option value="finished">finished</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="sm:w-40">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Author</label>
-                        <input type="text" wire:model="editBookAuthor"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">
+                                {{ $selected->pdf_path ? 'Replace PDF (optional)' : 'Attach PDF (optional)' }}
+                            </label>
+                            <input type="file"
+                                   accept="application/pdf,.pdf"
+                                   wire:model="editBookPdf"
+                                   x-on:change="extract($event)"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-muted file:mr-2.5 file:rounded file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-xs file:text-body hover:file:bg-white/15" />
+                            @error('editBookPdf') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                            <p x-show="status" x-cloak x-text="status" class="mt-1 text-[11px] text-muted"></p>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">
+                                {{ $selected->cover_path ? 'Replace Cover Image (optional)' : 'Upload Cover Image (optional)' }}
+                            </label>
+                            <input type="file"
+                                   accept="image/*"
+                                   wire:model="editBookCover"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-muted file:mr-2.5 file:rounded file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-xs file:text-body hover:file:bg-white/15" />
+                            @error('editBookCover') <p class="mt-1 text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
                     </div>
-                    @unless ($isArticles)
-                    <div class="sm:w-28">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
-                        <input type="number" min="0" wire:model="editBookTotalPages"
-                               class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+
+                    <div class="flex items-center gap-3">
+                        <template x-if="preview">
+                            <img :src="preview" alt="Extracted cover preview" class="h-14 w-10 rounded border border-zinc-700 object-cover" />
+                        </template>
+                        <button type="submit"
+                                wire:loading.attr="disabled"
+                                wire:target="editBookPdf,editBookCover,saveEditBook"
+                                class="rounded bg-check px-3.5 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                            <span wire:loading.remove wire:target="editBookPdf,editBookCover">Save</span>
+                            <span wire:loading wire:target="editBookPdf,editBookCover">Uploading…</span>
+                        </button>
+                        <button type="button" wire:click="cancelForms" class="text-sm text-muted hover:text-body">Cancel</button>
                     </div>
-                    @endunless
-                    <div class="sm:w-32">
-                        <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Status</label>
-                        <select wire:model="editBookStatus"
-                                class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none">
-                            <option value="reading">reading</option>
-                            <option value="finished">finished</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save</button>
-                    <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
                 </form>
             @endif
 
+            @if ($addingSession)
+                <form wire:submit="addSession" x-show="!readMode" class="mb-4 space-y-2 rounded-lg border border-white/10 bg-panel p-3">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <div>
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Start</label>
+                            <input type="datetime-local" wire:model="newSessionStartedAt" required
+                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                            @error('newSessionStartedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Finish</label>
+                            <input type="datetime-local" wire:model="newSessionFinishedAt" required
+                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                            @error('newSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+                        @unless ($isArticles)
+                        <div class="sm:w-28">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
+                            <input type="number" min="0" wire:model="newSessionPagesRead" placeholder="—"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                            @error('newSessionPagesRead') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
+                        </div>
+                        @endunless
+                        <div class="sm:flex-1">
+                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
+                            <input type="text" wire:model="newSessionNote" placeholder="Optional"
+                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save session</button>
+                        <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
+                    </div>
+                </form>
+            @endif
+
+            {{-- Reader Viewport + Optional Highlights Drawer --}}
+            <div :class="readMode ? 'relative flex min-h-0 flex-1 gap-3 overflow-hidden' : 'relative mb-5 flex flex-col gap-3 lg:flex-row'">
+                {{-- PDF Canvas + Selectable Text Layer (with Dark/Light mode + Highlight Popover) --}}
+                <div class="relative min-w-0 flex-1"
+                     data-pdf-reader
+                     data-pdf-url="{{ $selected->pdfUrl() ?? '' }}">
+                    @if ($selected->pdfUrl())
+                        <div x-show="!fallbackIframe"
+                             :class="[
+                                 readMode ? 'h-full rounded-none border-0' : 'h-[84vh] rounded-lg border',
+                                 theme === 'dark'
+                                     ? (readMode ? 'bg-black' : 'bg-[#111114] border-zinc-800')
+                                     : (theme === 'sepia' ? 'bg-[#f4ecd8] border-[#d8cbb0]' : (readMode ? 'bg-[#fbfaf7]' : 'bg-[#e6e2da] border-zinc-300')),
+                             ]"
+                             class="relative flex flex-col items-center overflow-auto p-3 sm:p-6">
+                            {{-- Subtle zoom + page bar inside viewport (Page View only) --}}
+                            <div x-show="!readMode" class="mb-3 flex w-full max-w-3xl items-center justify-between text-[11px]"
+                                 :class="theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'">
+                                <span>Select any text to highlight</span>
+                                <div class="flex items-center gap-1.5">
+                                    <button type="button" x-on:click="zoomOut()" class="rounded border border-current/20 px-1.5 py-0.5 hover:opacity-80">−</button>
+                                    <span class="tabular-nums" x-text="Math.round(scale * 100) + '%'">135%</span>
+                                    <button type="button" x-on:click="zoomIn()" class="rounded border border-current/20 px-1.5 py-0.5 hover:opacity-80">+</button>
+                                    <button type="button" x-on:click="fallbackIframe = true" class="ml-2 underline opacity-70 hover:opacity-100">Native PDF</button>
+                                </div>
+                            </div>
+
+                            {{-- Toast feedback when a highlight is saved --}}
+                            <div x-show="toast" x-cloak x-transition.opacity
+                                 class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-amber-400/30 bg-zinc-900/95 px-3.5 py-1.5 text-xs font-medium text-amber-300 shadow-lg">
+                                <span x-text="toast"></span>
+                            </div>
+
+                            {{-- Loading indicator --}}
+                            <div x-show="loading" class="py-24 text-sm text-muted">Loading page…</div>
+
+                            {{-- Instapaper-Style RSVP Speed Reader Overlay (in Read Mode) --}}
+                            <div x-show="readMode && speedRead.open && !loading"
+                                 x-cloak
+                                 class="my-auto flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-zinc-950/90 px-6 py-10 text-center shadow-2xl">
+                                <div class="flex w-full items-center justify-between text-xs text-zinc-400">
+                                    <span>RSVP Speed Reader · p.<span x-text="page"></span></span>
+                                    <span class="font-mono tabular-nums" x-text="(speedRead.index + 1) + ' / ' + Math.max(1, speedRead.words.length)"></span>
+                                </div>
+
+                                {{-- Fixed ORP Reticle + Word Display --}}
+                                <div class="relative flex h-24 w-full items-center justify-center border-y border-zinc-800 font-serif text-4xl tracking-wide sm:text-5xl">
+                                    <span class="pointer-events-none absolute top-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-rose-500/70"></span>
+                                    <span class="pointer-events-none absolute bottom-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-rose-500/70"></span>
+                                    <span class="flex w-full items-baseline justify-center">
+                                        <span class="w-1/2 text-right text-zinc-100" x-text="speedWordParts().left"></span>
+                                        <span class="font-bold text-rose-400" x-text="speedWordParts().pivot"></span>
+                                        <span class="w-1/2 text-left text-zinc-100" x-text="speedWordParts().right"></span>
+                                    </span>
+                                </div>
+
+                                {{-- Progress Bar --}}
+                                <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
+                                    <div class="h-full bg-amber-400 transition-all duration-100"
+                                         :style="`width: ${speedRead.words.length ? Math.round(((speedRead.index + 1) / speedRead.words.length) * 100) : 0}%;`"></div>
+                                </div>
+
+                                {{-- Controls & WPM Slider --}}
+                                <div class="flex flex-wrap items-center justify-center gap-3 text-xs">
+                                    <button type="button" x-on:click="toggleSpeedPlay()"
+                                            class="rounded bg-amber-400 px-4 py-1.5 font-semibold text-zinc-950 hover:bg-amber-300">
+                                        <span x-show="!speedRead.playing">▶ Play (Space)</span>
+                                        <span x-show="speedRead.playing" x-cloak>⏸ Pause</span>
+                                    </button>
+                                    <button type="button" x-on:click="restartSpeedRead()"
+                                            class="rounded border border-zinc-700 px-2.5 py-1.5 text-zinc-300 hover:border-zinc-500">↺ Restart</button>
+                                    <label class="flex items-center gap-2 text-zinc-300">
+                                        <input type="range" min="180" max="650" step="20" x-model.number="speedRead.wpm" x-on:input="updateWpm()" class="w-28 accent-amber-400" />
+                                        <span class="w-16 font-mono tabular-nums" x-text="speedRead.wpm + ' WPM'"></span>
+                                    </label>
+                                    <button type="button" x-on:click="closeSpeedRead()" class="text-zinc-400 hover:text-zinc-100">Close</button>
+                                </div>
+                            </div>
+
+                            {{-- Adobe Liquid / Reflow Read Mode (OLED Black, large crisp serif, instant Highlighter Pen + right-click) --}}
+                            <div x-show="readMode && !speedRead.open && !loading"
+                                 x-cloak
+                                 x-ref="reflowWrap"
+                                 x-on:contextmenu="onContextHighlight($event)"
+                                 :class="[
+                                     theme === 'dark' ? 'text-[#f5f4f0]' : (theme === 'sepia' ? 'text-[#3b2f20]' : 'text-[#141414]'),
+                                     readWidth === 'narrow' ? 'max-w-lg' : (readWidth === 'wide' ? 'max-w-4xl' : 'max-w-2xl'),
+                                     penMode ? 'cursor-text' : '',
+                                 ]"
+                                 class="relative mx-auto w-full px-3 py-2 sm:px-8 sm:py-5">
+                                {{-- Active Highlighter Pen banner --}}
+                                <div x-show="penMode" x-cloak
+                                     class="mb-4 flex items-center justify-between rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300">
+                                    <span>Highlighter pen active — drag across any text to highlight instantly</span>
+                                    <button type="button" x-on:click="penMode = false" class="ml-2 underline">Done</button>
+                                </div>
+
+                                <article :class="[
+                                             readFont === 'sans' ? 'font-sans' : (readFont === 'mono' ? 'font-mono' : 'font-serif'),
+                                             'leading-[1.58] tracking-[0.005em] selection:bg-amber-400/40',
+                                         ]"
+                                         :style="`font-size: ${readFontSize}px;`">
+                                    <template x-for="(block, idx) in reflowBlocks" :key="idx">
+                                        <div :class="tts.speaking && tts.blockIndex === idx ? 'rounded-lg bg-emerald-400/15 px-2 -mx-2 transition-colors' : ''">
+                                            <h3 x-show="block.type === 'heading'"
+                                                x-html="renderHighlightedHtml(block.text)"
+                                                class="mb-5 mt-6 font-bold leading-snug tracking-tight"
+                                                :style="`font-size: ${Math.round(readFontSize * 1.28)}px;`"></h3>
+                                            <p x-show="block.type === 'paragraph'"
+                                               x-html="renderHighlightedHtml(block.text)"
+                                               class="mb-5"></p>
+                                        </div>
+                                    </template>
+                                    <p x-show="reflowBlocks.length === 0" class="py-12 text-center text-sm opacity-60">
+                                        No reflowable text detected on this page — switch to Page View to inspect graphics.
+                                    </p>
+                                </article>
+
+                                {{-- Subtle Acrobat-style page break bar between pages --}}
+                                <div class="my-6 flex items-center gap-3 opacity-60">
+                                    <span class="h-px flex-1 bg-current/25"></span>
+                                    <span class="font-mono text-[11px]">Page <span x-text="page"></span> <span x-show="numPages">/ <span x-text="numPages"></span></span></span>
+                                    <span class="h-px flex-1 bg-current/25"></span>
+                                </div>
+                            </div>
+
+                            {{-- Page Canvas + Selectable Text Layer (Page View) --}}
+                            <div wire:ignore
+                                 x-show="!readMode"
+                                 x-ref="pageWrap"
+                                 x-on:contextmenu="onContextHighlight($event)"
+                                 class="relative mx-auto shadow-2xl"
+                                 :style="pageWidth ? `width:${pageWidth}px;height:${pageHeight}px;` : ''">
+                                <canvas x-ref="canvas"
+                                        class="block rounded-sm transition-[filter] duration-200"
+                                        :style="theme === 'dark' ? 'filter: invert(0.90) hue-rotate(180deg) contrast(0.96);' : ''"></canvas>
+                                <div x-ref="textLayer" class="pdf-text-layer"></div>
+                            </div>
+
+                            {{-- Bottom Prev / Next Page Bar --}}
+                            <div class="mt-4 flex items-center gap-3 text-xs"
+                                 :class="theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'">
+                                <button type="button" x-on:click="prevPage()" :disabled="page <= 1"
+                                        class="rounded border border-current/20 px-3 py-1 disabled:opacity-30">← Previous</button>
+                                <span class="tabular-nums">Page <strong x-text="page">1</strong> <span x-show="numPages">of <span x-text="numPages"></span></span></span>
+                                <button type="button" x-on:click="nextPage()" :disabled="numPages > 0 && page >= numPages"
+                                        class="rounded border border-current/20 px-3 py-1 disabled:opacity-30">Next →</button>
+                            </div>
+                        </div>
+
+                        {{-- Native PDF Fallback (with Dark/Light optical filter) --}}
+                        <div x-show="fallbackIframe" x-cloak class="relative">
+                            <button type="button" x-on:click="fallbackIframe = false"
+                                    class="mb-2 text-xs text-link hover:underline">← Back to Highlightable Reader</button>
+                            <iframe wire:key="pdf-frame-{{ $selected->id }}-{{ $initialPage }}-{{ $showPdfToolbar ? 1 : 0 }}"
+                                    src="{{ $selected->pdfUrl() }}#page={{ $initialPage }}&toolbar={{ $showPdfToolbar ? 1 : 0 }}&navpanes=0&view=FitH"
+                                    title="{{ $selected->title }} PDF"
+                                    :style="theme === 'dark' ? 'filter: invert(0.90) hue-rotate(180deg);' : ''"
+                                    :class="readMode ? 'h-[88vh]' : 'h-[84vh]'"
+                                    class="w-full rounded-lg border border-zinc-800 bg-zinc-950"></iframe>
+                        </div>
+                    @else
+                        <div class="flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-zinc-800 bg-sidebar/60 px-6 py-10 text-center">
+                            <svg class="h-8 w-8 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                            </svg>
+                            <p class="text-sm text-muted">No PDF attached to this {{ $isArticles ? 'article' : 'book' }} yet.</p>
+                            <button type="button"
+                                    wire:click="openPdfUpload"
+                                    class="rounded border border-zinc-700 bg-panel px-3 py-1.5 text-xs font-medium text-link transition hover:border-link/50">
+                                Attach PDF
+                            </button>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Slide-Over Highlights Notebook Drawer --}}
+                @if ($showHighlights)
+                    <aside data-highlights-panel
+                           :class="readMode ? 'h-full w-80 shrink-0 overflow-y-auto' : 'max-h-[84vh] w-full shrink-0 overflow-y-auto lg:w-80'"
+                           class="rounded-lg border border-zinc-800 bg-sidebar p-3.5">
+                        <div class="mb-3 flex items-center justify-between gap-2">
+                            <h3 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                                Highlights ({{ $highlights->count() }})
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                @if ($highlights->isNotEmpty())
+                                    <button type="button"
+                                            x-on:click="copyHighlightsMarkdown(@js(route('read.highlights.export', $selected->id)))"
+                                            class="rounded border border-white/10 bg-panel px-1.5 py-0.5 text-[10px] text-muted hover:border-link/40 hover:text-body"
+                                            title="Copy Markdown to clipboard">
+                                        Copy MD
+                                    </button>
+                                    <a href="{{ route('read.highlights.export', $selected->id) }}"
+                                       class="rounded border border-white/10 bg-panel px-1.5 py-0.5 text-[10px] text-link no-underline hover:border-link/40"
+                                       title="Download Markdown for Obsidian / Notion">
+                                        ↓ .md
+                                    </a>
+                                @endif
+                                <button type="button" wire:click="$set('showHighlights', false)"
+                                        class="text-xs text-muted hover:text-body">Close</button>
+                            </div>
+                        </div>
+                        <ul class="space-y-2.5">
+                            @forelse ($highlights as $highlight)
+                                @php
+                                    $borderAccent = match ($highlight->color) {
+                                        'green' => 'border-l-emerald-400',
+                                        'blue' => 'border-l-sky-400',
+                                        'rose' => 'border-l-rose-400',
+                                        default => 'border-l-amber-300',
+                                    };
+                                @endphp
+                                <li wire:key="highlight-{{ $highlight->id }}"
+                                    class="rounded border border-white/10 border-l-2 {{ $borderAccent }} bg-panel p-2.5 text-xs">
+                                    <div class="mb-1 flex items-center justify-between gap-2">
+                                        @if ($highlight->page_number)
+                                            <button type="button"
+                                                    wire:click="jumpToPage({{ $highlight->page_number }})"
+                                                    class="font-mono text-[11px] font-semibold text-link hover:underline">
+                                                p. {{ $highlight->page_number }}
+                                            </button>
+                                        @else
+                                            <span class="text-[11px] text-faint">—</span>
+                                        @endif
+                                        <button type="button"
+                                                wire:click="deleteHighlight({{ $highlight->id }})"
+                                                class="text-[11px] text-muted hover:text-red-400">
+                                            remove
+                                        </button>
+                                    </div>
+                                    <blockquote class="font-serif text-sm leading-relaxed text-body">“{{ $highlight->quote }}”</blockquote>
+                                    @if ($highlight->note)
+                                        <p class="mt-1.5 border-t border-white/5 pt-1.5 text-[11px] text-muted">{{ $highlight->note }}</p>
+                                    @endif
+                                    @if ($highlight->tagList() !== [])
+                                        <div class="mt-1.5 flex flex-wrap gap-1">
+                                            @foreach ($highlight->tagList() as $tag)
+                                                <span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-300">#{{ $tag }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </li>
+                            @empty
+                                <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-xs text-muted">
+                                    No highlights yet. Drag-select any passage in the book to save a highlight.
+                                </li>
+                            @endforelse
+                        </ul>
+                    </aside>
+                @endif
+            </div>
+
+            {{-- Instapaper-Style Fixed Translucent Glass Selection Pill (Works in BOTH Page View & Read Mode, never clipped) --}}
+            <div x-show="selection.open"
+                 x-cloak
+                 x-transition.opacity.duration.120ms
+                 x-on:mousedown.stop
+                 x-on:mouseup.stop
+                 x-on:touchend.stop
+                 data-highlight-pill
+                 :style="`left:${selection.x}px;top:${selection.y}px;`"
+                 class="fixed z-[60] -translate-x-1/2 -translate-y-full rounded-2xl border border-white/15 bg-zinc-900/95 px-2.5 py-2 text-xs text-zinc-100 shadow-2xl backdrop-blur-md">
+                <div class="flex items-center gap-2">
+                    {{-- 1-Click Color Highlight Dots --}}
+                    <button type="button" x-on:click="quickHighlight('yellow')" class="h-5 w-5 rounded-full bg-amber-300 transition hover:scale-110" title="Highlight Yellow"></button>
+                    <button type="button" x-on:click="quickHighlight('green')" class="h-5 w-5 rounded-full bg-emerald-400 transition hover:scale-110" title="Highlight Green"></button>
+                    <button type="button" x-on:click="quickHighlight('blue')" class="h-5 w-5 rounded-full bg-sky-400 transition hover:scale-110" title="Highlight Blue"></button>
+                    <button type="button" x-on:click="quickHighlight('rose')" class="h-5 w-5 rounded-full bg-rose-400 transition hover:scale-110" title="Highlight Rose"></button>
+
+                    <span class="h-4 w-px bg-white/15" aria-hidden="true"></span>
+
+                    {{-- Expand Note + #tags --}}
+                    <button type="button"
+                            x-on:click="selection.showNote = !selection.showNote"
+                            :class="selection.showNote ? 'text-amber-300' : 'text-zinc-300 hover:text-white'"
+                            class="rounded px-1.5 py-0.5 text-[11px] font-medium transition"
+                            title="Add note & #tags">
+                        + Note
+                    </button>
+
+                    {{-- Copy Quote --}}
+                    <button type="button"
+                            x-on:click="copySelectedQuote()"
+                            class="rounded px-1.5 py-0.5 text-[11px] text-zinc-300 transition hover:text-white"
+                            title="Copy quote">
+                        Copy
+                    </button>
+
+                    <button type="button"
+                            x-on:click="clearSelection()"
+                            class="rounded px-1 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+                            aria-label="Close">✕</button>
+                </div>
+
+                {{-- Optional Note & #tags Drawer inside Pill --}}
+                <div x-show="selection.showNote" x-cloak class="mt-2 w-60 space-y-1.5 border-t border-white/10 pt-2">
+                    <input type="text"
+                           x-model="selection.note"
+                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                           placeholder="Add a note…"
+                           class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                    <input type="text"
+                           x-model="selection.tags"
+                           x-on:keydown.enter.prevent="saveSelectionHighlight()"
+                           placeholder="#tags (e.g. stoicism, strategy)"
+                           class="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-amber-200 placeholder:text-zinc-500 focus:border-amber-400 focus:outline-none" />
+                    <div class="flex justify-end">
+                        <button type="button" x-on:click="saveSelectionHighlight()"
+                                class="rounded bg-amber-400 px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-amber-300">
+                            Save Highlight
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Acrobat-Style Bottom Action Dock (visible in Read Mode: Highlighter Pen, Aa, Speed, Listen, Highlights) --}}
+            <div x-show="readMode" x-cloak
+                 :class="theme === 'dark' ? 'border-zinc-800 bg-black/95 text-zinc-200' : (theme === 'sepia' ? 'border-[#dfd3b8] bg-[#efe6d1]/95 text-[#3b2f20]' : 'border-zinc-200 bg-white/95 text-zinc-800')"
+                 class="relative shrink-0 border-t px-2 py-2">
+                {{-- Floating Highlighter Color Swatch Bar when Pen Mode is ON --}}
+                <div x-show="penMode" x-cloak x-transition.opacity
+                     class="absolute -top-11 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1.5 text-xs text-zinc-200 shadow-xl backdrop-blur">
+                    <span class="text-[10px] uppercase tracking-wider text-zinc-400">Pen color</span>
+                    <button type="button" x-on:click="penColor = 'yellow'" :class="penColor === 'yellow' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-amber-300 transition" aria-label="Yellow pen"></button>
+                    <button type="button" x-on:click="penColor = 'green'" :class="penColor === 'green' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-emerald-400 transition" aria-label="Green pen"></button>
+                    <button type="button" x-on:click="penColor = 'blue'" :class="penColor === 'blue' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-sky-400 transition" aria-label="Blue pen"></button>
+                    <button type="button" x-on:click="penColor = 'rose'" :class="penColor === 'rose' ? 'ring-2 ring-white scale-110' : ''" class="h-4 w-4 rounded-full bg-rose-400 transition" aria-label="Rose pen"></button>
+                </div>
+
+                {{-- Floating Aa Typography & Theme Sheet --}}
+                <div x-show="showAaSheet" x-cloak x-transition.opacity
+                     x-on:click.outside="showAaSheet = false"
+                     class="absolute bottom-full left-1/2 mb-2 flex w-[min(22rem,92vw)] -translate-x-1/2 flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-900/95 p-3.5 text-xs text-zinc-100 shadow-2xl backdrop-blur">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Theme</span>
+                        <div class="flex gap-1.5">
+                            <button type="button" x-on:click="setTheme('dark')" :class="theme === 'dark' ? 'ring-2 ring-link' : ''" class="rounded bg-black px-2.5 py-1 text-zinc-100 border border-zinc-700">Dark</button>
+                            <button type="button" x-on:click="setTheme('sepia')" :class="theme === 'sepia' ? 'ring-2 ring-link' : ''" class="rounded bg-[#f4ecd8] px-2.5 py-1 text-[#3b2f20]">Sepia</button>
+                            <button type="button" x-on:click="setTheme('light')" :class="theme === 'light' ? 'ring-2 ring-link' : ''" class="rounded bg-white px-2.5 py-1 text-zinc-900">Light</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Text Size</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" x-on:click="smallerFont()" class="rounded border border-zinc-700 px-2.5 py-1 hover:border-zinc-500">A-</button>
+                            <span class="w-10 text-center font-mono tabular-nums" x-text="readFontSize + 'px'"></span>
+                            <button type="button" x-on:click="largerFont()" class="rounded border border-zinc-700 px-2.5 py-1 hover:border-zinc-500">A+</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Font & Width</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" x-on:click="cycleFont()" class="rounded border border-zinc-700 px-2.5 py-1 capitalize hover:border-zinc-500" x-text="readFont"></button>
+                            <button type="button" x-on:click="cycleWidth()" class="rounded border border-zinc-700 px-2.5 py-1 capitalize hover:border-zinc-500" x-text="readWidth"></button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Bottom Dock Icons (matching Acrobat Mobile's clean 5-icon footer) --}}
+                <div class="mx-auto grid max-w-xl grid-cols-5 items-center gap-1 text-[11px]">
+                    <button type="button"
+                            x-on:click="togglePenMode()"
+                            :class="penMode ? 'text-amber-300 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Z" />
+                        </svg>
+                        <span>Highlight</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="showAaSheet = !showAaSheet"
+                            :class="showAaSheet ? 'text-link font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <span class="font-serif text-base font-bold leading-5">Aa</span>
+                        <span>Text</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="toggleSpeedRead()"
+                            :class="speedRead.open ? 'text-amber-300 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                        </svg>
+                        <span>Speed</span>
+                    </button>
+
+                    <button type="button"
+                            x-on:click="toggleSpeech()"
+                            :class="tts.speaking ? 'text-emerald-400 font-semibold' : 'opacity-75 hover:opacity-100'"
+                            class="flex flex-col items-center gap-1 rounded-lg py-1 transition">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                        </svg>
+                        <span x-text="tts.speaking ? ('Stop ' + tts.rate + 'x') : 'Listen'">Listen</span>
+                    </button>
+
+                    <button type="button"
+                            wire:click="$toggle('showHighlights')"
+                            @class([
+                                'flex flex-col items-center gap-1 rounded-lg py-1 transition',
+                                'text-amber-300 font-semibold' => $showHighlights,
+                                'opacity-75 hover:opacity-100' => ! $showHighlights,
+                            ])>
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+                        </svg>
+                        <span>Notes{{ $highlights->isNotEmpty() ? ' ('.$highlights->count().')' : '' }}</span>
+                    </button>
+                </div>
+            </div>
+
+            {{-- Everything below hides cleanly in Adobe Read Mode --}}
+            <div x-show="!readMode">
+
+            {{-- Secondary Metadata Strip --}}
             <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 @unless ($isArticles)
                 <div class="sm:w-28 sm:shrink-0" x-data="{ typeOpen: false }" wire:key="book-type-{{ $selected->id }}">
@@ -285,98 +1285,42 @@
                     </template>
                 </div>
                 @endunless
-                <div class="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Total time read</div>
-                    <div class="text-lg font-semibold tabular-nums" x-text="formatMinutes(bookMinutes())">{{ $bookTotals['totalDuration'] }}</div>
-                </div>
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Read this week</div>
-                    <div class="text-sm font-semibold">{{ $bookTotals['weekDays'] !== '' ? $bookTotals['weekDays'] : '—' }}</div>
-                </div>
-                <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
-                    <div class="text-[10px] uppercase tracking-wide text-muted">Last read</div>
-                    <div class="text-sm font-semibold">
-                        @if ($bookTotals['lastRead'])
-                            <span title="{{ $bookTotals['lastRead']->timezone($timezone)->format('j M Y, H:i') }}">{{ \App\Livewire\Read::relativeDay($bookTotals['lastRead']) }}</span>
+
+                <div class="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
+                        <div class="text-[10px] uppercase tracking-wide text-muted">Read this week</div>
+                        <div class="text-sm font-semibold">{{ $bookTotals['weekDays'] !== '' ? $bookTotals['weekDays'] : '—' }}</div>
+                    </div>
+                    <div class="rounded border border-white/10 bg-sidebar px-3 py-2">
+                        <div class="text-[10px] uppercase tracking-wide text-muted">Last read</div>
+                        <div class="text-sm font-semibold">
+                            @if ($bookTotals['lastRead'])
+                                <span title="{{ $bookTotals['lastRead']->timezone($timezone)->format('j M Y, H:i') }}">{{ \App\Livewire\Read::relativeDay($bookTotals['lastRead']) }}</span>
+                            @else
+                                —
+                            @endif
+                        </div>
+                    </div>
+                    <div class="col-span-2 flex flex-col justify-center gap-1 px-1 py-1 sm:col-span-1">
+                        @if ($selected->isStartedToday())
+                            <button type="button" wire:click="clearStartedToday({{ $selected->id }})"
+                                    class="text-left text-xs text-muted hover:text-body">Clear 'started today'</button>
                         @else
-                            —
+                            <button type="button" wire:click="markStartedToday({{ $selected->id }})"
+                                    class="text-left text-xs text-muted hover:text-body">Mark as 'started today'</button>
+                        @endif
+                        @if ($selected->isFinished())
+                            <button type="button" wire:click="markBookReading({{ $selected->id }})"
+                                    class="text-left text-xs text-muted hover:text-body">Mark as unfinished</button>
+                        @else
+                            <button type="button" wire:click="markBookFinished({{ $selected->id }})"
+                                    class="text-left text-xs text-muted hover:text-body">Mark as 'finished'</button>
                         @endif
                     </div>
                 </div>
-                <div class="flex flex-col justify-center gap-1 px-1 py-1">
-                    @if ($selected->isStartedToday())
-                        <button type="button" wire:click="clearStartedToday({{ $selected->id }})"
-                                class="text-left text-xs text-muted hover:text-body">Clear 'started today'</button>
-                    @else
-                        <button type="button" wire:click="markStartedToday({{ $selected->id }})"
-                                class="text-left text-xs text-muted hover:text-body">Mark as 'started today'</button>
-                    @endif
-                    @if ($selected->isFinished())
-                        <button type="button" wire:click="markBookReading({{ $selected->id }})"
-                                class="text-left text-xs text-muted hover:text-body">Mark as unfinished</button>
-                    @else
-                        <button type="button" wire:click="markBookFinished({{ $selected->id }})"
-                                class="text-left text-xs text-muted hover:text-body">Mark as 'finished'</button>
-                    @endif
-                </div>
-                </div>
             </div>
 
-            <div class="mb-4 flex flex-wrap items-center justify-center gap-2">
-                @if ($runningSession)
-                    <button type="button" wire:click="stopSession({{ $runningSession->id }})"
-                            class="rounded bg-mark px-3 py-1.5 text-sm font-medium text-black">
-                        Stop session
-                    </button>
-                @else
-                    <button type="button" wire:click="startSessionNow"
-                            class="rounded bg-check px-3 py-1.5 text-sm font-medium text-white">
-                        Start session now
-                    </button>
-                @endif
-                <button type="button" wire:click="startAddSession"
-                        class="rounded border border-white/10 px-3 py-1.5 text-sm text-link hover:bg-panel">
-                    + Log session
-                </button>
-            </div>
-
-            @if ($addingSession)
-                <form wire:submit="addSession" class="mb-4 space-y-2 rounded border border-white/10 bg-panel p-3">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                        <div>
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Start</label>
-                            <input type="datetime-local" wire:model="newSessionStartedAt" required
-                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                            @error('newSessionStartedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Finish</label>
-                            <input type="datetime-local" wire:model="newSessionFinishedAt" required
-                                   class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                            @error('newSessionFinishedAt') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                        </div>
-                        @unless ($isArticles)
-                        <div class="sm:w-28">
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Pages</label>
-                            <input type="number" min="0" wire:model="newSessionPagesRead" placeholder="—"
-                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                            @error('newSessionPagesRead') <p class="text-xs text-red-400">{{ $message }}</p> @enderror
-                        </div>
-                        @endunless
-                        <div class="sm:flex-1">
-                            <label class="mb-1 block text-[10px] uppercase tracking-wide text-muted">Note</label>
-                            <input type="text" wire:model="newSessionNote" placeholder="Optional"
-                                   class="w-full rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none" />
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button type="submit" class="rounded bg-check px-3 py-1.5 text-sm text-white">Save session</button>
-                        <button type="button" wire:click="cancelForms" class="text-sm text-muted">Cancel</button>
-                    </div>
-                </form>
-            @endif
-
+            {{-- Sessions History --}}
             <h3 class="mb-2 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Sessions</h3>
             <ul class="space-y-2">
                 @forelse ($sessions as $session)
@@ -486,10 +1430,661 @@
                     </li>
                 @endforelse
             </ul>
-        @endif
-    </div>
+            </div>
+        </section>
+    @endif
 
     <script>
+        function pdfBookReader(cfg) {
+            return {
+                pdfUrl: cfg.pdfUrl || null,
+                page: cfg.initialPage || 1,
+                numPages: 0,
+                scale: 1.35,
+                pageWidth: 0,
+                pageHeight: 0,
+                loading: false,
+                fallbackIframe: false,
+                readMode: false,
+                penMode: false,
+                penColor: 'yellow',
+                showAaSheet: false,
+                reflowBlocks: [],
+                readFontSize: (() => {
+                    try { return Number(localStorage.getItem('read-font-size')) || 26; } catch (e) { return 26; }
+                })(),
+                readFont: (() => {
+                    try { return localStorage.getItem('read-font') || 'serif'; } catch (e) { return 'serif'; }
+                })(),
+                readWidth: (() => {
+                    try { return localStorage.getItem('read-width') || 'medium'; } catch (e) { return 'medium'; }
+                })(),
+                theme: (() => {
+                    try { return localStorage.getItem('read-theme') || 'dark'; } catch (e) { return 'dark'; }
+                })(),
+                speedRead: {
+                    open: false,
+                    playing: false,
+                    words: [],
+                    index: 0,
+                    wpm: (() => {
+                        try { return Number(localStorage.getItem('read-wpm')) || 320; } catch (e) { return 320; }
+                    })(),
+                    timer: null,
+                },
+                tts: {
+                    speaking: false,
+                    blockIndex: -1,
+                    rate: (() => {
+                        try { return Number(localStorage.getItem('read-tts-rate')) || 1; } catch (e) { return 1; }
+                    })(),
+                },
+                stopUrl: cfg.stopUrl,
+                activeBookId: cfg.activeBookId,
+                highlights: cfg.highlights || [],
+                toast: '',
+                selection: { open: false, showNote: false, text: '', color: 'yellow', note: '', tags: '', x: 0, y: 0 },
+                _pdfDoc: null,
+                _pdfjs: null,
+                _rendering: false,
+                _pendingPage: null,
+
+                init() {
+                    const csrf = document.querySelector('meta[name=csrf-token]')?.content || '';
+                    window.addEventListener('pagehide', () => {
+                        if (!this.activeBookId || !navigator.sendBeacon) return;
+                        const fd = new FormData();
+                        fd.append('_token', csrf);
+                        fd.append('book_id', String(this.activeBookId));
+                        navigator.sendBeacon(this.stopUrl, fd);
+                    });
+
+                    if (this.pdfUrl) {
+                        this.loadPdf();
+                    }
+                },
+
+                toggleTheme() {
+                    const order = ['dark', 'sepia', 'light'];
+                    const next = order[(order.indexOf(this.theme) + 1) % order.length];
+                    this.setTheme(next);
+                },
+
+                setTheme(name) {
+                    this.theme = name;
+                    try { localStorage.setItem('read-theme', this.theme); } catch (e) {}
+                },
+
+                togglePenMode() {
+                    this.penMode = !this.penMode;
+                    this.showAaSheet = false;
+                    this.clearSelection();
+                },
+
+                toggleReadMode() {
+                    this.stopSpeech();
+                    this.closeSpeedRead();
+                    this.readMode = !this.readMode;
+                    this.clearSelection();
+                    if (!this.readMode && this._pdfDoc) {
+                        this.$nextTick(() => this.renderPage(this.page));
+                    }
+                },
+
+                largerFont() {
+                    this.readFontSize = Math.min(30, this.readFontSize + 2);
+                    try { localStorage.setItem('read-font-size', String(this.readFontSize)); } catch (e) {}
+                },
+
+                smallerFont() {
+                    this.readFontSize = Math.max(14, this.readFontSize - 2);
+                    try { localStorage.setItem('read-font-size', String(this.readFontSize)); } catch (e) {}
+                },
+
+                cycleFont() {
+                    const order = ['serif', 'sans', 'mono'];
+                    this.readFont = order[(order.indexOf(this.readFont) + 1) % order.length];
+                    try { localStorage.setItem('read-font', this.readFont); } catch (e) {}
+                },
+
+                cycleWidth() {
+                    const order = ['narrow', 'medium', 'wide'];
+                    this.readWidth = order[(order.indexOf(this.readWidth) + 1) % order.length];
+                    try { localStorage.setItem('read-width', this.readWidth); } catch (e) {}
+                },
+
+                toggleSpeedRead() {
+                    if (this.speedRead.open) {
+                        this.closeSpeedRead();
+                        return;
+                    }
+                    this.stopSpeech();
+                    this.syncSpeedWords();
+                    this.speedRead.open = true;
+                },
+
+                syncSpeedWords() {
+                    const allText = (this.reflowBlocks || []).map((b) => b.text).join(' ');
+                    this.speedRead.words = allText.split(/\s+/).filter(Boolean);
+                    this.speedRead.index = 0;
+                },
+
+                speedWordParts() {
+                    const w = this.speedRead.words[this.speedRead.index] || 'Ready';
+                    const len = w.length;
+                    const pivotIdx = len <= 1 ? 0 : (len <= 5 ? 1 : (len <= 9 ? 2 : (len <= 13 ? 3 : 4)));
+                    return {
+                        left: w.slice(0, pivotIdx),
+                        pivot: w.charAt(pivotIdx),
+                        right: w.slice(pivotIdx + 1),
+                    };
+                },
+
+                toggleSpeedPlay() {
+                    if (this.speedRead.playing) {
+                        this.pauseSpeedRead();
+                        return;
+                    }
+                    if (!this.speedRead.words.length) {
+                        this.syncSpeedWords();
+                    }
+                    if (!this.speedRead.words.length) return;
+                    this.speedRead.playing = true;
+                    this.scheduleSpeedTick();
+                },
+
+                scheduleSpeedTick() {
+                    clearTimeout(this.speedRead.timer);
+                    if (!this.speedRead.playing) return;
+                    const word = this.speedRead.words[this.speedRead.index] || '';
+                    const baseMs = Math.max(80, Math.round(60000 / Math.max(150, this.speedRead.wpm)));
+                    const pauseMult = /[.!?]$/.test(word) ? 1.85 : (/[,;:]$/.test(word) ? 1.35 : 1);
+                    this.speedRead.timer = setTimeout(async () => {
+                        if (!this.speedRead.playing) return;
+                        if (this.speedRead.index < this.speedRead.words.length - 1) {
+                            this.speedRead.index++;
+                            this.scheduleSpeedTick();
+                        } else if (this.numPages && this.page < this.numPages) {
+                            this.page++;
+                            this.$wire.set('readerCurrentPage', String(this.page), false);
+                            this.$wire.saveCurrentPage();
+                            await this.renderPage(this.page);
+                            this.syncSpeedWords();
+                            this.scheduleSpeedTick();
+                        } else {
+                            this.pauseSpeedRead();
+                        }
+                    }, Math.round(baseMs * pauseMult));
+                },
+
+                pauseSpeedRead() {
+                    this.speedRead.playing = false;
+                    clearTimeout(this.speedRead.timer);
+                    this.speedRead.timer = null;
+                },
+
+                restartSpeedRead() {
+                    this.pauseSpeedRead();
+                    this.speedRead.index = 0;
+                },
+
+                closeSpeedRead() {
+                    this.pauseSpeedRead();
+                    this.speedRead.open = false;
+                },
+
+                updateWpm() {
+                    try { localStorage.setItem('read-wpm', String(this.speedRead.wpm)); } catch (e) {}
+                },
+
+                toggleSpeech() {
+                    if (this.tts.speaking) {
+                        this.stopSpeech();
+                        return;
+                    }
+                    if (!('speechSynthesis' in window) || !this.reflowBlocks.length) return;
+                    this.closeSpeedRead();
+                    this.tts.speaking = true;
+                    this.speakBlock(0);
+                },
+
+                speakBlock(idx) {
+                    if (!this.tts.speaking || idx >= this.reflowBlocks.length) {
+                        this.stopSpeech();
+                        return;
+                    }
+                    window.speechSynthesis.cancel();
+                    this.tts.blockIndex = idx;
+                    const utter = new SpeechSynthesisUtterance(this.reflowBlocks[idx].text);
+                    utter.rate = this.tts.rate;
+                    utter.onend = () => {
+                        if (this.tts.speaking) {
+                            this.speakBlock(idx + 1);
+                        }
+                    };
+                    utter.onerror = () => {
+                        this.stopSpeech();
+                    };
+                    window.speechSynthesis.speak(utter);
+                },
+
+                stopSpeech() {
+                    this.tts.speaking = false;
+                    this.tts.blockIndex = -1;
+                    try { window.speechSynthesis?.cancel(); } catch (e) {}
+                },
+
+                cycleSpeechRate() {
+                    const rates = [1, 1.25, 1.5, 2];
+                    this.tts.rate = rates[(rates.indexOf(this.tts.rate) + 1) % rates.length];
+                    try { localStorage.setItem('read-tts-rate', String(this.tts.rate)); } catch (e) {}
+                    if (this.tts.speaking && this.tts.blockIndex >= 0) {
+                        this.speakBlock(this.tts.blockIndex);
+                    }
+                },
+
+                async copyHighlightsMarkdown(url) {
+                    try {
+                        const res = await fetch(url, { credentials: 'same-origin' });
+                        if (!res.ok) return;
+                        const md = await res.text();
+                        await navigator.clipboard.writeText(md);
+                        this.toast = 'Copied Markdown to clipboard';
+                        setTimeout(() => { this.toast = ''; }, 2400);
+                    } catch (e) {
+                        this.toast = 'Could not copy — use ↓ .md';
+                        setTimeout(() => { this.toast = ''; }, 2400);
+                    }
+                },
+
+                buildReflowBlocks(textContent, pageHeightPt) {
+                    const rawLines = [];
+                    const buckets = new Map();
+
+                    for (const item of textContent.items) {
+                        const str = (item.str || '');
+                        if (!str.trim()) continue;
+                        const x = item.transform[4];
+                        const y = item.transform[5];
+                        const size = Math.abs(item.transform[3]) || Math.abs(item.transform[0]) || 11;
+
+                        // Skip page headers and footers
+                        if (pageHeightPt > 200 && (y > pageHeightPt - 58 || y < 56)) {
+                            continue;
+                        }
+
+                        const yKey = Math.round(y / 2) * 2;
+                        if (!buckets.has(yKey)) {
+                            buckets.set(yKey, { y, xMin: x, size, parts: [] });
+                        }
+                        const line = buckets.get(yKey);
+                        line.xMin = Math.min(line.xMin, x);
+                        line.size = Math.max(line.size, size);
+                        line.parts.push({ x, str });
+                    }
+
+                    const sortedLines = [...buckets.values()].sort((a, b) => b.y - a.y);
+                    if (sortedLines.length === 0) return [];
+
+                    const sizes = sortedLines.map((l) => l.size).sort((a, b) => a - b);
+                    const bodySize = sizes[Math.floor(sizes.length / 2)] || 11;
+                    const leftMargins = sortedLines.map((l) => l.xMin).sort((a, b) => a - b);
+                    const baseLeft = leftMargins[Math.floor(leftMargins.length * 0.25)] || 72;
+
+                    for (const l of sortedLines) {
+                        l.parts.sort((a, b) => a.x - b.x);
+                        const text = l.parts.map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim();
+                        if (text) {
+                            rawLines.push({ y: l.y, x: l.xMin, size: l.size, text });
+                        }
+                    }
+
+                    const blocks = [];
+                    let currentPara = '';
+                    let prevY = null;
+
+                    const flushPara = () => {
+                        const cleaned = currentPara.trim();
+                        if (cleaned) {
+                            blocks.push({ type: 'paragraph', text: cleaned });
+                        }
+                        currentPara = '';
+                    };
+
+                    for (const line of rawLines) {
+                        const isHeading = line.size >= bodySize * 1.18;
+                        const yGap = prevY !== null ? (prevY - line.y) : 0;
+                        const isIndented = line.x > baseLeft + 8;
+
+                        if (isHeading) {
+                            flushPara();
+                            const last = blocks[blocks.length - 1];
+                            if (last && last.type === 'heading' && yGap < line.size * 1.8) {
+                                last.text += ' ' + line.text;
+                            } else {
+                                blocks.push({ type: 'heading', text: line.text });
+                            }
+                        } else {
+                            if (currentPara && (yGap > bodySize * 1.65 || isIndented)) {
+                                flushPara();
+                            }
+                            if (currentPara.endsWith('-')) {
+                                currentPara = currentPara.slice(0, -1) + line.text;
+                            } else {
+                                currentPara = currentPara ? currentPara + ' ' + line.text : line.text;
+                            }
+                        }
+                        prevY = line.y;
+                    }
+                    flushPara();
+
+                    return blocks;
+                },
+
+                renderHighlightedHtml(text) {
+                    const escapeHtml = (s) => s
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;');
+
+                    let html = escapeHtml(text);
+                    const pageHighlights = (this.highlights || []).filter((h) => Number(h.page) === Number(this.page));
+                    const markClasses = {
+                        yellow: 'rounded-sm bg-amber-300/35 px-0.5 text-inherit',
+                        green: 'rounded-sm bg-emerald-400/35 px-0.5 text-inherit',
+                        blue: 'rounded-sm bg-sky-400/35 px-0.5 text-inherit',
+                        rose: 'rounded-sm bg-rose-400/35 px-0.5 text-inherit',
+                    };
+
+                    for (const h of pageHighlights) {
+                        if (!h.quote || h.quote.length < 3) continue;
+                        const needle = escapeHtml(h.quote);
+                        const cls = markClasses[h.color] || markClasses.yellow;
+                        const escapedRegex = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        html = html.replace(new RegExp(escapedRegex, 'gi'), (m) => `<mark class="${cls}">${m}</mark>`);
+                    }
+
+                    return html;
+                },
+
+                async loadPdf() {
+                    this.loading = true;
+                    try {
+                        const pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
+                        pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+                        this._pdfjs = pdfjs;
+                        this._pdfDoc = await pdfjs.getDocument(this.pdfUrl).promise;
+                        this.numPages = this._pdfDoc.numPages;
+                        this.page = Math.min(Math.max(1, this.page), this.numPages);
+                        await this.renderPage(this.page);
+                    } catch (e) {
+                        this.fallbackIframe = true;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async renderPage(num) {
+                    if (!this._pdfDoc) return;
+                    if (this._rendering) {
+                        this._pendingPage = num;
+                        return;
+                    }
+                    this._rendering = true;
+                    this.clearSelection();
+                    try {
+                        const page = await this._pdfDoc.getPage(num);
+                        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                        const viewport = page.getViewport({ scale: this.scale });
+                        const canvas = this.$refs.canvas;
+                        if (!canvas) return;
+
+                        this.pageWidth = Math.round(viewport.width);
+                        this.pageHeight = Math.round(viewport.height);
+
+                        canvas.width = Math.round(viewport.width * dpr);
+                        canvas.height = Math.round(viewport.height * dpr);
+                        canvas.style.width = this.pageWidth + 'px';
+                        canvas.style.height = this.pageHeight + 'px';
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                        await page.render({ canvasContext: ctx, viewport }).promise;
+
+                        await this.renderTextLayer(page, viewport);
+                    } finally {
+                        this._rendering = false;
+                        if (this._pendingPage !== null && this._pendingPage !== num) {
+                            const next = this._pendingPage;
+                            this._pendingPage = null;
+                            this.renderPage(next);
+                        }
+                    }
+                },
+
+                async renderTextLayer(page, viewport) {
+                    const container = this.$refs.textLayer;
+                    if (!container || !this._pdfjs) return;
+                    container.innerHTML = '';
+
+                    const textContent = await page.getTextContent();
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    this.reflowBlocks = this.buildReflowBlocks(textContent, baseViewport.height);
+                    const pageHighlights = (this.highlights || []).filter((h) => Number(h.page) === Number(this.page));
+                    const colorWash = {
+                        yellow: 'rgba(250, 204, 21, 0.28)',
+                        green: 'rgba(52, 211, 153, 0.28)',
+                        blue: 'rgba(56, 189, 248, 0.28)',
+                        rose: 'rgba(251, 113, 133, 0.28)',
+                    };
+
+                    for (const item of textContent.items) {
+                        if (!item.str) continue;
+                        const tx = this._pdfjs.Util.transform(viewport.transform, item.transform);
+                        const fontHeight = Math.hypot(tx[2], tx[3]);
+                        const span = document.createElement('span');
+                        span.textContent = item.str;
+                        span.style.left = tx[4] + 'px';
+                        span.style.top = (tx[5] - fontHeight) + 'px';
+                        span.style.fontSize = fontHeight + 'px';
+                        span.style.fontFamily = 'serif';
+                        if (item.width > 0) {
+                            span.style.minWidth = (item.width * viewport.scale) + 'px';
+                        }
+
+                        const trimmed = item.str.trim().toLowerCase();
+                        if (trimmed.length >= 3) {
+                            const match = pageHighlights.find((h) => h.quote && h.quote.toLowerCase().includes(trimmed));
+                            if (match) {
+                                span.style.backgroundColor = colorWash[match.color] || colorWash.yellow;
+                            }
+                        }
+
+                        container.appendChild(span);
+                    }
+                },
+
+                goToPage(num) {
+                    const target = parseInt(num, 10);
+                    if (isNaN(target) || target < 1) return;
+                    this.page = this.numPages ? Math.min(target, this.numPages) : target;
+                    if (this._pdfDoc) {
+                        this.renderPage(this.page);
+                    }
+                },
+
+                prevPage() {
+                    if (this.page <= 1) return;
+                    this.page--;
+                    this.$wire.set('readerCurrentPage', String(this.page), false);
+                    this.$wire.saveCurrentPage();
+                    this.renderPage(this.page);
+                },
+
+                nextPage() {
+                    if (this.numPages && this.page >= this.numPages) return;
+                    this.page++;
+                    this.$wire.set('readerCurrentPage', String(this.page), false);
+                    this.$wire.saveCurrentPage();
+                    this.renderPage(this.page);
+                },
+
+                zoomIn() {
+                    this.scale = Math.min(2.4, Math.round((this.scale + 0.15) * 100) / 100);
+                    this.renderPage(this.page);
+                },
+
+                zoomOut() {
+                    this.scale = Math.max(0.75, Math.round((this.scale - 0.15) * 100) / 100);
+                    this.renderPage(this.page);
+                },
+
+                onWindowPointerUp(e) {
+                    if (e.target?.closest?.('[data-highlight-pill]')) {
+                        return;
+                    }
+                    setTimeout(() => this.captureSelection(false), 15);
+                },
+
+                onContextHighlight(e) {
+                    const sel = window.getSelection();
+                    const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+                    if (text.length >= 2) {
+                        e.preventDefault();
+                        this.captureSelection(true);
+                    }
+                },
+
+                async captureSelection(forcePopover = false) {
+                    const sel = window.getSelection();
+                    const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+                    if (text.length < 2 || !sel.rangeCount) {
+                        return;
+                    }
+
+                    const anchor = sel.anchorNode;
+                    const inReflow = this.$refs.reflowWrap && anchor && this.$refs.reflowWrap.contains(anchor);
+                    const inCanvas = this.$refs.pageWrap && anchor && this.$refs.pageWrap.contains(anchor);
+                    if (!inReflow && !inCanvas) {
+                        return;
+                    }
+
+                    // Instant 1-swipe highlighting when Highlighter Pen Mode is active
+                    if (this.penMode && !forcePopover) {
+                        const color = this.penColor || 'yellow';
+                        const pageNum = this.page;
+                        try { sel.removeAllRanges(); } catch (err) {}
+                        await this.persistHighlight(text, pageNum, color, null, null);
+                        return;
+                    }
+
+                    const range = sel.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    if (!rect || (rect.width === 0 && rect.height === 0)) {
+                        return;
+                    }
+
+                    this.selection.text = text;
+                    this.selection.color = this.penColor || 'yellow';
+                    this.selection.note = '';
+                    this.selection.tags = '';
+                    this.selection.showNote = false;
+                    this.selection.x = Math.min(Math.max(150, rect.left + rect.width / 2), window.innerWidth - 150);
+                    this.selection.y = Math.max(72, rect.top - 10);
+                    this.selection.open = true;
+                },
+
+                async quickHighlight(color) {
+                    if (!this.selection.text) return;
+                    const quote = this.selection.text;
+                    const pageNum = this.page;
+                    this.penColor = color;
+                    this.clearSelection();
+                    await this.persistHighlight(quote, pageNum, color, null, null);
+                },
+
+                async copySelectedQuote() {
+                    if (!this.selection.text) return;
+                    try {
+                        await navigator.clipboard.writeText(this.selection.text);
+                        this.toast = 'Copied quote';
+                        setTimeout(() => { this.toast = ''; }, 2000);
+                    } catch (e) {}
+                    this.clearSelection();
+                },
+
+                clearSelection() {
+                    this.selection.open = false;
+                    this.selection.showNote = false;
+                    this.selection.text = '';
+                    this.selection.note = '';
+                    this.selection.tags = '';
+                    try { window.getSelection()?.removeAllRanges(); } catch (e) {}
+                },
+
+                async saveSelectionHighlight() {
+                    if (!this.selection.text) return;
+                    const quote = this.selection.text;
+                    const color = this.selection.color || this.penColor || 'yellow';
+                    const note = this.selection.note;
+                    const tags = this.selection.tags;
+                    const pageNum = this.page;
+
+                    this.clearSelection();
+                    await this.persistHighlight(quote, pageNum, color, note, tags);
+                },
+
+                async persistHighlight(quote, pageNum, color, note, tags) {
+                    await this.$wire.addHighlight(quote, pageNum, color, note, tags);
+                    this.highlights = [...this.highlights, { page: pageNum, quote, color }];
+                    if (!this.readMode && this._pdfDoc) {
+                        this.renderPage(this.page);
+                    }
+                    this.toast = 'Highlighted (p. ' + pageNum + ')';
+                    setTimeout(() => { this.toast = ''; }, 2400);
+                },
+
+                handleKey(e) {
+                    const tag = document.activeElement?.tagName;
+                    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+
+                    if (e.key === ' ' && this.speedRead.open) {
+                        e.preventDefault();
+                        this.toggleSpeedPlay();
+                        return;
+                    }
+
+                    if (e.key === 'Escape') {
+                        if (this.selection.open) {
+                            this.clearSelection();
+                        } else if (this.speedRead.open) {
+                            this.closeSpeedRead();
+                        } else if (this.readMode) {
+                            this.stopSpeech();
+                            this.readMode = false;
+                        } else if (this.$wire.readerOpen) {
+                            this.stopSpeech();
+                            this.$wire.closeReader();
+                        }
+                        return;
+                    }
+
+                    if (!this.pdfUrl) return;
+                    if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        this.nextPage();
+                    } else if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        this.prevPage();
+                    } else if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {
+                        e.preventDefault();
+                        this.toggleReadMode();
+                    }
+                },
+            };
+        }
+
         function formatReadMinutes(minutes) {
             minutes = Math.max(0, Math.floor(minutes));
             if (minutes <= 0) return '0m';
@@ -530,6 +2125,53 @@
                     this.weekRuns = t.weekRuns || [];
                     this.bookRuns = t.bookRuns || [];
                     this.tick = Date.now();
+                },
+            };
+        }
+
+        // Lazy-loads PDF.js from CDN only when a PDF is chosen, renders Page 1 to a JPEG thumbnail,
+        // and syncs the data URL to Livewire so cover_path is saved automatically on submit.
+        function pdfCoverExtractor(targetProp) {
+            return {
+                preview: null,
+                status: '',
+                async extract(event) {
+                    const file = event.target.files && event.target.files[0];
+                    this.preview = null;
+                    this.status = '';
+                    this.$wire.set(targetProp, null);
+
+                    if (!file || (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) {
+                        return;
+                    }
+
+                    this.status = 'Extracting Page 1 cover…';
+
+                    try {
+                        const pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
+                        pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
+
+                        const buffer = await file.arrayBuffer();
+                        const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+                        const page = await pdf.getPage(1);
+                        const baseViewport = page.getViewport({ scale: 1 });
+                        const scale = Math.min(2, 360 / baseViewport.width);
+                        const viewport = page.getViewport({ scale });
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(viewport.width);
+                        canvas.height = Math.round(viewport.height);
+
+                        const ctx = canvas.getContext('2d');
+                        await page.render({ canvasContext: ctx, viewport }).promise;
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                        this.preview = dataUrl;
+                        this.status = 'Cover extracted from Page 1.';
+                        this.$wire.set(targetProp, dataUrl);
+                    } catch (e) {
+                        this.status = 'PDF attached (will use typographic cover).';
+                    }
                 },
             };
         }
@@ -608,4 +2250,3 @@
         }
     </script>
 </div>
- 

@@ -7,8 +7,10 @@ use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
 use App\Support\ReechTimelog;
+use App\Support\WeekLabel;
 use Carbon\Carbon;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Title('Reading stats')]
@@ -24,9 +26,65 @@ class ReadStats extends Component
         '—' => '#8b8b8b',
     ];
 
+    /** ISO week shown ("2026-W46"); empty or invalid means the current week. */
+    #[Url(as: 'week', history: true, except: '')]
+    public string $week = '';
+
     public function mount(): void
     {
         Onboarding::complete('read.stats');
+        $this->constrainWeek();
+    }
+
+    public function updatedWeek(): void
+    {
+        $this->constrainWeek();
+    }
+
+    public function previousWeek(): void
+    {
+        $this->week = $this->weekStart()->copy()->subWeek()->format('o-\WW');
+    }
+
+    public function nextWeek(): void
+    {
+        if ($this->isCurrentWeek()) {
+            return;
+        }
+
+        $next = $this->weekStart()->copy()->addWeek()->format('o-\WW');
+        $this->week = $next === Clock::currentWeek() ? '' : $next;
+    }
+
+    public function goToCurrentWeek(): void
+    {
+        $this->week = '';
+    }
+
+    /** Selected ISO week, falling back to the current week for empty, invalid, or future values. */
+    public function weekKey(): string
+    {
+        $normalized = self::normalizedWeekKey($this->week);
+        $current = Clock::currentWeek();
+
+        if ($normalized === null || $normalized > $current) {
+            return $current;
+        }
+
+        return $normalized;
+    }
+
+    public function isCurrentWeek(): bool
+    {
+        return $this->weekKey() === Clock::currentWeek();
+    }
+
+    public function weekStart(): Carbon
+    {
+        $key = $this->weekKey();
+        [$year, $number] = [(int) substr($key, 0, 4), (int) substr($key, -2)];
+
+        return Clock::now()->setISODate($year, $number)->startOfWeek(Carbon::MONDAY)->startOfDay();
     }
 
     public static function typeLabel(string $type): string
@@ -41,17 +99,17 @@ class ReadStats extends Component
     }
 
     /**
-     * Minutes read per local day (Mon..Sun of the current week) and per book type / articles.
+     * Minutes read per local day (Mon..Sun of the given week, or the current week) and per book type / articles.
      * Sessions spanning midnight are split across days; a live session counts up to now.
      * Article time is kept in the "articles" category so book type totals stay unchanged.
      *
-     * @return array{days: array<int, array{label: string, date: string, minutes: array<string, int>}>, totals: array<string, int>}
+     * @return array{days: array<int, array{label: string, date: string, ymd: string, minutes: array<string, int>}>, totals: array<string, int>}
      */
-    public static function weekBreakdown(?Carbon $now = null): array
+    public static function weekBreakdown(?Carbon $now = null, ?Carbon $weekStart = null): array
     {
         $tz = Clock::timezone();
         $now = ($now ?? Clock::now())->copy()->timezone($tz);
-        $weekStart = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $weekStart = ($weekStart ?? $now)->copy()->timezone($tz)->startOfWeek(Carbon::MONDAY)->startOfDay();
         $weekEnd = $weekStart->copy()->addDays(7);
 
         $types = array_keys(self::TYPE_COLORS);
@@ -61,6 +119,7 @@ class ReadStats extends Component
             $days[$i] = [
                 'label' => $d->format('D'),
                 'date' => $d->format('j M'),
+                'ymd' => $d->toDateString(),
                 'minutes' => array_fill_keys($types, 0),
                 'seconds' => array_fill_keys($types, 0),
                 'bookSeconds' => array_fill_keys($types, []),
@@ -219,9 +278,43 @@ class ReadStats extends Component
         return $m === 0 ? $h.'h' : $h.'h '.$m.'m';
     }
 
+    /**
+     * Empty, malformed, or out-of-range ISO week keys become null.
+     */
+    public static function normalizedWeekKey(?string $week): ?string
+    {
+        if ($week === null || ! preg_match('/^(\d{4})-W(\d{1,2})$/i', trim($week), $m)) {
+            return null;
+        }
+
+        $year = (int) $m[1];
+        $number = (int) $m[2];
+        $weeksInYear = (int) Carbon::create($year, 12, 28)->isoWeek();
+
+        if ($number < 1 || $number > $weeksInYear) {
+            return null;
+        }
+
+        return sprintf('%04d-W%02d', $year, $number);
+    }
+
+    private function constrainWeek(): void
+    {
+        $normalized = self::normalizedWeekKey($this->week);
+        $current = Clock::currentWeek();
+
+        if ($normalized === null || $normalized >= $current) {
+            $this->week = '';
+        } else {
+            $this->week = $normalized;
+        }
+    }
+
     public function render()
     {
-        $data = self::weekBreakdown();
+        $now = Clock::now();
+        $weekStart = $this->weekStart();
+        $data = self::weekBreakdown($now, $weekStart);
         $types = array_keys(self::TYPE_COLORS);
 
         // Hide empty series that are not book types: untyped reading, and Reech when it logged nothing.
@@ -252,6 +345,8 @@ class ReadStats extends Component
             $acc += $pct;
         }
 
+        $isCurrentWeek = $this->isCurrentWeek();
+
         return view('livewire.read-stats', [
             'days' => $data['days'],
             'totals' => $data['totals'],
@@ -262,7 +357,10 @@ class ReadStats extends Component
             'maxDay' => max(1, $maxDay),
             'weekTotal' => $weekTotal,
             'pieGradient' => $stops ? 'conic-gradient('.implode(', ', $stops).')' : null,
-            'today' => Clock::now()->timezone(Clock::timezone())->format('D'),
+            'todayDate' => Clock::todayString(),
+            'isCurrentWeek' => $isCurrentWeek,
+            'weekRange' => WeekLabel::range($weekStart),
+            'weekKey' => $this->weekKey(),
         ]);
     }
 }

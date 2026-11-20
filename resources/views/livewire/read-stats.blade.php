@@ -4,7 +4,23 @@
         <a href="{{ route('read') }}" class="text-sm text-muted no-underline hover:text-body">&larr; Books</a>
     </div>
 
-    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">This week, hours per day</h2>
+    <div class="mb-6 flex justify-center">
+        <div class="flex items-center gap-0.5 text-xs text-muted" data-week-toggle>
+            <button type="button" wire:click="previousWeek"
+                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
+                    aria-label="Previous week">‹</button>
+            <span class="px-1 tabular-nums" data-week-label title="{{ $weekKey }}">{{ $weekRange }}</span>
+            @unless ($isCurrentWeek)
+                <button type="button" wire:click="nextWeek"
+                        class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
+                        aria-label="Next week">›</button>
+                <button type="button" wire:click="goToCurrentWeek"
+                        class="ml-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-body" data-week-today>This week</button>
+            @endunless
+        </div>
+    </div>
+
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $isCurrentWeek ? 'This week, hours per day' : 'Hours per day' }}</h2>
 
     <div class="mb-3 flex flex-wrap gap-4 text-xs text-muted">
         @foreach ($types as $t)
@@ -42,7 +58,7 @@
                             </div>
                         @endforeach
                     </div>
-                    <div class="mt-2 text-xs {{ $day['label'] === $today ? 'font-semibold text-body' : 'text-muted' }}">{{ $day['label'] }}</div>
+                    <div class="mt-2 text-xs {{ ($day['ymd'] ?? '') === $todayDate ? 'font-semibold text-body' : 'text-muted' }}">{{ $day['label'] }}</div>
                     @php $dayTotal = array_sum(array_intersect_key($day['minutes'], array_flip($types))); @endphp
                     <div class="text-[10px] tabular-nums text-faint">{{ $dayTotal > 0 ? \App\Livewire\ReadStats::formatMinutes($dayTotal) : '' }}</div>
                 </div>
@@ -50,7 +66,7 @@
         </div>
     </div>
 
-    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">This week, share by type</h2>
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $isCurrentWeek ? 'This week, share by type' : 'Share by type' }}</h2>
 
     <div class="flex flex-col items-center gap-6 rounded border border-white/10 bg-sidebar p-6 sm:flex-row sm:justify-center sm:gap-10">
         @if ($pieGradient)
@@ -71,7 +87,7 @@
         </ul>
     </div>
 
-    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Books read this week</h2>
+    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $isCurrentWeek ? 'Books read this week' : 'Books read' }}</h2>
 
     <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
         @forelse ($books as $book)
@@ -81,11 +97,11 @@
                 <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($book['minutes']) }}</span>
             </li>
         @empty
-            <li class="px-4 py-4 text-sm text-muted">No books read yet this week.</li>
+            <li class="px-4 py-4 text-sm text-muted">{{ $isCurrentWeek ? 'No books read yet this week.' : 'No books read this week.' }}</li>
         @endforelse
     </ul>
 
-    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Articles read this week</h2>
+    <h2 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $isCurrentWeek ? 'Articles read this week' : 'Articles read' }}</h2>
 
     <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
         @forelse ($articles as $article)
@@ -95,7 +111,7 @@
                 <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($article['minutes']) }}</span>
             </li>
         @empty
-            <li class="px-4 py-4 text-sm text-muted">No articles read yet this week.</li>
+            <li class="px-4 py-4 text-sm text-muted">{{ $isCurrentWeek ? 'No articles read yet this week.' : 'No articles read this week.' }}</li>
         @endforelse
     </ul>
 </div>

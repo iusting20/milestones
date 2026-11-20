@@ -9,6 +9,7 @@ use App\Support\Clock;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class ReadStatsTest extends TestCase
@@ -104,5 +105,99 @@ class ReadStatsTest extends TestCase
 
         $this->assertSame('First piece', $data['days'][0]['books']['content'][0]['title']);
         $this->assertSame('Second piece', $data['days'][1]['books']['engagement'][0]['title']);
+    }
+
+    public function test_week_breakdown_can_target_a_previous_week(): void
+    {
+        $tz = Clock::timezone();
+        $lastMonday = Carbon::parse('2026-11-09 00:00', $tz);
+        $thisMonday = Carbon::parse('2026-11-16 00:00', $tz);
+        $now = Carbon::parse('2026-11-20 12:00', $tz);
+
+        $last = Book::query()->create(['title' => 'Last week book', 'status' => 'reading', 'position' => 1, 'type' => 'A']);
+        $current = Book::query()->create(['title' => 'This week book', 'status' => 'reading', 'position' => 2, 'type' => 'B']);
+
+        ReadingSession::query()->create(['book_id' => $last->id, 'started_at' => $lastMonday->copy()->setTime(10, 0)->utc(), 'finished_at' => $lastMonday->copy()->setTime(11, 0)->utc()]);
+        ReadingSession::query()->create(['book_id' => $current->id, 'started_at' => $thisMonday->copy()->setTime(10, 0)->utc(), 'finished_at' => $thisMonday->copy()->setTime(11, 30)->utc()]);
+
+        $thisWeek = ReadStats::weekBreakdown($now, $thisMonday);
+        $this->assertSame(['This week book'], array_column($thisWeek['books'], 'title'));
+        $this->assertSame(90, $thisWeek['totals']['B']);
+        $this->assertSame(0, $thisWeek['totals']['A']);
+        $this->assertSame('2026-11-16', $thisWeek['days'][0]['ymd']);
+
+        $previous = ReadStats::weekBreakdown($now, $lastMonday);
+        $this->assertSame(['Last week book'], array_column($previous['books'], 'title'));
+        $this->assertSame(60, $previous['totals']['A']);
+        $this->assertSame(0, $previous['totals']['B']);
+        $this->assertSame('2026-11-09', $previous['days'][0]['ymd']);
+    }
+
+    public function test_week_toggle_defaults_to_current_week_and_navigates_with_url(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-20 12:00:00', 'Europe/Bucharest')->utc());
+
+        $last = Book::query()->create(['title' => 'Atomic Habits last week', 'status' => 'reading', 'position' => 1, 'type' => 'A']);
+        $current = Book::query()->create(['title' => 'Deep Work this week', 'status' => 'reading', 'position' => 2, 'type' => 'B']);
+
+        $lastMonday = Carbon::parse('2026-11-09 00:00', Clock::timezone());
+        $thisMonday = Carbon::parse('2026-11-16 00:00', Clock::timezone());
+        ReadingSession::query()->create(['book_id' => $last->id, 'started_at' => $lastMonday->copy()->setTime(10, 0)->utc(), 'finished_at' => $lastMonday->copy()->setTime(11, 0)->utc()]);
+        ReadingSession::query()->create(['book_id' => $current->id, 'started_at' => $thisMonday->copy()->setTime(10, 0)->utc(), 'finished_at' => $thisMonday->copy()->setTime(12, 0)->utc()]);
+
+        Livewire::test(ReadStats::class)
+            ->assertSeeHtml('data-week-toggle')
+            ->assertSee('16-22 Nov')
+            ->assertDontSeeHtml('data-week-today')
+            ->assertDontSeeHtml('aria-label="Next week"')
+            ->assertSee('This week, hours per day')
+            ->assertSee('Deep Work this week')
+            ->assertDontSee('Atomic Habits last week')
+            ->call('previousWeek')
+            ->assertSet('week', '2026-W46')
+            ->assertSee('9-15 Nov')
+            ->assertSeeHtml('data-week-today')
+            ->assertSeeHtml('aria-label="Next week"')
+            ->assertSee('Hours per day')
+            ->assertDontSee('This week, hours per day')
+            ->assertSee('Atomic Habits last week')
+            ->assertDontSee('Deep Work this week')
+            ->call('nextWeek')
+            ->assertSet('week', '')
+            ->assertSee('16-22 Nov')
+            ->assertSee('Deep Work this week')
+            ->call('previousWeek')
+            ->call('previousWeek')
+            ->assertSet('week', '2026-W45')
+            ->assertSee('2-8 Nov')
+            ->call('goToCurrentWeek')
+            ->assertSet('week', '')
+            ->assertSee('16-22 Nov')
+            ->assertSee('Deep Work this week');
+
+        Livewire::withQueryParams(['week' => 'garbage'])->test(ReadStats::class)
+            ->assertSet('week', '')
+            ->assertSee('16-22 Nov')
+            ->assertSee('Deep Work this week');
+
+        Livewire::withQueryParams(['week' => '2026-W46'])->test(ReadStats::class)
+            ->assertSet('week', '2026-W46')
+            ->assertSee('9-15 Nov')
+            ->assertSee('Atomic Habits last week')
+            ->assertDontSee('Deep Work this week');
+
+        Livewire::withQueryParams(['week' => '2026-W99'])->test(ReadStats::class)
+            ->assertSet('week', '')
+            ->assertSee('16-22 Nov');
+
+        Livewire::withQueryParams(['week' => '2026-W52'])->test(ReadStats::class)
+            ->assertSet('week', '')
+            ->assertSee('16-22 Nov');
+
+        $this->get(route('read.stats', ['week' => '2026-W46']))
+            ->assertOk()
+            ->assertSee('9-15 Nov')
+            ->assertSee('Atomic Habits last week')
+            ->assertDontSee('Deep Work this week');
     }
 }

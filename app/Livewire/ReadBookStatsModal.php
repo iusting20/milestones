@@ -213,15 +213,12 @@ class ReadBookStatsModal extends Component
             'finished' => $book->isFinished(),
             'startedOn' => $startDate ? Carbon::parse($startDate, $tz)->format('j M Y') : null,
             'startedAgo' => $startDate ? self::daysAgoLabel($startDate, $now) : null,
-            'isArticle' => $book->isArticle(),
-            'type' => $book->type ?: null,
             'lastReadOn' => $lastAt?->format('D j M Y, H:i'),
             'lastReadAgo' => $lastAt ? Read::relativeDay($lastAt) : null,
             'lastReadRunning' => $lastRunning,
             'totalMinutes' => $allMinutes,
             'weekMinutes' => $weekMinutes,
-            'weekDays' => self::weekDaysInRange($sessions, $weekStart, $weekEnd, $tz),
-            'weekLabel' => $this->isCurrentWeek() ? 'Read this week' : WeekLabel::range($weekStart),
+            'weekLabel' => $this->isCurrentWeek() ? 'This week' : WeekLabel::range($weekStart),
             'sessions' => $sessionRows,
             'heatmap' => [
                 'label' => $monthStart->format('M Y'),
@@ -320,27 +317,6 @@ class ReadBookStatsModal extends Component
         }
 
         return $segments;
-    }
-
-    /**
-     * @param  iterable<int, ReadingSession>  $sessions
-     */
-    private static function weekDaysInRange(iterable $sessions, Carbon $weekStart, Carbon $weekEnd, string $tz): string
-    {
-        return collect($sessions)
-            ->filter(function (ReadingSession $session) use ($weekStart, $weekEnd, $tz) {
-                if ($session->started_at === null) {
-                    return false;
-                }
-                $local = $session->started_at->copy()->timezone($tz);
-
-                return $local->gte($weekStart) && $local->lt($weekEnd);
-            })
-            ->map(fn (ReadingSession $session) => $session->started_at->copy()->timezone($tz))
-            ->sortBy(fn (Carbon $day) => $day->dayOfWeekIso)
-            ->map(fn (Carbon $day) => $day->format('D'))
-            ->unique()
-            ->implode(', ');
     }
 
     public static function hexAlpha(string $hex, float $alpha): string

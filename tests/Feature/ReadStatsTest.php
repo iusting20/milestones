@@ -230,7 +230,7 @@ class ReadStatsTest extends TestCase
             ->assertSee('3h 15m')
             ->assertSeeHtml('data-book-week')
             ->assertSee('2h 15m')
-            ->assertSee('This week')
+            ->assertSee('Read this week')
             ->assertSeeHtml('data-heatmap-month')
             ->assertSee('Nov 2026')
             ->assertSeeHtml('data-heatmap-day="2026-11-09"')
@@ -283,7 +283,7 @@ class ReadStatsTest extends TestCase
 
         $current = Livewire::test(ReadBookStatsModal::class, ['week' => '2026-W47'])
             ->call('openBook', $article->id)
-            ->assertSee('This week')
+            ->assertSee('Read this week')
             ->assertSeeHtml('data-book-week');
         $this->assertMatchesRegularExpression('/data-book-week"?\s*>\s*20m\s*</', $current->html());
     }

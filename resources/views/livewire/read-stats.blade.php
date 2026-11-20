@@ -1,23 +1,24 @@
 <div class="mx-auto max-w-4xl px-3 py-6 sm:px-4">
-    <div class="mb-6 flex items-center justify-between gap-2">
-        <h1 class="text-xl font-bold text-body">Stats</h1>
-        <a href="{{ route('read') }}" class="text-sm text-muted no-underline hover:text-body">&larr; Books</a>
-    </div>
+    <div class="mb-6 flex flex-nowrap items-center gap-1 sm:gap-2">
+        <h1 class="shrink-0 text-xl font-bold text-body">Stats</h1>
 
-    <div class="mb-6 flex justify-center">
-        <div class="flex items-center gap-0.5 text-xs text-muted" data-week-toggle>
-            <button type="button" wire:click="previousWeek"
-                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
-                    aria-label="Previous week">‹</button>
-            <span class="px-1 tabular-nums" data-week-label title="{{ $weekKey }}">{{ $weekRange }}</span>
-            @unless ($isCurrentWeek)
-                <button type="button" wire:click="nextWeek"
-                        class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
-                        aria-label="Next week">›</button>
-                <button type="button" wire:click="goToCurrentWeek"
-                        class="ml-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-body" data-week-today>This week</button>
-            @endunless
+        <div class="flex min-w-0 flex-1 justify-center">
+            <div class="flex items-center gap-0 whitespace-nowrap text-[11px] text-muted sm:gap-0.5 sm:text-xs" data-week-toggle>
+                <button type="button" wire:click="previousWeek"
+                        class="rounded px-1 py-0.5 leading-none hover:bg-white/5 hover:text-body sm:px-1.5"
+                        aria-label="Previous week">‹</button>
+                <span class="max-w-[7.5rem] truncate px-0.5 tabular-nums sm:max-w-none sm:px-1" data-week-label title="{{ $weekKey }}">{{ $weekRange }}</span>
+                @unless ($isCurrentWeek)
+                    <button type="button" wire:click="nextWeek"
+                            class="rounded px-1 py-0.5 leading-none hover:bg-white/5 hover:text-body sm:px-1.5"
+                            aria-label="Next week">›</button>
+                    <button type="button" wire:click="goToCurrentWeek"
+                            class="ml-0.5 rounded px-1 py-0.5 hover:bg-white/5 hover:text-body sm:ml-1 sm:px-1.5" data-week-today>This week</button>
+                @endunless
+            </div>
         </div>
+
+        <a href="{{ route('read') }}" class="shrink-0 whitespace-nowrap text-sm text-muted no-underline hover:text-body">&larr; Books</a>
     </div>
 
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $isCurrentWeek ? 'This week, hours per day' : 'Hours per day' }}</h2>

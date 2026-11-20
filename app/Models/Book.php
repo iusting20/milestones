@@ -115,6 +115,10 @@ class Book extends Model
     /** True when the start date (explicit or first session) is the calendar day of $now. */
     public function showsStartedGlyphToday(?Carbon $now = null): bool
     {
+        if ($this->isFinished()) {
+            return false;
+        }
+
         $start = $this->startDate();
 
         return $start !== null && $start === self::displayDate($now);
@@ -139,6 +143,10 @@ class Book extends Model
      */
     public function startedSessionId($sessions): ?int
     {
+        if ($this->isFinished()) {
+            return null;
+        }
+
         $start = $this->startDate();
         if ($start === null) {
             return null;

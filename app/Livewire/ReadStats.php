@@ -295,7 +295,7 @@ class ReadStats extends Component
      */
     private static function startedGlyph(?Book $book, Carbon $weekStart, Carbon $now): array
     {
-        if ($book === null || ! $book->isStartedInWeek($weekStart)) {
+        if ($book === null || $book->isFinished() || ! $book->isStartedInWeek($weekStart)) {
             return ['startedToday' => false];
         }
 

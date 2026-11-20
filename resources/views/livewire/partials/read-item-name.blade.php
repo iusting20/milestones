@@ -5,7 +5,7 @@
     $truncate = $truncate ?? false;
 @endphp
 <span class="inline-flex min-w-0 max-w-full items-center gap-1">
-    @if ($startedToday)
+    @if ($startedToday && ! $finished)
         @include('livewire.partials.read-started-icon', ['startedLabel' => $startedLabel])
     @endif
     @if ($finished)

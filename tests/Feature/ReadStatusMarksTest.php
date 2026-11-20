@@ -148,13 +148,14 @@ class ReadStatusMarksTest extends TestCase
             ->assertSee("Mark as 'started today'", false)
             ->assertSee("Mark as 'finished'", false)
             ->call('markStartedToday', $article->id)
+            ->assertSeeHtml('data-read-icon="started-today"')
             ->call('markBookFinished', $article->id)
             ->assertSet('showFinished', false)
             ->assertDontSeeHtml('data-sort-item="'.$article->id.'"')
             ->assertSee('Finished (1)')
             ->set('showFinished', true)
             ->assertSeeHtml('data-finished-item="'.$article->id.'"')
-            ->assertSeeHtml('data-read-icon="started-today"')
+            ->assertDontSeeHtml('data-read-icon="started-today"')
             ->assertSeeHtml('data-read-icon="finished"')
             ->assertSeeHtml('<svg')
             ->assertDontSeeHtml('⏻')
@@ -188,7 +189,7 @@ class ReadStatusMarksTest extends TestCase
             'title' => 'Glyph book',
             'type' => 'A',
             'started_on' => '2026-11-16',
-            'status' => Book::STATUS_FINISHED,
+            'status' => Book::STATUS_READING,
         ]);
         ReadingSession::query()->create([
             'book_id' => $book->id,
@@ -198,26 +199,26 @@ class ReadStatusMarksTest extends TestCase
 
         $today = ReadStats::weekBreakdown($now);
         $this->assertTrue($today['books'][0]['startedToday']);
-        $this->assertTrue($today['books'][0]['finished']);
+        $this->assertFalse($today['books'][0]['finished']);
         $this->assertTrue($today['days'][0]['books']['A'][0]['startedToday']);
-        $this->assertTrue($today['days'][0]['books']['A'][0]['finished']);
+        $this->assertFalse($today['days'][0]['books']['A'][0]['finished']);
 
         $this->travelTo($now);
         $this->get(route('read.stats'))
             ->assertOk()
             ->assertSeeHtml('data-read-icon="started-today"')
-            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertDontSeeHtml('data-read-icon="finished"')
             ->assertSeeHtml('<svg')
             ->assertDontSeeHtml('⏻')
             ->assertSee('aria-label="Started today"', false)
-            ->assertSee('aria-label="Finished"', false)
+            ->assertDontSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');
 
         $this->assertSame('Started today', $today['books'][0]['startedLabel']);
 
         $nextDay = ReadStats::weekBreakdown($monday->copy()->addDay()->setTime(10, 0));
         $this->assertTrue($nextDay['books'][0]['startedToday']);
-        $this->assertTrue($nextDay['books'][0]['finished']);
+        $this->assertFalse($nextDay['books'][0]['finished']);
         $this->assertTrue($nextDay['days'][0]['books']['A'][0]['startedToday']);
         $this->assertSame('Started this week', $nextDay['books'][0]['startedLabel']);
 
@@ -225,12 +226,12 @@ class ReadStatusMarksTest extends TestCase
         $this->get(route('read.stats'))
             ->assertOk()
             ->assertSeeHtml('data-read-icon="started-today"')
-            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertDontSeeHtml('data-read-icon="finished"')
             ->assertSeeHtml('<svg')
             ->assertDontSeeHtml('⏻')
             ->assertSee('aria-label="Started this week"', false)
             ->assertDontSee('aria-label="Started today"', false)
-            ->assertSee('aria-label="Finished"', false)
+            ->assertDontSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');
 
         $previousWeek = ReadStats::weekBreakdown($now, $monday->copy()->subWeek());
@@ -381,5 +382,44 @@ class ReadStatusMarksTest extends TestCase
         $pos = strpos($html, 'wire:key="session-'.$session->id.'"');
         $this->assertNotFalse($pos);
         $this->assertStringContainsString('data-read-icon="started-today"', substr($html, $pos, 1500));
+    }
+
+    public function test_finished_items_do_not_show_the_started_glyph(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 12:00:00', Clock::timezone()));
+        $book = $this->book([
+            'title' => 'Finished start book',
+            'type' => 'A',
+            'started_on' => '2026-11-20',
+            'status' => Book::STATUS_FINISHED,
+        ]);
+        $session = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-20 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-20 09:30:00', Clock::timezone())->utc(),
+        ]);
+
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->set('showFinished', true)
+            ->html();
+        $this->assertStringContainsString('data-read-icon="finished"', $html);
+        $this->assertStringNotContainsString('data-read-icon="started-today"', $html);
+        $this->assertStringContainsString('wire:key="session-'.$session->id.'"', $html);
+
+        $data = ReadStats::weekBreakdown(Clock::now());
+        $this->assertSame('Finished start book', $data['books'][0]['title']);
+        $this->assertFalse($data['books'][0]['startedToday']);
+        $this->assertTrue($data['books'][0]['finished']);
+        $this->assertFalse($data['days'][4]['books']['A'][0]['startedToday']);
+        $this->assertTrue($data['days'][4]['books']['A'][0]['finished']);
+
+        $this->get(route('read.stats'))
+            ->assertOk()
+            ->assertSee('Finished start book')
+            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertDontSeeHtml('data-read-icon="started-today"')
+            ->assertSee('aria-label="Finished"', false)
+            ->assertDontSee('aria-label="Started today"', false)
+            ->assertDontSee('aria-label="Started this week"', false);
     }
 }

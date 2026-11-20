@@ -92,10 +92,14 @@
 
     <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
         @forelse ($books as $book)
-            <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
-                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors[$book['type'] && isset($colors[$book['type']]) ? $book['type'] : '—'] }}"></span>
-                <span class="min-w-0 flex-1 text-body">@include('livewire.partials.read-item-name', ['title' => $book['title'], 'startedToday' => $book['startedToday'] ?? false, 'startedLabel' => $book['startedLabel'] ?? 'Started today', 'finished' => $book['finished'] ?? false, 'truncate' => true])</span>
-                <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($book['minutes']) }}</span>
+            <li>
+                <button type="button" wire:click="openBook({{ $book['id'] }})"
+                        class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
+                        data-open-book="{{ $book['id'] }}">
+                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors[$book['type'] && isset($colors[$book['type']]) ? $book['type'] : '—'] }}"></span>
+                    <span class="min-w-0 flex-1 text-body">@include('livewire.partials.read-item-name', ['title' => $book['title'], 'startedToday' => $book['startedToday'] ?? false, 'startedLabel' => $book['startedLabel'] ?? 'Started today', 'finished' => $book['finished'] ?? false, 'truncate' => true])</span>
+                    <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($book['minutes']) }}</span>
+                </button>
             </li>
         @empty
             <li class="px-4 py-4 text-sm text-muted">{{ $isCurrentWeek ? 'No books read yet this week.' : 'No books read this week.' }}</li>
@@ -106,13 +110,19 @@
 
     <ul class="divide-y divide-white/10 rounded border border-white/10 bg-sidebar">
         @forelse ($articles as $article)
-            <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
-                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors['articles'] }}"></span>
-                <span class="min-w-0 flex-1 text-body">@include('livewire.partials.read-item-name', ['title' => $article['title'], 'startedToday' => $article['startedToday'] ?? false, 'startedLabel' => $article['startedLabel'] ?? 'Started today', 'finished' => $article['finished'] ?? false, 'truncate' => true])</span>
-                <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($article['minutes']) }}</span>
+            <li>
+                <button type="button" wire:click="openBook({{ $article['id'] }})"
+                        class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-white/5 focus-visible:bg-white/5 focus-visible:outline-none"
+                        data-open-book="{{ $article['id'] }}">
+                    <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style="background: {{ $colors['articles'] }}"></span>
+                    <span class="min-w-0 flex-1 text-body">@include('livewire.partials.read-item-name', ['title' => $article['title'], 'startedToday' => $article['startedToday'] ?? false, 'startedLabel' => $article['startedLabel'] ?? 'Started today', 'finished' => $article['finished'] ?? false, 'truncate' => true])</span>
+                    <span class="shrink-0 font-semibold tabular-nums text-body">{{ \App\Livewire\ReadStats::formatMinutes($article['minutes']) }}</span>
+                </button>
             </li>
         @empty
             <li class="px-4 py-4 text-sm text-muted">{{ $isCurrentWeek ? 'No articles read yet this week.' : 'No articles read this week.' }}</li>
         @endforelse
     </ul>
+
+    <livewire:read-book-stats-modal :week="$weekKey" />
 </div>

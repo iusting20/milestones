@@ -357,6 +357,11 @@ class ReadStats extends Component
         }
     }
 
+    public function openBook(int $id): void
+    {
+        $this->dispatch('open-book-stats', id: $id, week: $this->weekKey());
+    }
+
     public function render()
     {
         $now = Clock::now();

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\ReadBookStatsModal;
 use App\Livewire\ReadStats;
 use App\Models\Book;
 use App\Models\ReadingSession;
@@ -199,5 +200,91 @@ class ReadStatsTest extends TestCase
             ->assertSee('9-15 Nov')
             ->assertSee('Atomic Habits last week')
             ->assertDontSee('Deep Work this week');
+    }
+
+    public function test_clicking_a_book_opens_a_detail_modal_with_start_last_read_totals_heatmap_and_sessions(): void
+    {
+        $tz = Clock::timezone();
+        Carbon::setTestNow(Carbon::parse('2026-11-20 12:00:00', $tz)->utc());
+        $first = Carbon::parse('2026-11-09 16:49', $tz);
+        $thisWeek = Carbon::parse('2026-11-16 10:00', $tz);
+        $last = Carbon::parse('2026-11-19 18:00', $tz);
+
+        $book = Book::query()->create(['title' => 'Modal book', 'status' => 'reading', 'position' => 1, 'type' => 'C']);
+        $firstSession = ReadingSession::query()->create(['book_id' => $book->id, 'started_at' => $first->copy()->utc(), 'finished_at' => $first->copy()->addHour()->utc()]);
+        ReadingSession::query()->create(['book_id' => $book->id, 'started_at' => $thisWeek->copy()->utc(), 'finished_at' => $thisWeek->copy()->addMinutes(90)->utc()]);
+        $lastSession = ReadingSession::query()->create(['book_id' => $book->id, 'started_at' => $last->copy()->utc(), 'finished_at' => $last->copy()->addMinutes(45)->utc()]);
+
+        Livewire::test(ReadBookStatsModal::class)
+            ->assertDontSeeHtml('data-book-modal')
+            ->call('openBook', $book->id)
+            ->assertSet('viewingBookId', $book->id)
+            ->assertSet('heatmapMonth', '2026-11')
+            ->assertSeeHtml('data-book-modal')
+            ->assertSee('Modal book')
+            ->assertSee('9 Nov 2026')
+            ->assertSee('11 days ago')
+            ->assertSee('Thu 19 Nov 2026, 18:00')
+            ->assertSee('yesterday')
+            ->assertSeeHtml('data-book-total')
+            ->assertSee('3h 15m')
+            ->assertSeeHtml('data-book-week')
+            ->assertSee('2h 15m')
+            ->assertSee('This week')
+            ->assertSeeHtml('data-heatmap-month')
+            ->assertSee('Nov 2026')
+            ->assertSeeHtml('data-heatmap-day="2026-11-09"')
+            ->assertSeeHtml('data-heatmap-minutes="60"')
+            ->assertSeeHtml('data-heatmap-day="2026-11-16"')
+            ->assertSeeHtml('data-heatmap-day="2026-11-19"')
+            ->assertSeeHtml('data-session-row="'.$lastSession->id.'"')
+            ->assertSeeHtml('data-session-row="'.$firstSession->id.'"')
+            ->assertSeeInOrder(['Thu 19 Nov 2026, 18:00', 'Mon 16 Nov 2026, 10:00', 'Mon 9 Nov 2026, 16:49'])
+            ->call('previousHeatmapMonth')
+            ->assertSet('heatmapMonth', '2026-10')
+            ->assertSee('Oct 2026')
+            ->call('nextHeatmapMonth')
+            ->assertSet('heatmapMonth', '2026-11')
+            ->call('nextHeatmapMonth')
+            ->assertSet('heatmapMonth', '2026-11')
+            ->call('closeBook')
+            ->assertSet('viewingBookId', null)
+            ->assertDontSeeHtml('data-book-modal');
+
+        Livewire::test(ReadBookStatsModal::class)->call('openBook', 99999)->assertSet('viewingBookId', null);
+
+        Livewire::test(ReadStats::class)
+            ->assertSeeHtml('data-open-book="'.$book->id.'"')
+            ->call('openBook', $book->id)
+            ->assertDispatched('open-book-stats', id: $book->id);
+    }
+
+    public function test_book_modal_week_total_follows_the_selected_stats_week_and_works_for_articles(): void
+    {
+        $tz = Clock::timezone();
+        Carbon::setTestNow(Carbon::parse('2026-11-20 12:00:00', $tz)->utc());
+        $article = Book::query()->create(['title' => 'Modal article', 'status' => Book::STATUS_FINISHED, 'position' => 1, 'kind' => Book::KIND_ARTICLE]);
+        ReadingSession::query()->create(['book_id' => $article->id, 'started_at' => Carbon::parse('2026-11-10 09:00', $tz)->utc(), 'finished_at' => Carbon::parse('2026-11-10 10:00', $tz)->utc()]);
+        ReadingSession::query()->create(['book_id' => $article->id, 'started_at' => Carbon::parse('2026-11-17 09:00', $tz)->utc(), 'finished_at' => Carbon::parse('2026-11-17 09:20', $tz)->utc()]);
+
+        $past = Livewire::test(ReadBookStatsModal::class, ['week' => '2026-W46'])
+            ->call('openBook', $article->id)
+            ->assertSee('Modal article')
+            ->assertSee('10 Nov 2026')
+            ->assertSee('10 days ago')
+            ->assertSee('9-15 Nov')
+            ->assertSeeHtml('data-book-finished')
+            ->assertSee('Finished')
+            ->assertDontSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('data-read-icon="finished"')
+            ->assertSet('heatmapMonth', '2026-11');
+        $this->assertMatchesRegularExpression('/data-book-total"?\s*>\s*1h 20m\s*</', $past->html());
+        $this->assertMatchesRegularExpression('/data-book-week"?\s*>\s*1h\s*</', $past->html());
+
+        $current = Livewire::test(ReadBookStatsModal::class, ['week' => '2026-W47'])
+            ->call('openBook', $article->id)
+            ->assertSee('This week')
+            ->assertSeeHtml('data-book-week');
+        $this->assertMatchesRegularExpression('/data-book-week"?\s*>\s*20m\s*</', $current->html());
     }
 }

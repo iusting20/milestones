@@ -461,6 +461,11 @@ class Read extends Component
         $this->resetSessionForm();
     }
 
+    public function openBookStats(int $id): void
+    {
+        $this->dispatch('open-book-stats', id: $id);
+    }
+
     public function render()
     {
         $all = $this->catalog()

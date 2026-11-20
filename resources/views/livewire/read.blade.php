@@ -198,6 +198,10 @@
                                 class="rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10">Delete</button>
                     @endif
                     <button type="button"
+                            wire:click="openBookStats({{ $selected->id }})"
+                            class="px-1 text-xs text-muted hover:text-body"
+                            data-open-book-stats="{{ $selected->id }}">stats</button>
+                    <button type="button"
                             wire:click="$toggle('editMode')"
                             @class([
                                 'flex h-8 w-8 items-center justify-center rounded text-muted transition hover:bg-white/5 hover:text-body',
@@ -610,5 +614,6 @@
             };
         }
     </script>
+    <livewire:read-book-stats-modal />
 </div>
  

@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Livewire\Read;
+use App\Livewire\ReadBookStatsModal;
 use App\Models\Book;
 use App\Models\ReadingSession;
+use App\Models\User;
 use App\Support\Clock;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -247,6 +249,7 @@ class ReadTest extends TestCase
         // Book total includes full running span (11h) + 30m = 11h 30m
         $this->assertStringContainsString('11h 30m', $html);
     }
+
     public function test_edit_controls_hidden_until_cog_toggled(): void
     {
         $book = Book::query()->create([
@@ -281,20 +284,55 @@ class ReadTest extends TestCase
             ->assertSee('+ Log session');
     }
 
+    public function test_stats_link_on_book_detail_opens_the_shared_modal(): void
+    {
+        $tz = Clock::timezone();
+        Carbon::setTestNow(Carbon::parse('2026-11-20 12:00:00', $tz)->utc());
+        $book = Book::query()->create(['title' => 'Detail modal book', 'status' => Book::STATUS_READING, 'position' => 1]);
+        $session = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-16 10:00', $tz)->utc(),
+            'finished_at' => Carbon::parse('2026-11-16 11:00', $tz)->utc(),
+        ]);
+
+        $page = Livewire::test(Read::class, ['selectedBookId' => $book->id])
+            ->assertDontSeeHtml('data-book-modal')
+            ->assertSeeHtml('data-open-book-stats="'.$book->id.'"')
+            ->assertSeeHtml('Show edit controls')
+            ->call('openBookStats', $book->id)
+            ->assertDispatched('open-book-stats', id: $book->id);
+        $this->assertMatchesRegularExpression(
+            '/data-open-book-stats="'.$book->id.'".*Show edit controls/s',
+            $page->html()
+        );
+
+        Livewire::test(ReadBookStatsModal::class)
+            ->call('openBook', $book->id)
+            ->assertSeeHtml('data-book-modal')
+            ->assertSee('Detail modal book')
+            ->assertSee('16 Nov 2026')
+            ->assertSee('4 days ago')
+            ->assertSeeHtml('data-book-total')
+            ->assertSee('1h')
+            ->assertSeeHtml('data-book-week')
+            ->assertSeeHtml('data-heatmap-month')
+            ->assertSeeHtml('data-session-row="'.$session->id.'"');
+    }
+
     public function test_books_can_be_reordered(): void
     {
-        $this->actingAs(\App\Models\User::factory()->create());
-        $a = \App\Models\Book::query()->create(['title' => 'A', 'status' => 'reading', 'position' => 1]);
-        $b = \App\Models\Book::query()->create(['title' => 'B', 'status' => 'reading', 'position' => 2]);
-        \Livewire\Livewire::test(\App\Livewire\Read::class)->call('reorderBooks', [$b->id, $a->id]);
+        $this->actingAs(User::factory()->create());
+        $a = Book::query()->create(['title' => 'A', 'status' => 'reading', 'position' => 1]);
+        $b = Book::query()->create(['title' => 'B', 'status' => 'reading', 'position' => 2]);
+        Livewire::test(Read::class)->call('reorderBooks', [$b->id, $a->id]);
         $this->assertSame(1, $b->fresh()->position);
         $this->assertSame(2, $a->fresh()->position);
     }
 
     public function test_book_type_can_be_set_to_a_b_or_c(): void
     {
-        $book = \App\Models\Book::query()->create(['title' => 'T', 'status' => 'reading', 'position' => 1]);
-        $c = \Livewire\Livewire::test(\App\Livewire\Read::class);
+        $book = Book::query()->create(['title' => 'T', 'status' => 'reading', 'position' => 1]);
+        $c = Livewire::test(Read::class);
         $c->call('setBookType', $book->id, 'B');
         $this->assertSame('B', $book->fresh()->type);
         $c->call('setBookType', $book->id, 'Z');
@@ -305,9 +343,10 @@ class ReadTest extends TestCase
 
     public function test_no_book_is_selected_on_first_load(): void
     {
-        \App\Models\Book::query()->create(['title' => 'First', 'status' => 'reading', 'position' => 1]);
-        \Livewire\Livewire::test(\App\Livewire\Read::class)->assertSet('selectedBookId', null);
+        Book::query()->create(['title' => 'First', 'status' => 'reading', 'position' => 1]);
+        Livewire::test(Read::class)->assertSet('selectedBookId', null);
     }
+
     public function test_new_book_is_added_at_the_top_without_changing_relative_order(): void
     {
         $a = Book::query()->create(['title' => 'Older A', 'status' => Book::STATUS_READING, 'position' => 2, 'kind' => Book::KIND_BOOK]);

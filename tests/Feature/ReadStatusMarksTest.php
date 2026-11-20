@@ -178,7 +178,7 @@ class ReadStatusMarksTest extends TestCase
         $this->assertSame(2, $b->fresh()->position);
     }
 
-    public function test_stats_show_started_today_glyph_only_on_that_day(): void
+    public function test_stats_show_started_glyph_throughout_the_week_of_the_explicit_start(): void
     {
         $tz = Clock::timezone();
         $monday = Carbon::parse('2026-11-16 00:00', $tz);
@@ -213,19 +213,173 @@ class ReadStatusMarksTest extends TestCase
             ->assertSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');
 
+        $this->assertSame('Started today', $today['books'][0]['startedLabel']);
+
         $nextDay = ReadStats::weekBreakdown($monday->copy()->addDay()->setTime(10, 0));
-        $this->assertFalse($nextDay['books'][0]['startedToday']);
+        $this->assertTrue($nextDay['books'][0]['startedToday']);
         $this->assertTrue($nextDay['books'][0]['finished']);
-        $this->assertFalse($nextDay['days'][0]['books']['A'][0]['startedToday']);
+        $this->assertTrue($nextDay['days'][0]['books']['A'][0]['startedToday']);
+        $this->assertSame('Started this week', $nextDay['books'][0]['startedLabel']);
 
         $this->travelTo($monday->copy()->addDay()->setTime(10, 0));
         $this->get(route('read.stats'))
             ->assertOk()
-            ->assertDontSeeHtml('data-read-icon="started-today"')
+            ->assertSeeHtml('data-read-icon="started-today"')
             ->assertSeeHtml('data-read-icon="finished"')
+            ->assertSeeHtml('<svg')
             ->assertDontSeeHtml('⏻')
+            ->assertSee('aria-label="Started this week"', false)
             ->assertDontSee('aria-label="Started today"', false)
             ->assertSee('aria-label="Finished"', false)
             ->assertSee('Glyph book');
+
+        $previousWeek = ReadStats::weekBreakdown($now, $monday->copy()->subWeek());
+        $this->assertSame([], $previousWeek['books']);
+    }
+
+    public function test_first_session_today_shows_glyph_on_list_title_and_session_without_explicit_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 12:00:00', Clock::timezone()));
+        $book = $this->book(['title' => 'First session today']);
+        $session = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-20 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-20 09:30:00', Clock::timezone())->utc(),
+        ]);
+
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])->html();
+        $this->assertSame(3, substr_count($html, 'data-read-icon="started-today"')); // list + title + session
+        $this->assertStringContainsString('aria-label="Started today"', $html);
+        $this->assertStringContainsString('wire:key="session-'.$session->id.'"', $html);
+        $blockStart = strpos($html, 'wire:key="session-'.$session->id.'"');
+        $this->assertNotFalse($blockStart);
+        $this->assertStringContainsString('data-read-icon="started-today"', substr($html, $blockStart, 1500));
+        $this->assertStringContainsString('aria-label="Started"', substr($html, $blockStart, 1500));
+    }
+
+    public function test_first_session_on_a_past_day_shows_glyph_only_on_that_session_row(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 12:00:00', Clock::timezone()));
+        $book = $this->book(['title' => 'Started last week']);
+        $first = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-10 10:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-10 11:00:00', Clock::timezone())->utc(),
+        ]);
+        $later = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-18 10:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-18 10:45:00', Clock::timezone())->utc(),
+        ]);
+
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])->html();
+        $this->assertSame(1, substr_count($html, 'data-read-icon="started-today"'));
+        $this->assertStringNotContainsString('aria-label="Started today"', $html);
+
+        $posLater = strpos($html, 'wire:key="session-'.$later->id.'"');
+        $posFirst = strpos($html, 'wire:key="session-'.$first->id.'"');
+        $this->assertNotFalse($posLater);
+        $this->assertNotFalse($posFirst);
+        $this->assertLessThan($posFirst, $posLater); // newest first
+        $this->assertStringNotContainsString('data-read-icon="started-today"', substr($html, $posLater, $posFirst - $posLater));
+        $this->assertStringContainsString('data-read-icon="started-today"', substr($html, $posFirst, 1500));
+        $this->assertStringContainsString('aria-label="Started"', substr($html, $posFirst, 1500));
+    }
+
+    public function test_explicit_started_on_wins_over_an_earlier_first_session(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 12:00:00', Clock::timezone()));
+        $book = $this->book(['title' => 'Marked start', 'started_on' => '2026-11-18']);
+        $first = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-10 10:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-10 11:00:00', Clock::timezone())->utc(),
+        ]);
+        $onStart = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-18 09:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-18 09:20:00', Clock::timezone())->utc(),
+        ]);
+        $laterSameDay = ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-11-18 15:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-18 15:10:00', Clock::timezone())->utc(),
+        ]);
+
+        $html = Livewire::test(Read::class, ['selectedBookId' => $book->id])->html();
+        $this->assertSame(1, substr_count($html, 'data-read-icon="started-today"'));
+
+        $posOnStart = strpos($html, 'wire:key="session-'.$onStart->id.'"');
+        $posFirst = strpos($html, 'wire:key="session-'.$first->id.'"');
+        $posLaterSameDay = strpos($html, 'wire:key="session-'.$laterSameDay->id.'"');
+        $this->assertNotFalse($posOnStart);
+        $this->assertNotFalse($posFirst);
+        $this->assertNotFalse($posLaterSameDay);
+        $this->assertStringContainsString('data-read-icon="started-today"', substr($html, $posOnStart, 1500));
+        $this->assertStringNotContainsString('data-read-icon="started-today"', substr($html, $posFirst, 1500));
+        $this->assertLessThan($posOnStart, $posLaterSameDay);
+        $this->assertStringNotContainsString('data-read-icon="started-today"', substr($html, $posLaterSameDay, $posOnStart - $posLaterSameDay));
+    }
+
+    public function test_stats_show_started_glyph_in_the_week_of_the_first_session(): void
+    {
+        $tz = Clock::timezone();
+        $lastMonday = Carbon::parse('2026-11-09 00:00', $tz);
+        $thisMonday = Carbon::parse('2026-11-16 00:00', $tz);
+        $friday = Carbon::parse('2026-11-20 12:00', $tz);
+
+        $book = $this->book(['title' => 'First session book', 'type' => 'A']);
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => $lastMonday->copy()->setTime(10, 0)->utc(),
+            'finished_at' => $lastMonday->copy()->setTime(11, 0)->utc(),
+        ]);
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => $thisMonday->copy()->setTime(10, 0)->utc(),
+            'finished_at' => $thisMonday->copy()->setTime(10, 30)->utc(),
+        ]);
+
+        $thisWeek = ReadStats::weekBreakdown($friday, $thisMonday);
+        $this->assertSame(['First session book'], array_column($thisWeek['books'], 'title'));
+        $this->assertFalse($thisWeek['books'][0]['startedToday']);
+
+        $lastWeek = ReadStats::weekBreakdown($friday, $lastMonday);
+        $this->assertTrue($lastWeek['books'][0]['startedToday']);
+        $this->assertSame('Started this week', $lastWeek['books'][0]['startedLabel']);
+        $this->assertTrue($lastWeek['days'][0]['books']['A'][0]['startedToday']);
+
+        $this->travelTo($friday);
+        $this->get(route('read.stats', ['week' => '2026-W46']))
+            ->assertOk()
+            ->assertSee('First session book')
+            ->assertSeeHtml('data-read-icon="started-today"')
+            ->assertSee('aria-label="Started this week"', false)
+            ->assertDontSeeHtml('⏻');
+
+        $this->get(route('read.stats'))
+            ->assertOk()
+            ->assertSee('First session book')
+            ->assertDontSeeHtml('data-read-icon="started-today"');
+    }
+
+    public function test_articles_first_session_uses_the_same_start_glyph_rule(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 12:00:00', Clock::timezone()));
+        $article = $this->book([
+            'title' => 'First article',
+            'kind' => Book::KIND_ARTICLE,
+        ]);
+        $session = ReadingSession::query()->create([
+            'book_id' => $article->id,
+            'started_at' => Carbon::parse('2026-11-10 10:00:00', Clock::timezone())->utc(),
+            'finished_at' => Carbon::parse('2026-11-10 10:20:00', Clock::timezone())->utc(),
+        ]);
+
+        $html = Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE, 'selectedBookId' => $article->id])->html();
+        $this->assertSame(1, substr_count($html, 'data-read-icon="started-today"'));
+        $pos = strpos($html, 'wire:key="session-'.$session->id.'"');
+        $this->assertNotFalse($pos);
+        $this->assertStringContainsString('data-read-icon="started-today"', substr($html, $pos, 1500));
     }
 }

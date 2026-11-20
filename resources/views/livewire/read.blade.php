@@ -58,7 +58,7 @@
                                 'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                             ])>
                         <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => false])</span>
+                        <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->showsStartedGlyphToday(), 'finished' => false])</span>
                         <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
                             @if ($book->author)
                                 <span>{{ $book->author }}</span>
@@ -135,7 +135,7 @@
                                             'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
                                         ])>
                                     <span class="flex min-w-0 flex-1 flex-col">
-                                    <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->isStartedToday(), 'finished' => true])</span>
+                                    <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->showsStartedGlyphToday(), 'finished' => true])</span>
                                     <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
                                         @if ($book->author)
                                             <span>{{ $book->author }}</span>
@@ -169,7 +169,7 @@
         @else
             <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 class="text-2xl font-bold text-body">@include('livewire.partials.read-item-name', ['title' => $selected->title, 'startedToday' => $selected->isStartedToday(), 'finished' => $selected->isFinished()])</h2>
+                    <h2 class="text-2xl font-bold text-body">@include('livewire.partials.read-item-name', ['title' => $selected->title, 'startedToday' => $selected->showsStartedGlyphToday(), 'finished' => $selected->isFinished()])</h2>
                     <p class="mt-1 text-sm text-muted">
                         @php
                             $metaParts = array_values(array_filter([
@@ -419,6 +419,9 @@
                             <div class="flex flex-wrap items-baseline justify-between gap-2">
                                 <div class="min-w-0">
                                     <div class="text-sm text-body">
+                                        @if ($startedSessionId === $session->id)
+                                            @include('livewire.partials.read-started-icon', ['startedLabel' => 'Started'])
+                                        @endif
                                         {{ $session->started_at->timezone($timezone)->format('D j M Y, H:i') }}
                                         @if ($session->isRunning())
                                             <span class="ml-1 rounded bg-mark/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mark">running</span>

@@ -214,7 +214,7 @@ class ReadArticlesTest extends TestCase
         $this->assertSame(['A book'], array_column($data['books'], 'title'));
         $this->assertSame(['An article'], array_column($data['articles'], 'title'));
         $this->assertSame([40], array_column($data['articles'], 'minutes'));
-        $this->assertSame([['title' => 'An article', 'minutes' => 40, 'startedToday' => false, 'finished' => false]], $data['days'][0]['books']['articles']);
+        $this->assertSame([['title' => 'An article', 'minutes' => 40, 'startedToday' => true, 'startedLabel' => 'Started today', 'finished' => false]], $data['days'][0]['books']['articles']);
 
         $this->travelTo($now);
         $this->get(route('read.stats'))
@@ -224,6 +224,7 @@ class ReadArticlesTest extends TestCase
             ->assertSee('A book')
             ->assertSee('Articles read this week');
     }
+
     public function test_new_article_is_added_at_the_top_without_changing_relative_order(): void
     {
         $a = Book::query()->create(['title' => 'Older article', 'status' => Book::STATUS_READING, 'position' => 1, 'kind' => Book::KIND_ARTICLE]);

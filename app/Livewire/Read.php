@@ -465,7 +465,7 @@ class Read extends Component
     {
         $all = $this->catalog()
             ->withCount('readingSessions')
-            ->with(['latestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
+            ->with(['latestSession', 'earliestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
             ->orderBy('position')
             ->orderBy('id')
             ->get();
@@ -517,11 +517,14 @@ class Read extends Component
 
         $liveTotals = $this->liveTotals($selected?->id);
 
+        $startedSessionId = $selected?->startedSessionId($sessions);
+
         return view('livewire.read', [
             'books' => $books,
             'finishedBooks' => $finishedBooks,
             'selected' => $selected,
             'sessions' => $sessions,
+            'startedSessionId' => $startedSessionId,
             'bookTotals' => $bookTotals,
             'pageTotals' => $pageTotals,
             'liveTotals' => $liveTotals,

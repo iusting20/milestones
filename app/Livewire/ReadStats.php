@@ -159,6 +159,7 @@ class ReadStats extends Component
         }
 
         self::addReechMinutes($days, $weekStart, $weekEnd, $now, $tz);
+        self::hydrateStartDates($bookInfo);
 
         $totals = array_fill_keys($types, 0);
         foreach ($days as $i => $day) {
@@ -177,7 +178,7 @@ class ReadStats extends Component
                         $list[] = [
                             'title' => $info?->title ?? (is_string($bookId) ? $bookId : 'Deleted book'),
                             'minutes' => $m,
-                            'startedToday' => $info?->isStartedToday($now) ?? false,
+                            ...self::startedGlyph($info, $weekStart, $now),
                             'finished' => $info?->isFinished() ?? false,
                         ];
                     }
@@ -202,7 +203,7 @@ class ReadStats extends Component
                 'type' => $isArticle ? 'articles' : $info?->type,
                 'kind' => $isArticle ? Book::KIND_ARTICLE : Book::KIND_BOOK,
                 'minutes' => $minutes,
-                'startedToday' => $info?->isStartedToday($now) ?? false,
+                ...self::startedGlyph($info, $weekStart, $now),
                 'finished' => $info?->isFinished() ?? false,
             ];
         }
@@ -256,6 +257,52 @@ class ReadStats extends Component
                 }
             }
         }
+    }
+
+    /**
+     * @param  array<int|string, Book|null>  $books
+     */
+    private static function hydrateStartDates(array $books): void
+    {
+        $ids = [];
+        foreach ($books as $book) {
+            if ($book instanceof Book && $book->started_on === null && ! $book->relationLoaded('earliestSession')) {
+                $ids[] = $book->id;
+            }
+        }
+        $ids = array_values(array_unique($ids));
+        if ($ids === []) {
+            return;
+        }
+
+        $firsts = ReadingSession::query()
+            ->whereIn('book_id', $ids)
+            ->orderBy('started_at')
+            ->orderBy('id')
+            ->get()
+            ->unique('book_id')
+            ->keyBy('book_id');
+
+        foreach ($books as $book) {
+            if ($book instanceof Book && $book->started_on === null && ! $book->relationLoaded('earliestSession')) {
+                $book->setRelation('earliestSession', $firsts->get($book->id));
+            }
+        }
+    }
+
+    /**
+     * @return array{startedToday: bool, startedLabel?: string}
+     */
+    private static function startedGlyph(?Book $book, Carbon $weekStart, Carbon $now): array
+    {
+        if ($book === null || ! $book->isStartedInWeek($weekStart)) {
+            return ['startedToday' => false];
+        }
+
+        $today = $now->copy()->timezone(Clock::timezone())->toDateString();
+        $label = $book->startDate() === $today ? 'Started today' : 'Started this week';
+
+        return ['startedToday' => true, 'startedLabel' => $label];
     }
 
     public static function categoryFor(?Book $book): string

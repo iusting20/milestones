@@ -675,4 +675,48 @@ class RoadmapsTest extends TestCase
         $this->assertStringNotContainsString('data-marker="start"', $html);
         $this->assertStringNotContainsString('data-marker="finish"', $html);
     }
+
+    public function test_lists_are_sorted_by_due_date_then_start_date(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        RoadmapItem::factory()->create([
+            'title' => 'Later due',
+            'started_on' => '2026-09-01',
+            'finish_on' => '2026-09-20',
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Soon due',
+            'started_on' => '2026-09-10',
+            'finish_on' => '2026-09-05',
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Early start',
+            'started_on' => '2026-09-02',
+            'finish_on' => null,
+        ]);
+        RoadmapItem::factory()->create([
+            'title' => 'Late start',
+            'started_on' => '2026-09-15',
+            'finish_on' => null,
+        ]);
+        RoadmapItem::factory()->deliverable()->create([
+            'title' => 'Later drop',
+            'started_on' => '2026-09-12',
+        ]);
+        RoadmapItem::factory()->deliverable()->create([
+            'title' => 'Soon drop',
+            'started_on' => '2026-09-04',
+        ]);
+
+        Livewire::test(Roadmaps::class)
+            ->assertSeeInOrder([
+                'Edit Soon drop',
+                'Edit Later drop',
+                'Edit Soon due',
+                'Edit Later due',
+                'Edit Early start',
+                'Edit Late start',
+            ]);
+    }
 }

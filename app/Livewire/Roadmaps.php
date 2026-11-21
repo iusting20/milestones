@@ -312,9 +312,9 @@ class Roadmaps extends Component
             ->orderBy('id')
             ->get();
 
-        $visibleItems = $items
-            ->filter(fn (RoadmapItem $item) => $this->overlaps($item, $monthStart, $monthEnd, $today))
-            ->values();
+        $visibleItems = $this->sortByUrgency(
+            $items->filter(fn (RoadmapItem $item) => $this->overlaps($item, $monthStart, $monthEnd, $today))
+        );
 
         return view('livewire.roadmaps', [
             'monthLabel' => strtoupper($monthStart->format('F Y')),
@@ -556,6 +556,29 @@ class Roadmaps extends Component
         }
 
         return $markers;
+    }
+
+    /**
+     * Soonest due date first. A deliverable is due on its single day. A timeline with no finish date
+     * sorts after dated ones, earliest start first.
+     *
+     * @param  Collection<int, RoadmapItem>  $items
+     * @return Collection<int, RoadmapItem>
+     */
+    private function sortByUrgency(Collection $items): Collection
+    {
+        return $items
+            ->sortBy(function (RoadmapItem $item): array {
+                $due = $item->isDeliverable() ? $item->started_on : $item->finish_on;
+
+                return [
+                    $due === null ? 1 : 0,
+                    $due?->toDateString() ?? '',
+                    $item->started_on->toDateString(),
+                    $item->id,
+                ];
+            })
+            ->values();
     }
 
     private function overlaps(RoadmapItem $item, Carbon $from, Carbon $to, Carbon $today): bool

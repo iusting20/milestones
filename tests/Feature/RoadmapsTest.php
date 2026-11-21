@@ -708,6 +708,11 @@ class RoadmapsTest extends TestCase
             'title' => 'Soon drop',
             'started_on' => '2026-09-04',
         ]);
+        RoadmapItem::factory()->completed('2026-09-03')->create([
+            'title' => 'Already done',
+            'started_on' => '2026-09-01',
+            'finish_on' => '2026-09-02',
+        ]);
 
         Livewire::test(Roadmaps::class)
             ->assertSeeInOrder([
@@ -717,6 +722,7 @@ class RoadmapsTest extends TestCase
                 'Edit Later due',
                 'Edit Early start',
                 'Edit Late start',
+                'Edit Already done',
             ]);
     }
 }

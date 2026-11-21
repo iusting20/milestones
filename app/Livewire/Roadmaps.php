@@ -559,8 +559,8 @@ class Roadmaps extends Component
     }
 
     /**
-     * Soonest due date first. A deliverable is due on its single day. A timeline with no finish date
-     * sorts after dated ones, earliest start first.
+     * Open items first: soonest due date, then undated items by earliest start.
+     * Completed items sort last. A deliverable is due on its single day.
      *
      * @param  Collection<int, RoadmapItem>  $items
      * @return Collection<int, RoadmapItem>
@@ -572,6 +572,7 @@ class Roadmaps extends Component
                 $due = $item->isDeliverable() ? $item->started_on : $item->finish_on;
 
                 return [
+                    $item->isPending() ? 0 : 1,
                     $due === null ? 1 : 0,
                     $due?->toDateString() ?? '',
                     $item->started_on->toDateString(),

@@ -290,18 +290,22 @@ class Comms extends Component
         $assets = $this->projectsQuery('assets')->get();
         $people = Person::query()->orderBy('name')->orderBy('id')->get();
 
+        $projectIds = $clients->pluck('id')->merge($assets->pluck('id'));
+        $personIds = $people->pluck('id');
+
         $entries = Communication::query()
             ->with(['project', 'person'])
             ->whereDate('occurred_on', '>=', $gridStart->toDateString())
             ->whereDate('occurred_on', '<=', $gridEnd->toDateString())
+            ->where(function (Builder $query) use ($projectIds, $personIds): void {
+                $query->whereIn('project_id', $projectIds)
+                    ->orWhereIn('person_id', $personIds);
+            })
             ->orderBy('occurred_on')
             ->orderBy('id')
             ->get();
 
         $selectedDate = $this->parseDate($this->occurredOn)?->toDateString();
-
-        $projectIds = $clients->pluck('id')->merge($assets->pluck('id'));
-        $personIds = $people->pluck('id');
 
         $history = Communication::query()
             ->where(function (Builder $query) use ($projectIds, $personIds): void {
@@ -431,6 +435,7 @@ class Comms extends Component
             ->where('hub', $hub)
             ->where('is_delimiter', false)
             ->where('is_archived', false)
+            ->where('track_comms', true)
             ->orderBy('position')
             ->orderBy('id');
     }

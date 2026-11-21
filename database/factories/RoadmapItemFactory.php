@@ -17,9 +17,18 @@ class RoadmapItemFactory extends Factory
     {
         return [
             'title' => fake()->sentence(3),
+            'kind' => 'timeline',
             'started_on' => now()->toDateString(),
             'completed_on' => null,
         ];
+    }
+
+    public function deliverable(): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => 'deliverable',
+            'finish_on' => null,
+        ]);
     }
 
     public function completed(?string $on = null): static

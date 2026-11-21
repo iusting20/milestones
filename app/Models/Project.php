@@ -14,6 +14,7 @@ class Project extends Model
         'slug',
         'position',
         'is_archived',
+        'track_comms',
         'is_delimiter',
     ];
 
@@ -22,6 +23,7 @@ class Project extends Model
         return [
             'position' => 'integer',
             'is_archived' => 'boolean',
+            'track_comms' => 'boolean',
             'is_delimiter' => 'boolean',
         ];
     }

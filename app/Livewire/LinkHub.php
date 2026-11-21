@@ -120,6 +120,7 @@ class LinkHub extends Component
             'slug' => $slug,
             'position' => $max + 1,
             'is_archived' => false,
+            'track_comms' => true,
         ]);
 
         $this->addingProject = false;
@@ -186,6 +187,17 @@ class LinkHub extends Component
 
         $this->renamingProjectId = null;
         $this->renameProjectName = '';
+    }
+
+    public function toggleTrackComms(int $id): void
+    {
+        $project = $this->findProject($id);
+
+        if ($project->is_delimiter) {
+            return;
+        }
+
+        $project->update(['track_comms' => ! $project->track_comms]);
     }
 
     public function toggleArchive(int $id): void

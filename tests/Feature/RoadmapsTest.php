@@ -642,4 +642,37 @@ class RoadmapsTest extends TestCase
             ->assertDontSee('Archived client')
             ->assertDontSee('Delimiter row');
     }
+
+    public function test_can_add_a_deliverable_on_a_single_day_with_a_star(): void
+    {
+        $this->travelTo('2026-09-18 12:00:00');
+
+        Livewire::test(Roadmaps::class)
+            ->call('openCreate', 'deliverable')
+            ->assertSet('kind', 'deliverable')
+            ->assertSee('Add a deliverable')
+            ->assertDontSee('Finish date')
+            ->set('newTitle', 'Design handoff')
+            ->set('startedOn', '2026-09-03')
+            ->set('finishOn', '2026-09-20')
+            ->call('addItem')
+            ->assertSeeInOrder(['Deliverables', 'Edit Design handoff', 'No timelines in this month'])
+            ->assertDontSee('data-finish-for', false);
+
+        $item = RoadmapItem::query()->where('title', 'Design handoff')->first();
+
+        $this->assertNotNull($item);
+        $this->assertSame('deliverable', $item->kind);
+        $this->assertSame('2026-09-03', $item->started_on->toDateString());
+        $this->assertNull($item->finish_on);
+        $this->assertTrue($item->rangeEnd()->equalTo($item->rangeStart()));
+
+        $html = Livewire::test(Roadmaps::class)
+            ->call('showMonth', '2026-09')
+            ->html();
+
+        $this->assertStringContainsString('data-marker="star"', $html);
+        $this->assertStringNotContainsString('data-marker="start"', $html);
+        $this->assertStringNotContainsString('data-marker="finish"', $html);
+    }
 }

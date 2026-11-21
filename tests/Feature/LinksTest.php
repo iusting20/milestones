@@ -313,6 +313,7 @@ class LinksTest extends TestCase
         $this->assertSame('assets', $project->hub);
         $this->assertSame('alpha', $project->slug);
     }
+
     public function test_link_icon_is_rendered_instead_of_diamond(): void
     {
         $project = Project::query()->create([
@@ -429,7 +430,7 @@ class LinksTest extends TestCase
         ]);
         $family = Link::query()->create([
             'link_group_id' => $group->id,
-            'title' => "👨‍👩‍👧‍👦 Family",
+            'title' => '👨‍👩‍👧‍👦 Family',
             'url' => 'https://example.com/family',
             'position' => 5,
         ]);
@@ -455,5 +456,24 @@ class LinksTest extends TestCase
         $family->refresh();
         $this->assertSame('👨‍👩‍👧‍👦', $family->icon);
         $this->assertSame('Family', $family->title);
+    }
+
+    public function test_track_comms_starts_checked_and_can_be_turned_off(): void
+    {
+        $project = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Tudia',
+            'slug' => 'tudia',
+            'position' => 1,
+        ]);
+
+        $this->assertTrue($project->fresh()->track_comms);
+
+        Livewire::test(LinkHub::class, ['hub' => 'partners', 'slug' => 'tudia'])
+            ->set('editMode', true)
+            ->assertSee('Track comm.')
+            ->call('toggleTrackComms', $project->id);
+
+        $this->assertFalse($project->fresh()->track_comms);
     }
 }

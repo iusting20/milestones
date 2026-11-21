@@ -35,6 +35,15 @@
                     @if ($editMode)
                         <button type="button" wire:click="startRenameProject({{ $selected->id }})"
                                 class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Rename</button>
+                        @unless ($selected->is_delimiter)
+                            <label class="flex cursor-pointer items-center gap-1.5 rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">
+                                <input type="checkbox"
+                                       wire:click="toggleTrackComms({{ $selected->id }})"
+                                       @checked($selected->track_comms)
+                                       class="h-3.5 w-3.5 rounded border-white/20 bg-panel text-check focus:ring-link focus:ring-offset-0">
+                                Track comm.
+                            </label>
+                        @endunless
                         <button type="button" wire:click="toggleArchive({{ $selected->id }})"
                                 class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">
                             {{ $selected->is_archived ? 'Unarchive' : 'Archive' }}

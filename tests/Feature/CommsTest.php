@@ -392,4 +392,27 @@ class CommsTest extends TestCase
 
         $this->assertModelMissing($entry);
     }
+
+    public function test_untracked_projects_are_left_off_the_comms_page(): void
+    {
+        $this->travelTo('2026-10-28 12:00:00');
+
+        $quiet = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Quiet Client',
+            'slug' => 'quiet-client',
+            'position' => 1,
+            'track_comms' => false,
+        ]);
+        Communication::query()->create([
+            'project_id' => $quiet->id,
+            'type' => CommunicationType::QuickUpdate,
+            'occurred_on' => '2026-10-28',
+        ]);
+
+        Livewire::test(Comms::class)
+            ->assertDontSee('Quiet Client')
+            ->call('selectProject', $quiet->id)
+            ->assertSet('projectId', '');
+    }
 }

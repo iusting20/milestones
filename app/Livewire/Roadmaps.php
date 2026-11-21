@@ -36,6 +36,9 @@ class Roadmaps extends Component
 
     public string $newTitle = '';
 
+    /** timeline or deliverable. A deliverable is a single day with a star marker. */
+    public string $kind = 'timeline';
+
     public string $startedOn = '';
 
     /** Optional scheduled finish day for the "Start a project" form. */
@@ -98,9 +101,10 @@ class Roadmaps extends Component
         $this->startedOn = $date;
     }
 
-    public function openCreate(): void
+    public function openCreate(string $kind = 'timeline'): void
     {
         $this->resetFormFields();
+        $this->kind = $kind === 'deliverable' ? 'deliverable' : 'timeline';
         $this->startedOn = Clock::todayString();
         $this->editingId = null;
         $this->creating = true;
@@ -113,6 +117,7 @@ class Roadmaps extends Component
         $this->resetErrorBag();
         $this->editingId = $item->id;
         $this->newTitle = $item->title;
+        $this->kind = $item->isDeliverable() ? 'deliverable' : 'timeline';
         $this->startedOn = $item->started_on->toDateString();
         $this->finishOn = $item->finish_on?->toDateString() ?? '';
         $this->newLinkTitle = $item->link_title ?? '';
@@ -147,7 +152,8 @@ class Roadmaps extends Component
 
         [$linkTitle, $linkUrl] = $link;
 
-        $finishOn = trim($this->finishOn) === '' ? null : $this->parseDate($this->finishOn);
+        $isDeliverable = $this->kind === 'deliverable';
+        $finishOn = $isDeliverable || trim($this->finishOn) === '' ? null : $this->parseDate($this->finishOn);
 
         if ($finishOn !== null && $finishOn->lt($startedOn)) {
             $finishOn = $startedOn->copy();
@@ -155,6 +161,7 @@ class Roadmaps extends Component
 
         $payload = [
             'title' => $title,
+            'kind' => $isDeliverable ? 'deliverable' : 'timeline',
             'started_on' => $startedOn->toDateString(),
             'finish_on' => $finishOn?->toDateString(),
             'link_title' => $linkTitle,
@@ -249,6 +256,10 @@ class Roadmaps extends Component
     {
         $item = RoadmapItem::query()->findOrFail($id);
 
+        if ($item->isDeliverable()) {
+            return;
+        }
+
         if ($date === null || trim($date) === '') {
             $item->update(['finish_on' => null]);
 
@@ -312,6 +323,8 @@ class Roadmaps extends Component
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
             'visibleItems' => $visibleItems,
+            'deliverableItems' => $visibleItems->filter(fn (RoadmapItem $item): bool => $item->isDeliverable())->values(),
+            'timelineItems' => $visibleItems->reject(fn (RoadmapItem $item): bool => $item->isDeliverable())->values(),
             'clients' => $this->associableProjects('partners'),
             'assets' => $this->associableProjects('assets'),
             'activeCount' => RoadmapItem::query()
@@ -451,8 +464,8 @@ class Roadmaps extends Component
             $col = $segStart->dayOfWeekIso;
             $span = (int) $segStart->diffInDays($segEnd) + 1;
             $markers = $this->markersFor($item, $originalStart, $segStart, $segEnd);
-            $hasStartMarker = collect($markers)->contains(fn (array $m): bool => $m['type'] === 'start' && $m['at'] === 0);
-            $hasEndMarker = collect($markers)->contains(fn (array $m): bool => $m['type'] !== 'start' && $m['at'] === $span - 1);
+            $hasStartMarker = collect($markers)->contains(fn (array $m): bool => in_array($m['type'], ['start', 'star'], true) && $m['at'] === 0);
+            $hasEndMarker = collect($markers)->contains(fn (array $m): bool => ! in_array($m['type'], ['start', 'star'], true) && $m['at'] === $span - 1);
 
             $segments[] = [
                 'id' => $item->id,
@@ -520,7 +533,15 @@ class Roadmaps extends Component
         $offset = fn (Carbon $day): int => (int) $segStart->diffInDays($day);
 
         if ($within($start)) {
-            $markers[] = ['type' => 'start', 'at' => $offset($start), 'date' => $start->toDateString()];
+            $markers[] = [
+                'type' => $item->isDeliverable() ? 'star' : 'start',
+                'at' => $offset($start),
+                'date' => $start->toDateString(),
+            ];
+        }
+
+        if ($item->isDeliverable()) {
+            return $markers;
         }
 
         $finish = $item->scheduledFinish();
@@ -550,6 +571,7 @@ class Roadmaps extends Component
     private function resetFormFields(): void
     {
         $this->newTitle = '';
+        $this->kind = 'timeline';
         $this->finishOn = '';
         $this->newLinkTitle = '';
         $this->newLinkUrl = '';

@@ -16,6 +16,7 @@ class RoadmapItem extends Model
 
     protected $fillable = [
         'title',
+        'kind',
         'link_title',
         'link_url',
         'project_id',
@@ -55,6 +56,11 @@ class RoadmapItem extends Model
         return $this->completed_on === null;
     }
 
+    public function isDeliverable(): bool
+    {
+        return $this->kind === 'deliverable';
+    }
+
     public function rangeStart(): Carbon
     {
         return $this->started_on->copy()->startOfDay();
@@ -82,6 +88,10 @@ class RoadmapItem extends Model
      */
     public function rangeEnd(?Carbon $today = null): Carbon
     {
+        if ($this->isDeliverable()) {
+            return $this->rangeStart();
+        }
+
         $start = $this->rangeStart();
 
         if ($this->completed_on !== null) {

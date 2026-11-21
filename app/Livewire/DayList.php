@@ -62,6 +62,18 @@ class DayList extends Component
         //
     }
 
+    #[On('open-day')]
+    public function openDay(string $date, int $itemId): void
+    {
+        if ($this->date !== $date) {
+            return;
+        }
+
+        $this->expanded = true;
+
+        $this->js("document.querySelector('[data-item-id=\"{$itemId}\"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })");
+    }
+
     public function toggleExpanded(): void
     {
         if ($this->isToday) {

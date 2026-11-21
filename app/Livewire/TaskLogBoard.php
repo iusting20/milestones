@@ -528,6 +528,7 @@ class TaskLogBoard extends Component
             'reech' => $this->reechState,
             'weekNumber' => $this->weekNumber(),
             'weekRange' => WeekLabel::range($this->weekStart()),
+            'isCurrentWeek' => $this->week === Clock::currentWeek(),
             'hasLogs' => $hasEntries,
             'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
             'selectableDays' => $this->selectableDays(),

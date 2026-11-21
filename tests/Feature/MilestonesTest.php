@@ -14,6 +14,58 @@ class MilestonesTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_open_items_are_unchecked_tasks_for_the_selected_week(): void
+    {
+        $open = TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Still open Monday',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-03-17',
+            'title' => 'Still open Tuesday',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-03-16',
+            'title' => 'Done Monday',
+            'is_completed' => true,
+            'position' => 2,
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-03-23',
+            'title' => 'Next week open',
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(WeekBoard::class)
+            ->assertSee('Started and not finished')
+            ->assertDontSee('Still open Monday')
+            ->set('showOpenItems', true)
+            ->assertSee('Still open Monday')
+            ->assertSee('Still open Tuesday')
+            ->assertSeeHtml('border-dashed')
+            ->assertDontSee('Done Monday')
+            ->assertDontSee('Next week open')
+            ->call('focusOpenItem', $open->id, '2026-03-16')
+            ->assertDispatched('open-day');
+
+        Livewire::test(DayList::class, [
+            'date' => '2026-03-16',
+            'dayLabel' => 'MONDAY',
+            'isToday' => false,
+        ])
+            ->assertSet('expanded', false)
+            ->dispatch('open-day', date: '2026-03-17', itemId: $open->id)
+            ->assertSet('expanded', false)
+            ->dispatch('open-day', date: '2026-03-16', itemId: $open->id)
+            ->assertSet('expanded', true);
+    }
+
     public function test_milestones_page_renders_week_board(): void
     {
         $this->get(route('milestones'))
@@ -467,7 +519,7 @@ class MilestonesTest extends TestCase
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(WeekBoard::class)
             ->assertSet('week', '2026-W12')
-            ->assertSee('Week: 16-22 Mar')
+            ->assertSee('16-22 Mar')
             ->assertDontSee('Week 12');
     }
 

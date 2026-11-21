@@ -2,8 +2,11 @@
 
 namespace App\Livewire;
 
+use App\Models\TodoItem;
 use App\Support\Clock;
+use App\Support\WeekLabel;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -15,6 +18,8 @@ class WeekBoard extends Component
     public bool $showTags = false;
 
     public bool $showLogControls = false;
+
+    public bool $showOpenItems = false;
 
     public function mount(): void
     {
@@ -71,13 +76,38 @@ class WeekBoard extends Component
         return (int) $this->weekStart()->isoWeek();
     }
 
+    public function focusOpenItem(int $id, string $date): void
+    {
+        $this->dispatch('open-day', date: $date, itemId: $id);
+    }
+
+    /**
+     * @return Collection<int, TodoItem>
+     */
+    public function openItems(): Collection
+    {
+        $start = $this->weekStart();
+
+        return TodoItem::query()
+            ->where('is_separator', false)
+            ->where('is_completed', false)
+            ->whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $start->copy()->endOfWeek(Carbon::SUNDAY)->toDateString())
+            ->orderBy('date')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function render()
     {
         return view('livewire.week-board', [
             'days' => $this->days(),
             'weekNumber' => $this->weekNumber(),
-            'weekRange' => \App\Support\WeekLabel::range($this->weekStart()),
+            'weekRange' => WeekLabel::range($this->weekStart()),
+            'isCurrentWeek' => $this->week === Clock::currentWeek(),
             'today' => Clock::todayString(),
+            'openItems' => $this->openItems(),
         ]);
     }
 

@@ -1,18 +1,11 @@
 <div class="mx-auto max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
     <div class="mb-5 space-y-3">
         <div class="flex flex-wrap items-center gap-2">
-            <button type="button" wire:click="previousWeek"
-                    class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                    aria-label="Previous week">‹</button>
-
-            <h1 class="inline-block max-w-[min(100%,12rem)] truncate bg-mark px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-black sm:max-w-none sm:px-3 sm:text-sm md:text-base">
-                <span class="sm:hidden">DRIP · {{ $weekRange }}</span>
-                <span class="hidden sm:inline">DRIP Matrix - Week: {{ $weekRange }}</span>
+            <h1 class="inline-block bg-mark px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-black sm:px-3 sm:text-sm md:text-base">
+                DRIP Matrix
             </h1>
 
-            <button type="button" wire:click="nextWeek"
-                    class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                    aria-label="Next week">›</button>
+            @include('livewire.partials.week-cycler', ['weekKey' => $week, 'todayAction' => 'goToToday'])
 
             <a href="{{ route('milestones', ['week' => $week]) }}"
                class="ml-auto rounded border border-white/10 px-2.5 py-1.5 text-sm text-muted no-underline hover:text-body sm:px-3">

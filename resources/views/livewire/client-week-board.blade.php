@@ -2,19 +2,7 @@
     <div class="mb-6 flex flex-wrap items-center gap-2">
         <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Week Board</h1>
 
-        <div class="ml-2 flex items-center gap-0.5 text-xs text-muted" data-week-toggle>
-            <button type="button" wire:click="previousWeek"
-                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
-                    aria-label="Previous week">‹</button>
-            <span class="px-1 tabular-nums" data-week-label title="{{ $weekKey }}">{{ $weekRange }}</span>
-            <button type="button" wire:click="nextWeek"
-                    class="rounded px-1.5 py-0.5 leading-none hover:bg-white/5 hover:text-body"
-                    aria-label="Next week">›</button>
-            @unless ($isCurrentWeek)
-                <button type="button" wire:click="goToCurrentWeek"
-                        class="ml-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-body" data-week-today>This week</button>
-            @endunless
-        </div>
+        @include('livewire.partials.week-cycler', ['todayAction' => 'goToCurrentWeek', 'class' => 'ml-2'])
 
         <div class="ml-auto flex items-center gap-1 rounded border border-white/10 p-0.5 text-sm" role="group" aria-label="Rows">
             @foreach (['partners' => 'Partners', 'assets' => 'Assets'] as $option => $label)

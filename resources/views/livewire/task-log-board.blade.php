@@ -24,17 +24,11 @@
         },
      }">
     <div class="mb-6 flex flex-wrap items-center gap-2">
-        <button type="button" wire:click="previousWeek"
-                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                aria-label="Previous week">‹</button>
-
         <h1 class="inline-block bg-mark px-3 py-1 text-sm font-bold uppercase tracking-wide text-black sm:text-base">
-            Log - Week: {{ $weekRange }}
+            Log
         </h1>
 
-        <button type="button" wire:click="nextWeek"
-                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body"
-                aria-label="Next week">›</button>
+        @include('livewire.partials.week-cycler', ['weekKey' => $week, 'todayAction' => 'goToToday'])
 
         <div class="ml-auto flex items-center gap-2">
             <button type="button" wire:click="openAddModal"

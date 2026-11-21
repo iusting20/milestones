@@ -90,6 +90,7 @@ class DripMatrix extends Component
         return view('livewire.drip-matrix', [
             'weekNumber' => $this->weekNumber(),
             'weekRange' => WeekLabel::range($this->weekStart()),
+            'isCurrentWeek' => $this->week === Clock::currentWeek(),
             'quadrants' => $this->quadrants(),
             'untagged' => $this->untagged(),
             'grid' => [

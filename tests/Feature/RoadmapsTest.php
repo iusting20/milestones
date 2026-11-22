@@ -95,32 +95,6 @@ class RoadmapsTest extends TestCase
         $this->assertNull($item->completed_on);
     }
 
-    public function test_status_counts_split_active_completed_and_future_ranges(): void
-    {
-        $this->travelTo('2026-09-18 12:00:00');
-
-        RoadmapItem::factory()->create([
-            'title' => 'In progress',
-            'started_on' => '2026-09-01',
-            'completed_on' => null,
-        ]);
-        RoadmapItem::factory()->create([
-            'title' => 'Finished',
-            'started_on' => '2026-09-02',
-            'completed_on' => '2026-09-10',
-        ]);
-        RoadmapItem::factory()->create([
-            'title' => 'Later',
-            'started_on' => '2026-10-01',
-            'completed_on' => null,
-        ]);
-
-        Livewire::test(Roadmaps::class)
-            ->assertSee('1 active')
-            ->assertSee('1 completed')
-            ->assertSee('1 not yet started');
-    }
-
     public function test_does_not_add_blank_title(): void
     {
         Livewire::test(Roadmaps::class)

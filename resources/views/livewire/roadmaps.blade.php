@@ -17,13 +17,6 @@
         </div>
     </div>
 
-    <div class="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-center text-[11px] uppercase tracking-[0.18em] text-muted">
-        <span class="font-bold">{{ $visibleItems->count() }} projects</span>
-        <span>{{ $activeCount }} active</span>
-        <span>{{ $completedCount }} completed</span>
-        <span>{{ $notStartedCount }} not yet started</span>
-    </div>
-
     <div x-data="{ hoverId: null }" class="flex items-start gap-3">
     <div class="min-w-0 flex-1">
     <div class="overflow-hidden rounded-lg border border-white/10 bg-sidebar/80">

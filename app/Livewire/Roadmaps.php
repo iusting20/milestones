@@ -322,20 +322,10 @@ class Roadmaps extends Component
             'yearMinimap' => $this->yearMinimap($monthStart, $today),
             'today' => $today->toDateString(),
             'weeks' => $this->weeks($gridStart, $gridEnd, $monthStart, $monthEnd, $items, $today),
-            'visibleItems' => $visibleItems,
             'deliverableItems' => $visibleItems->filter(fn (RoadmapItem $item): bool => $item->isDeliverable())->values(),
             'timelineItems' => $visibleItems->reject(fn (RoadmapItem $item): bool => $item->isDeliverable())->values(),
             'clients' => $this->associableProjects('partners'),
             'assets' => $this->associableProjects('assets'),
-            'activeCount' => RoadmapItem::query()
-                ->whereDate('started_on', '<=', $today->toDateString())
-                ->whereNull('completed_on')
-                ->count(),
-            'completedCount' => RoadmapItem::query()->whereNotNull('completed_on')->count(),
-            'notStartedCount' => RoadmapItem::query()
-                ->whereDate('started_on', '>', $today->toDateString())
-                ->whereNull('completed_on')
-                ->count(),
         ]);
     }
 

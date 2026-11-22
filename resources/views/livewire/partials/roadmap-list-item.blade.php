@@ -3,12 +3,19 @@
     @mouseleave="hoverId = null"
     :class="{ 'roadmap-bar-dimmed': hoverId !== null && hoverId !== {{ $item->id }} }"
     class="group flex items-center gap-2 rounded px-1 py-1.5 transition-opacity hover:bg-white/5">
-    <span @class([
-        'mr-[3ch] h-2 w-2 shrink-0 rounded-full',
-        'roadmap-color-'.$this->colorIndexFor($item->id) => $item->isPending(),
-        'roadmap-swatch' => $item->isPending(),
-        'roadmap-swatch-done' => ! $item->isPending(),
-    ])></span>
+    @if ($item->isDeliverable())
+        <span @class([
+            'mr-[3ch] w-3 shrink-0 text-center text-sm leading-none',
+            'roadmap-color-'.$this->colorIndexFor($item->id) => $item->isPending(),
+        ]) style="color: {{ $item->isPending() ? 'var(--roadmap-color)' : '#7cb518' }}" aria-hidden="true">★</span>
+    @else
+        <span @class([
+            'mr-[3ch] h-2 w-2 shrink-0 rounded-full',
+            'roadmap-color-'.$this->colorIndexFor($item->id) => $item->isPending(),
+            'roadmap-swatch' => $item->isPending(),
+            'roadmap-swatch-done' => ! $item->isPending(),
+        ])></span>
+    @endif
 
     <span @class([
         'min-w-0 flex-1 truncate text-sm',
@@ -19,9 +26,6 @@
                 wire:click="openEdit({{ $item->id }})"
                 class="truncate text-left hover:underline"
                 title="Edit {{ $item->title }}">
-            @if ($item->isDeliverable())
-                <span aria-hidden="true">★</span>
-            @endif
             {{ $item->title }}
         </button>
         @if ($item->hasLink())

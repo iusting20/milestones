@@ -515,11 +515,14 @@ class TaskLogBoard extends Component
             ->sum(fn (array $day): int => $day['idle']['idleMinutes']);
 
         $hasEntries = $logs->isNotEmpty() || $completedUntimedByDate->flatten(1)->isNotEmpty();
+        $stats = $this->stats($logs, $completedUntimedByDate, $colorByTitle);
+        $idleBase = $weekIdleMinutes + $stats['totalMinutes'];
 
         return view('livewire.task-log-board', [
             'days' => $days,
             'weekIdleDuration' => $this->formatDuration($weekIdleMinutes),
             'weekIdleMinutes' => $weekIdleMinutes,
+            'weekIdlePercent' => $idleBase > 0 ? (int) round($weekIdleMinutes / $idleBase * 100) : 0,
             'coverage' => [
                 'partners' => $this->hubCoverage('partners', $logs->pluck('title')),
                 'assets' => $this->hubCoverage('assets', $logs->pluck('title')),
@@ -534,7 +537,7 @@ class TaskLogBoard extends Component
             'weekRange' => WeekLabel::range($this->weekStart()),
             'isCurrentWeek' => $this->week === Clock::currentWeek(),
             'hasLogs' => $hasEntries,
-            'stats' => $this->stats($logs, $completedUntimedByDate, $colorByTitle),
+            'stats' => $stats,
             'selectableDays' => $this->selectableDays(),
             'tasks' => $this->tasksForLogDate(),
         ]);

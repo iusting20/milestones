@@ -1033,7 +1033,12 @@ class TaskLogTest extends TestCase
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(TaskLogBoard::class)
             ->assertViewHas('weekIdleMinutes', 20 * 60)
-            ->assertSee('Idle hours');
+            ->assertViewHas('weekIdlePercent', 91)
+            ->assertSee('Logged hours')
+            ->assertSee('Idle hours')
+            ->assertSee('Idle %')
+            ->assertDontSee('>Items<')
+            ->assertDontSee('>Sessions<');
     }
 
     public function test_week_totals_show_partner_and_asset_coverage(): void
@@ -1104,8 +1109,8 @@ class TaskLogTest extends TestCase
         $this->assertNotContains('Neo Wars - art', collect($activity['partners']['rows'])->pluck('items')->flatten(1)->pluck('title'));
 
         $html = $component->html();
-        $this->assertTrue(strpos($html, 'data-week-activity') < strpos($html, 'data-week-totals'));
-        $component->assertSee('Activity by client')->assertSee('Activity by asset')->assertSeeHtml('data-activity-row="Others"');
+        $this->assertTrue(strpos($html, 'data-week-totals') < strpos($html, 'data-week-activity'));
+        $component->assertSee('Activity by client')->assertSee('Activity by asset')->assertSee('Unassigned')->assertSeeHtml('data-activity-chart="unassigned"')->assertSeeHtml('data-activity-row="Emails"')->assertDontSeeHtml('data-activity-row="Others"');
     }
 
     public function test_week_activity_charts_render_empty_week(): void

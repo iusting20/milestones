@@ -201,18 +201,121 @@
         </div>
     </div>
 
+    @if (count($stats['days']) > 0)
+        <section class="mt-8 space-y-3" data-week-totals>
+            <header class="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Week totals</h2>
+                <dl class="flex flex-wrap gap-x-5 gap-y-1 text-sm tabular-nums">
+                    <div>
+                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Logged hours</dt>
+                        <dd class="text-lg font-semibold text-body">{{ $stats['totalDuration'] }}</dd>
+                    </div>
+                    <div data-week-idle>
+                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Idle hours</dt>
+                        <dd class="text-lg font-semibold text-body">{{ $weekIdleDuration }}</dd>
+                    </div>
+                    <div data-week-idle-percent>
+                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Idle %</dt>
+                        <dd class="text-lg font-semibold text-body">{{ $weekIdlePercent }}%</dd>
+                    </div>
+                </dl>
+            </header>
+
+            <div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+                @foreach ($stats['days'] as $dayStats)
+                    <section wire:key="stat-day-{{ $dayStats['date'] }}" data-week-total-day="{{ $dayStats['date'] }}"
+                             @class([
+                                 'rounded-lg border px-4 py-3',
+                                 'border-link/40 bg-today' => $dayStats['date'] === \App\Support\Clock::todayString(),
+                                 'border-white/10 bg-sidebar/60' => $dayStats['date'] !== \App\Support\Clock::todayString(),
+                             ])>
+                        <header class="mb-3 flex items-baseline justify-center gap-3 border-b border-white/10 pb-2">
+                            <h3 class="text-base font-semibold uppercase tracking-[0.14em] text-muted sm:text-lg">
+                                {{ $dayStats['heading'] }}
+                            </h3>
+                        </header>
+
+                        <ul class="space-y-3">
+                            @foreach ($dayStats['items'] as $item)
+                                @php
+                                    $previousWasTimed = $loop->index > 0 && $dayStats['items'][$loop->index - 1]['timed'];
+                                    $separateUntimed = ! $item['timed'] && ($loop->first || $previousWasTimed);
+                                @endphp
+                                <li wire:key="stat-{{ $dayStats['date'] }}-{{ md5($item['title']) }}"
+                                    data-log-stat="{{ $item['title'] }}"
+                                    @class([
+                                        'scroll-mt-24 rounded-md',
+                                        'mt-8 border-t border-white/10 pt-6' => $separateUntimed,
+                                    ])
+                                    :class="{ 'log-item-glow': glowTitle === @js($item['title']) }">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <div class="flex min-w-0 items-center gap-2">
+                                            <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {{ $item['color'] }}"></span>
+                                            <span class="truncate text-[15px] text-body">{{ $item['title'] }}</span>
+                                        </div>
+                                        <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['share'] }}%</span>
+                                    </div>
+                                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+                                        <div class="h-full cursor-pointer rounded-full transition-opacity duration-150"
+                                             style="width: {{ max(4, $item['width']) }}%; @if ($item['timed']) background-color: {{ $item['color'] }}; @else background-color: transparent; background-image: repeating-linear-gradient(-45deg, {{ $item['color'] }} 0 3px, transparent 3px 7px); @endif"
+                                             @mouseenter="hoverTitle = @js($item['title'])"
+                                             @mouseleave="hoverTitle = null"
+                                             @click="focusTitle(@js($item['title']))"
+                                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($item['title']) }"
+                                             @if (! $item['timed']) data-untimed-bar @endif></div>
+                                    </div>
+                                    <ul class="mt-2 space-y-1">
+                                        @foreach ($item['sessions'] as $session)
+                                            <li wire:key="stat-session-{{ $session['id'] ?? ('untimed-'.md5($dayStats['date'].$item['title'])) }}"
+                                                class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted">
+                                                @include('livewire.partials.task-log-times', [
+                                                    'logId' => $session['id'],
+                                                    'startLogId' => $session['startLogId'] ?? $session['id'],
+                                                    'finishLogId' => $session['finishLogId'] ?? $session['id'],
+                                                    'todoItemId' => $session['todoItemId'] ?? null,
+                                                    'started' => $session['started'],
+                                                    'finished' => $session['finished'],
+                                                    'timed' => $session['timed'],
+                                                    'textClass' => 'text-xs text-muted',
+                                                    'context' => 'stats',
+                                                ])
+                                                <span class="ml-auto tabular-nums text-body/90">{{ $session['duration'] }}</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </section>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
+    @php
+        $coverageLabels = ['partners' => 'Partners covered', 'assets' => 'Assets covered'];
+        $unassigned = collect($activity['partners']['rows'])->firstWhere('others', true)
+            ?? collect($activity['assets']['rows'])->firstWhere('others', true);
+    @endphp
+
     <section class="mt-8 grid grid-cols-1 gap-3 lg:grid-cols-2" data-week-activity>
         @foreach (['partners' => 'Activity by client', 'assets' => 'Activity by asset'] as $hubKey => $chartLabel)
+            @php
+                $assignedRows = array_values(array_filter($activity[$hubKey]['rows'], fn (array $row): bool => ! $row['others']));
+            @endphp
             <section class="rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3" data-activity-chart="{{ $hubKey }}">
                 <header class="mb-3 flex items-baseline justify-between gap-3 border-b border-white/10 pb-2">
                     <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">{{ $chartLabel }}</h2>
-                    <span class="text-xs tabular-nums text-muted">{{ $activity[$hubKey]['totalDuration'] }}</span>
+                    <span class="text-xs tabular-nums text-muted" data-coverage="{{ $hubKey }}"
+                          title="{{ $coverage[$hubKey]['uncovered'] === [] ? 'All covered' : 'Not covered: '.implode(', ', $coverage[$hubKey]['uncovered']) }}">
+                        {{ $coverageLabels[$hubKey] }} {{ $coverage[$hubKey]['covered'] }} out of {{ $coverage[$hubKey]['total'] }}
+                    </span>
                 </header>
-                @if ($activity[$hubKey]['rows'] === [])
+                @if ($assignedRows === [])
                     <p class="text-xs text-muted" data-activity-empty>No logged time this week.</p>
                 @else
                     <ul class="space-y-2.5">
-                        @foreach ($activity[$hubKey]['rows'] as $row)
+                        @foreach ($assignedRows as $row)
                             <li wire:key="activity-{{ $hubKey }}-{{ md5($row['name']) }}" data-activity-row="{{ $row['name'] }}"
                                 role="button" tabindex="0"
                                 title="{{ $row['others'] ? 'Show and assign items not linked to a '.($hubKey === 'partners' ? 'client' : 'asset') : 'Show items for '.$row['name'] }}"
@@ -242,6 +345,36 @@
                 @endif
             </section>
         @endforeach
+
+        @if ($unassigned)
+            <section class="rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3 lg:col-span-2" data-activity-chart="unassigned">
+                <header class="mb-3 flex items-baseline justify-between gap-3 border-b border-white/10 pb-2">
+                    <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Unassigned</h2>
+                    <span class="text-xs tabular-nums text-muted">{{ $unassigned['duration'] }}</span>
+                </header>
+                <ul class="space-y-2.5">
+                    @foreach ($unassigned['items'] as $item)
+                        <li wire:key="unassigned-{{ md5($item['title']) }}" data-activity-row="{{ $item['title'] }}"
+                            role="button" tabindex="0"
+                            title="Assign {{ $item['title'] }} to a client or an asset"
+                            wire:click="openActivity('partners', 'Others')"
+                            wire:keydown.enter="openActivity('partners', 'Others')"
+                            class="-mx-2 cursor-pointer rounded-md px-2 py-1 transition hover:bg-white/5 focus:bg-white/5 focus:outline-none">
+                            <div class="flex items-baseline justify-between gap-3 text-sm">
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background: {{ $unassigned['color'] }}"></span>
+                                    <span class="truncate text-muted italic">{{ $item['title'] }}</span>
+                                </span>
+                                <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['duration'] }} · {{ $item['share'] }}%</span>
+                            </div>
+                            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-white/5">
+                                <div class="h-full rounded-full" style="width: {{ max(2, $item['share']) }}%; background: {{ $unassigned['color'] }}"></div>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
     </section>
 
     @if ($activityModal)
@@ -324,107 +457,5 @@
                 @endif
             </div>
         </div>
-    @endif
-
-    @if (count($stats['days']) > 0)
-        <section class="mt-8 space-y-3" data-week-totals>
-            <header class="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/10 bg-sidebar/60 px-4 py-3">
-                <h2 class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Week totals</h2>
-                <dl class="flex flex-wrap gap-x-5 gap-y-1 text-sm tabular-nums">
-                    <div>
-                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Logged</dt>
-                        <dd class="text-lg font-semibold text-body">{{ $stats['totalDuration'] }}</dd>
-                    </div>
-                    <div data-week-idle>
-                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Idle hours</dt>
-                        <dd class="text-lg font-semibold text-body">{{ $weekIdleDuration }}</dd>
-                    </div>
-                    @foreach (['partners' => 'Partners covered', 'assets' => 'Assets covered'] as $hubKey => $hubLabel)
-                        <div data-coverage="{{ $hubKey }}"
-                             title="{{ $coverage[$hubKey]['uncovered'] === [] ? 'All covered' : 'Not covered: '.implode(', ', $coverage[$hubKey]['uncovered']) }}">
-                            <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">{{ $hubLabel }}</dt>
-                            <dd class="text-lg font-semibold text-body">{{ $coverage[$hubKey]['covered'] }} out of {{ $coverage[$hubKey]['total'] }}</dd>
-                        </div>
-                    @endforeach
-                    <div>
-                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Items</dt>
-                        <dd class="text-lg font-semibold text-body">{{ $stats['itemCount'] }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[10px] uppercase tracking-[0.16em] text-muted">Sessions</dt>
-                        <dd class="text-lg font-semibold text-body">{{ $stats['sessionCount'] }}</dd>
-                    </div>
-                </dl>
-            </header>
-
-            <div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-                @foreach ($stats['days'] as $dayStats)
-                    <section wire:key="stat-day-{{ $dayStats['date'] }}" data-week-total-day="{{ $dayStats['date'] }}"
-                             @class([
-                                 'rounded-lg border px-4 py-3',
-                                 'border-link/40 bg-today' => $dayStats['date'] === \App\Support\Clock::todayString(),
-                                 'border-white/10 bg-sidebar/60' => $dayStats['date'] !== \App\Support\Clock::todayString(),
-                             ])>
-                        <header class="mb-3 flex items-baseline justify-center gap-3 border-b border-white/10 pb-2">
-                            <h3 class="text-base font-semibold uppercase tracking-[0.14em] text-muted sm:text-lg">
-                                {{ $dayStats['heading'] }}
-                            </h3>
-                        </header>
-
-                        <ul class="space-y-3">
-                            @foreach ($dayStats['items'] as $item)
-                                @php
-                                    $previousWasTimed = $loop->index > 0 && $dayStats['items'][$loop->index - 1]['timed'];
-                                    $separateUntimed = ! $item['timed'] && ($loop->first || $previousWasTimed);
-                                @endphp
-                                <li wire:key="stat-{{ $dayStats['date'] }}-{{ md5($item['title']) }}"
-                                    data-log-stat="{{ $item['title'] }}"
-                                    @class([
-                                        'scroll-mt-24 rounded-md',
-                                        'mt-8 border-t border-white/10 pt-6' => $separateUntimed,
-                                    ])
-                                    :class="{ 'log-item-glow': glowTitle === @js($item['title']) }">
-                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                        <div class="flex min-w-0 items-center gap-2">
-                                            <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {{ $item['color'] }}"></span>
-                                            <span class="truncate text-[15px] text-body">{{ $item['title'] }}</span>
-                                        </div>
-                                        <span class="shrink-0 text-xs tabular-nums text-muted">{{ $item['share'] }}%</span>
-                                    </div>
-                                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
-                                        <div class="h-full cursor-pointer rounded-full transition-opacity duration-150"
-                                             style="width: {{ max(4, $item['width']) }}%; @if ($item['timed']) background-color: {{ $item['color'] }}; @else background-color: transparent; background-image: repeating-linear-gradient(-45deg, {{ $item['color'] }} 0 3px, transparent 3px 7px); @endif"
-                                             @mouseenter="hoverTitle = @js($item['title'])"
-                                             @mouseleave="hoverTitle = null"
-                                             @click="focusTitle(@js($item['title']))"
-                                             :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($item['title']) }"
-                                             @if (! $item['timed']) data-untimed-bar @endif></div>
-                                    </div>
-                                    <ul class="mt-2 space-y-1">
-                                        @foreach ($item['sessions'] as $session)
-                                            <li wire:key="stat-session-{{ $session['id'] ?? ('untimed-'.md5($dayStats['date'].$item['title'])) }}"
-                                                class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted">
-                                                @include('livewire.partials.task-log-times', [
-                                                    'logId' => $session['id'],
-                                                    'startLogId' => $session['startLogId'] ?? $session['id'],
-                                                    'finishLogId' => $session['finishLogId'] ?? $session['id'],
-                                                    'todoItemId' => $session['todoItemId'] ?? null,
-                                                    'started' => $session['started'],
-                                                    'finished' => $session['finished'],
-                                                    'timed' => $session['timed'],
-                                                    'textClass' => 'text-xs text-muted',
-                                                    'context' => 'stats',
-                                                ])
-                                                <span class="ml-auto tabular-nums text-body/90">{{ $session['duration'] }}</span>
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                </li>
-                            @endforeach
-                        </ul>
-                    </section>
-                @endforeach
-            </div>
-        </section>
     @endif
 </div>

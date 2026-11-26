@@ -493,6 +493,8 @@ class DayList extends Component
             'is_completed' => false,
             'is_separator' => false,
             'drip_tag' => $item->drip_tag,
+            'drip_money' => $item->drip_money,
+            'drip_energy' => $item->drip_energy,
             'position' => $position,
         ]);
 

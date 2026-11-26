@@ -2,7 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\DripEnergy;
+use App\Enums\DripMoney;
 use App\Enums\DripTag;
+use App\Enums\WeekBoardStatus;
+use App\Support\Clock;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +23,8 @@ class TodoItem extends Model
         'is_separator',
         'logging_started_at',
         'drip_tag',
+        'drip_money',
+        'drip_energy',
         'position',
     ];
 
@@ -30,6 +36,8 @@ class TodoItem extends Model
             'is_separator' => 'boolean',
             'logging_started_at' => 'datetime',
             'drip_tag' => DripTag::class,
+            'drip_money' => DripMoney::class,
+            'drip_energy' => DripEnergy::class,
             'position' => 'integer',
         ];
     }
@@ -150,8 +158,8 @@ class TodoItem extends Model
      */
     private function syncWeekBoardCards(bool $completed): void
     {
-        $from = $completed ? [\App\Enums\WeekBoardStatus::Planned, \App\Enums\WeekBoardStatus::Wip] : [\App\Enums\WeekBoardStatus::Done];
-        $to = $completed ? \App\Enums\WeekBoardStatus::Done : \App\Enums\WeekBoardStatus::Wip;
+        $from = $completed ? [WeekBoardStatus::Planned, WeekBoardStatus::Wip] : [WeekBoardStatus::Done];
+        $to = $completed ? WeekBoardStatus::Done : WeekBoardStatus::Wip;
 
         WeekBoardItem::query()
             ->where('todo_item_id', $this->id)
@@ -164,7 +172,7 @@ class TodoItem extends Model
                     ->max('position');
 
                 $card->update(['status' => $to, 'position' => $max + 1]
-                    + ($to === \App\Enums\WeekBoardStatus::Done ? ['week' => \App\Support\Clock::currentWeek()] : []));
+                    + ($to === WeekBoardStatus::Done ? ['week' => Clock::currentWeek()] : []));
             });
     }
 }

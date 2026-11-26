@@ -22,7 +22,7 @@ trait SetsDripTags
         }
 
         if ($tag === null || $tag === '') {
-            $item->update(['drip_tag' => null]);
+            $this->writeDripAxes($item, null, null);
 
             return;
         }
@@ -34,12 +34,12 @@ trait SetsDripTags
         }
 
         if ($item->drip_tag === $dripTag) {
-            $item->update(['drip_tag' => null]);
+            $this->writeDripAxes($item, null, null);
 
             return;
         }
 
-        $item->update(['drip_tag' => $dripTag]);
+        $this->writeDripAxes($item, $dripTag->money(), $dripTag->energy());
         Onboarding::complete('milestone.drip');
     }
 
@@ -51,8 +51,11 @@ trait SetsDripTags
             return;
         }
 
+        $currentMoney = $item->drip_money ?? $item->drip_tag?->money();
+        $energy = $item->drip_energy ?? $item->drip_tag?->energy();
+
         if ($money === null || $money === '') {
-            $item->update(['drip_tag' => null]);
+            $this->writeDripAxes($item, null, $energy);
 
             return;
         }
@@ -63,15 +66,17 @@ trait SetsDripTags
             return;
         }
 
-        if ($item->drip_tag?->money() === $newMoney) {
-            $item->update(['drip_tag' => null]);
+        if ($currentMoney === $newMoney) {
+            $this->writeDripAxes($item, null, $energy);
 
             return;
         }
 
-        $energy = $item->drip_tag?->energy() ?? DripEnergy::Drains;
+        $this->writeDripAxes($item, $newMoney, $energy);
 
-        $item->update(['drip_tag' => DripTag::fromAxes($newMoney, $energy)]);
+        if ($energy !== null) {
+            Onboarding::complete('milestone.drip');
+        }
     }
 
     public function setDripEnergy(int $id, ?string $energy): void
@@ -82,8 +87,11 @@ trait SetsDripTags
             return;
         }
 
+        $money = $item->drip_money ?? $item->drip_tag?->money();
+        $currentEnergy = $item->drip_energy ?? $item->drip_tag?->energy();
+
         if ($energy === null || $energy === '') {
-            $item->update(['drip_tag' => null]);
+            $this->writeDripAxes($item, $money, null);
 
             return;
         }
@@ -94,19 +102,32 @@ trait SetsDripTags
             return;
         }
 
-        if ($item->drip_tag?->energy() === $newEnergy) {
-            $item->update(['drip_tag' => null]);
+        if ($currentEnergy === $newEnergy) {
+            $this->writeDripAxes($item, $money, null);
 
             return;
         }
 
-        $money = $item->drip_tag?->money() ?? DripMoney::Low;
+        $this->writeDripAxes($item, $money, $newEnergy);
 
-        $item->update(['drip_tag' => DripTag::fromAxes($money, $newEnergy)]);
+        if ($money !== null) {
+            Onboarding::complete('milestone.drip');
+        }
     }
 
     protected function cannotSetDripTag(Model $item): bool
     {
         return (bool) ($item->getAttribute('is_separator') ?? false);
+    }
+
+    protected function writeDripAxes(Model $item, ?DripMoney $money, ?DripEnergy $energy): void
+    {
+        $item->update([
+            'drip_money' => $money,
+            'drip_energy' => $energy,
+            'drip_tag' => ($money !== null && $energy !== null)
+                ? DripTag::fromAxes($money, $energy)
+                : null,
+        ]);
     }
 }

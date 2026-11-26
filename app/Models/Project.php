@@ -15,6 +15,7 @@ class Project extends Model
         'position',
         'is_archived',
         'track_comms',
+        'docmost_space_slug',
         'is_delimiter',
     ];
 

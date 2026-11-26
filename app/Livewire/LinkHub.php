@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Link;
 use App\Models\LinkGroup;
 use App\Models\Project;
+use App\Support\Docmost;
 use App\Support\Onboarding;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Title;
@@ -55,6 +56,8 @@ class LinkHub extends Component
 
     public bool $editMode = false;
 
+    public string $docmostSpaceSlug = '';
+
     public function mount(string $hub, ?string $slug = null): void
     {
         abort_unless(in_array($hub, ['partners', 'assets'], true), 404);
@@ -80,6 +83,8 @@ class LinkHub extends Component
         if ($this->hub === 'assets') {
             Onboarding::complete('links.assets');
         }
+
+        $this->syncDocmostSpaceSlug();
     }
 
     public function selectProject(string $slug): void
@@ -524,6 +529,32 @@ class LinkHub extends Component
         $this->newProjectName = '';
     }
 
+    public function updatedDocmostSpaceSlug(string $value): void
+    {
+        $project = $this->selectedProject();
+        if (! $project || $project->is_delimiter) {
+            return;
+        }
+
+        $slug = trim($value);
+        if ($slug === '') {
+            $project->update(['docmost_space_slug' => null]);
+            $this->docmostSpaceSlug = '';
+
+            return;
+        }
+
+        $allowed = Docmost::spaces()->pluck('slug')->all();
+        if (! in_array($slug, $allowed, true)) {
+            $this->syncDocmostSpaceSlug();
+
+            return;
+        }
+
+        $project->update(['docmost_space_slug' => $slug]);
+        $this->docmostSpaceSlug = $slug;
+    }
+
     public function render()
     {
         $projects = $this->projectsQuery()->get();
@@ -533,9 +564,21 @@ class LinkHub extends Component
             $selected->load(['linkGroups.links']);
         }
 
+        $docmostSpaces = Docmost::spaces();
+        $docmostAvailable = Docmost::available();
+        $spaceSlug = $selected?->docmost_space_slug;
+        $docmostPages = $spaceSlug ? Docmost::topLevelPages($spaceSlug) : [];
+        $docmostSpaceUrl = $spaceSlug ? Docmost::spaceUrl($spaceSlug) : null;
+        $docmostSpaceName = $spaceSlug ? Docmost::spaceName($spaceSlug) : null;
+
         return view('livewire.link-hub', [
             'projects' => $projects,
             'selected' => $selected,
+            'docmostSpaces' => $docmostSpaces,
+            'docmostAvailable' => $docmostAvailable,
+            'docmostPages' => $docmostPages,
+            'docmostSpaceUrl' => $docmostSpaceUrl,
+            'docmostSpaceName' => $docmostSpaceName,
         ])->layout('layouts.app', ['hub' => $this->hub]);
     }
 
@@ -546,6 +589,11 @@ class LinkHub extends Component
             ->orderBy('is_archived')
             ->orderBy('position')
             ->orderBy('id');
+    }
+
+    private function syncDocmostSpaceSlug(): void
+    {
+        $this->docmostSpaceSlug = (string) ($this->selectedProject()?->docmost_space_slug ?? '');
     }
 
     private function selectedProject(): ?Project

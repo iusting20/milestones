@@ -99,6 +99,20 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        'docmost' => [
+            'driver' => 'pgsql',
+            'host' => env('DOCMOST_DB_HOST', '127.0.0.1'),
+            'port' => env('DOCMOST_DB_PORT', '5432'),
+            'database' => env('DOCMOST_DB_DATABASE', 'docmost'),
+            'username' => env('DOCMOST_DB_USERNAME', 'milestones_readonly'),
+            'password' => env('DOCMOST_DB_PASSWORD', ''),
+            'charset' => env('DOCMOST_DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DOCMOST_DB_SSLMODE', 'prefer'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

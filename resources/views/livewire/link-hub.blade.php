@@ -82,6 +82,55 @@
                 </form>
             @endif
 
+            @unless ($selected->is_delimiter)
+                @if ($editMode)
+                    <div class="mb-6 flex flex-wrap items-center gap-2">
+                        <label for="docmost-space" class="text-xs text-muted">Docmost space</label>
+                        <select id="docmost-space" wire:model.live="docmostSpaceSlug"
+                                class="rounded border border-white/10 bg-sidebar px-3 py-1.5 text-sm focus:border-link focus:outline-none">
+                            <option value="">— none —</option>
+                            @foreach ($docmostSpaces as $space)
+                                <option value="{{ $space->slug }}">{{ $space->name }} ({{ $space->slug }})</option>
+                            @endforeach
+                        </select>
+                        @unless ($docmostAvailable)
+                            <span class="text-xs text-muted">Docmost is unreachable right now.</span>
+                        @endunless
+                    </div>
+                @endif
+
+                @if (filled($docmostSpaceSlug))
+                    <section class="mb-8 border-b border-dashed border-white/15 pb-8">
+                        <h3 class="mb-3 text-lg font-bold text-body">Docs (Docmost)</h3>
+                        <ul class="space-y-2">
+                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <span class="text-link" aria-hidden="true">◆</span>
+                                <a href="{{ $docmostSpaceUrl }}" target="_blank" rel="noopener noreferrer"
+                                   class="font-medium text-link no-underline hover:underline">{{ $docmostSpaceName ?? $docmostSpaceSlug }}</a>
+                                <span class="text-xs text-muted">space home</span>
+                            </li>
+                            @forelse ($docmostPages as $page)
+                                <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                    <span class="text-link" aria-hidden="true">{{ $page['icon'] ?? '◆' }}</span>
+                                    <a href="{{ $page['url'] }}" target="_blank" rel="noopener noreferrer"
+                                       class="font-medium text-link no-underline hover:underline">{{ $page['title'] }}</a>
+                                </li>
+                            @empty
+                                <li class="text-sm text-muted">
+                                    @if ($docmostAvailable)
+                                        No top-level pages in this space yet.
+                                    @else
+                                        Could not load Docmost pages right now.
+                                    @endif
+                                </li>
+                            @endforelse
+                        </ul>
+                    </section>
+                @elseif ($editMode)
+                    <p class="mb-8 text-sm text-muted">No Docmost space connected. Choose one above to list its top-level pages here.</p>
+                @endif
+            @endunless
+
             <div @if ($editMode) x-data="linkSortList('reorderGroups')" x-on:dragover.prevent="over($event)" x-on:drop.prevent="drop($event)" @endif>
             @forelse ($selected->linkGroups as $group)
                 <section class="mb-8 border-b border-dashed border-white/15 pb-8 last:border-0" id="group-{{ $group->id }}" data-sort-item="{{ $group->id }}" wire:key="group-{{ $group->id }}">

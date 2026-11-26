@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ImpactMapController;
 use App\Http\Controllers\LoginController;
+use App\Livewire\ActivityStats;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\JobApplications;
@@ -25,6 +26,7 @@ Route::view('/milestones', 'milestones')->name('milestones');
 Route::get('/milestones/drip-matrix', DripMatrix::class)->name('milestones.drip-matrix');
 
 Route::get('/milestones/log', TaskLogBoard::class)->name('milestones.log');
+Route::get('/milestones/stats', ActivityStats::class)->name('milestones.stats');
 Route::view('/backlog', 'backlog')->name('backlog');
 
 Route::get('/backlog/drip-matrix', BacklogDripMatrix::class)->name('backlog.drip-matrix');

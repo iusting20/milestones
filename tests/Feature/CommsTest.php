@@ -415,4 +415,48 @@ class CommsTest extends TestCase
             ->call('selectProject', $quiet->id)
             ->assertSet('projectId', '');
     }
+
+    public function test_saving_a_note_dispatches_a_saved_event_for_the_modal_glow(): void
+    {
+        $this->travelTo('2026-11-26 12:00:00');
+
+        $client = Project::query()->create([
+            'hub' => 'partners',
+            'name' => 'Tudia',
+            'slug' => 'tudia',
+            'position' => 1,
+        ]);
+        $person = Person::factory()->create([
+            'name' => 'Ada',
+        ]);
+
+        $component = Livewire::test(Comms::class)
+            ->call('openNotes', 'project', $client->id)
+            ->assertSee('comm-notes-saved-glow', false)
+            ->assertSee('comm-note-saved', false)
+            ->call('startNewNote')
+            ->set('noteBody', '   ')
+            ->call('saveNote')
+            ->assertNotDispatched('comm-note-saved');
+
+        $this->assertDatabaseCount('comm_notes', 0);
+
+        $component->set('noteBody', 'Follow up next week')
+            ->call('saveNote')
+            ->assertDispatched('comm-note-saved');
+
+        $this->assertDatabaseCount('comm_notes', 1);
+
+        $component->call('saveNote')
+            ->assertNotDispatched('comm-note-saved');
+
+        Livewire::test(Comms::class)
+            ->call('openNotes', 'person', $person->id)
+            ->call('startNewNote')
+            ->set('noteBody', 'Met at the office')
+            ->call('saveNote')
+            ->assertDispatched('comm-note-saved');
+
+        $this->assertDatabaseCount('comm_notes', 2);
+    }
 }

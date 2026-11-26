@@ -212,6 +212,38 @@
         animation: log-item-glow 1.5s ease-in-out 1;
     }
 
+    @keyframes comm-notes-saved-glow {
+        0%, 100% {
+            box-shadow:
+                0 20px 25px -5px rgb(0 0 0 / 0.1),
+                0 8px 10px -6px rgb(0 0 0 / 0.1),
+                0 0 0 0 transparent;
+        }
+        35% {
+            box-shadow:
+                0 20px 25px -5px rgb(0 0 0 / 0.1),
+                0 8px 10px -6px rgb(0 0 0 / 0.1),
+                0 0 0 1px rgb(124 181 24 / 75%),
+                0 0 18px rgb(124 181 24 / 45%),
+                0 0 36px rgb(124 181 24 / 22%);
+        }
+    }
+
+    .comm-notes-saved-glow {
+        animation: comm-notes-saved-glow 1s ease-in-out 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .comm-notes-saved-glow {
+            animation: none;
+            box-shadow:
+                0 20px 25px -5px rgb(0 0 0 / 0.1),
+                0 8px 10px -6px rgb(0 0 0 / 0.1),
+                0 0 0 1px rgb(124 181 24 / 75%),
+                0 0 18px rgb(124 181 24 / 45%);
+        }
+    }
+
     .has-parent-tip {
         @apply relative;
     }

@@ -287,15 +287,27 @@
                     if (! $wire.noteDirty || confirm('Discard unsaved changes?')) {
                         fn();
                     }
+                },
+                saved: false,
+                savedTimer: null,
+                flashSaved() {
+                    this.saved = false;
+                    this.$nextTick(() => {
+                        this.saved = true;
+                        clearTimeout(this.savedTimer);
+                        this.savedTimer = setTimeout(() => { this.saved = false }, 1000);
+                    });
                 }
              }"
+             x-on:comm-note-saved.window="flashSaved()"
              x-on:keydown.escape.window="leave(() => $wire.closeNotes())"
              role="dialog"
              aria-modal="true"
              aria-labelledby="comm-notes-title">
             <div class="absolute inset-0 bg-black/60" x-on:click="leave(() => $wire.closeNotes())" aria-hidden="true"></div>
 
-            <div class="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
+            <div class="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5"
+                 :class="{ 'comm-notes-saved-glow': saved }">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <h2 id="comm-notes-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
                         Notes · {{ $notesSubjectName }}

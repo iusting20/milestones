@@ -311,6 +311,12 @@ class Comms extends Component
                 return;
             }
 
+            if ($note->body === $body) {
+                $this->loadNote($note);
+
+                return;
+            }
+
             $note->update(['body' => $body]);
         } else {
             $note = CommNote::query()->create([
@@ -321,6 +327,7 @@ class Comms extends Component
         }
 
         $this->loadNote($note);
+        $this->dispatch('comm-note-saved');
     }
 
     public function previousNote(): void

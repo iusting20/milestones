@@ -336,8 +336,6 @@
                         <span class="sr-only">Note</span>
                         <textarea wire:model.live="noteBody"
                                   rows="10"
-                                  x-data
-                                  x-init="$nextTick(() => $el.focus())"
                                   class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
                                   placeholder="Write a note…"></textarea>
                     </label>

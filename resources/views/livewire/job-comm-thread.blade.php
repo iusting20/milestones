@@ -16,9 +16,6 @@
                 <span class="rounded border border-[#da3633]/50 bg-[#da3633]/10 px-2 py-0.5 text-xs font-medium text-body" data-closed-badge>Closed</span>
                 <button type="button" wire:click="reopen" data-reopen="{{ $application->id }}"
                         class="rounded border border-white/15 bg-panel px-3 py-1.5 text-sm font-medium text-body hover:border-[#39c5cf]/60">Reopen</button>
-            @else
-                <button type="button" wire:click="markClosed" data-mark-closed="{{ $application->id }}"
-                        class="rounded border border-white/15 bg-panel px-3 py-1.5 text-sm font-medium text-body hover:border-[#da3633]/60">Mark as closed</button>
             @endif
         </div>
     </div>
@@ -65,7 +62,7 @@
                 <li class="rounded border border-white/10 bg-panel p-3" wire:key="msg-{{ $m->id }}" @if ($editingMessageId === $m->id) data-editing-message @endif>
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <span class="text-xs font-semibold" style="color: {{ $m->direction === 'sent' ? '#39c5cf' : '#f778ba' }}">
-                            {{ $m->direction === 'sent' ? 'Sent by me' : 'Received' }}
+                            {{ $m->directionLabel() }}
                         </span>
                         <span class="text-xs tabular-nums text-muted">{{ $m->occurredLabel($tz) }}</span>
                     </div>
@@ -90,9 +87,9 @@
             <p class="mb-2 text-xs font-medium text-body">{{ $editingMessageId ? 'Edit entry' : 'Add a message' }}</p>
             <div class="mb-2 flex flex-wrap gap-1" role="group" aria-label="Direction">
                 <button type="button" wire:click="$set('messageForm.direction', 'sent')"
-                        class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'sent' ? 'border-[#39c5cf]/70 bg-[#39c5cf]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">Sent by me</button>
+                        class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'sent' ? 'border-[#39c5cf]/70 bg-[#39c5cf]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">From me</button>
                 <button type="button" wire:click="$set('messageForm.direction', 'received')"
-                        class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'received' ? 'border-[#f778ba]/70 bg-[#f778ba]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">Received</button>
+                        class="rounded border px-2.5 py-1 text-xs {{ $messageForm['direction'] === 'received' ? 'border-[#f778ba]/70 bg-[#f778ba]/10 font-medium text-body' : 'border-white/15 text-muted hover:text-body' }}">From them</button>
             </div>
             @error('messageForm.direction')<p class="mb-2 text-xs text-[#da3633]">{{ $message }}</p>@enderror
             <div class="grid gap-2 sm:grid-cols-2">

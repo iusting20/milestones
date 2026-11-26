@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureAuthenticated;
 use App\Livewire\JobApplications;
 use App\Livewire\JobCommThread;
 use App\Models\JobApplication;
@@ -35,7 +36,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
         $closed = $this->job('already', ['company' => 'ShutCo', 'role' => 'Shut Role', 'status' => 'closed']);
 
         $this->get($this->url())->assertOk()
-            ->assertSee('Mark as closed')
+            ->assertDontSee('Mark as closed')
             ->assertSee('Reopen')
             ->assertSee('Comm. Threads')
             ->assertSee('data-mark-closed="'.$open->id.'"', false)
@@ -137,7 +138,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
             ->assertSee('Paste the message here')
             ->assertSee('Date')
             ->assertSee('Time')
-            ->assertSee('Mark as closed')
+            ->assertDontSee('Mark as closed')
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
@@ -177,7 +178,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
             ->set('messageForm.body', 'Hello, please find my CV attached.')
             ->call('saveMessage')
             ->assertSee('Added a conversation entry for Msg Role · MsgCo')
-            ->assertSee('Sent by me')
+            ->assertSee('From me')
             ->assertSee('Application for Msg Role')
             ->assertSee('Hello, please find my CV attached.')
             ->assertSee('Tue 17 Nov 2026, 09:15')
@@ -186,6 +187,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
         $this->assertSame(1, $job->messages()->count());
         $message = $job->messages()->first();
         $this->assertSame('sent', $message->direction);
+        $this->assertSame('From me', $message->directionLabel());
         $this->assertTrue($message->has_time);
         $this->assertSame('Application for Msg Role', $message->subject);
         $this->assertSame('2026-11-17 07:15:00', $message->occurred_at->copy()->utc()->format('Y-m-d H:i:s'));
@@ -196,13 +198,14 @@ class JobApplicationCloseAndThreadsTest extends TestCase
             ->set('messageForm.subject', '')
             ->set('messageForm.body', 'Thanks, we will be in touch.')
             ->call('saveMessage')
-            ->assertSee('Received')
+            ->assertSee('From them')
             ->assertSee('Thanks, we will be in touch.')
             ->assertSee('Wed 18 Nov 2026')
             ->assertDontSee('Wed 18 Nov 2026, 00:00');
 
         $this->assertSame(['sent', 'received'], $job->messages()->orderBy('occurred_at')->pluck('direction')->all());
         $reply = $job->messages()->where('direction', 'received')->first();
+        $this->assertSame('From them', $reply->directionLabel());
         $this->assertFalse($reply->has_time);
 
         $firstId = $message->id;
@@ -269,7 +272,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
         $this->flushSession();
         $this->get($url)->assertRedirect(route('login'));
 
-        $this->withSession([\App\Http\Middleware\EnsureAuthenticated::SESSION_KEY => true]);
+        $this->withSession([EnsureAuthenticated::SESSION_KEY => true]);
         $this->get('/x/wrong-token/'.$job->id.'/threads')->assertNotFound();
         $this->get($url)->assertOk();
     }

@@ -30,6 +30,11 @@ class JobApplicationMessage extends Model
         return $this->belongsTo(JobApplication::class, 'job_application_id');
     }
 
+    public function directionLabel(): string
+    {
+        return $this->direction === 'sent' ? 'From me' : 'From them';
+    }
+
     public function occurredLabel(string $tz): string
     {
         $local = $this->occurred_at->copy()->timezone($tz);

@@ -348,16 +348,22 @@
                         <button type="button"
                                 x-on:click="leave(() => $wire.previousNote())"
                                 @disabled($noteId === null ? $noteCount === 0 : $noteIndex >= $noteCount)
-                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
-                                aria-label="Previous (older) note">
-                            Prev
+                                class="inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label="Previous note"
+                                title="Previous note">
+                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                <path d="M7.5 2.5 4 6l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                         </button>
                         <button type="button"
                                 x-on:click="leave(() => $wire.nextNote())"
                                 @disabled($noteId === null || $noteIndex <= 1)
-                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
-                                aria-label="Next (newer) note">
-                            Next
+                                class="inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label="Next note"
+                                title="Next note">
+                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                <path d="M4.5 2.5 8 6 4.5 9.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                         </button>
                         <button type="button"
                                 x-on:click="leave(() => $wire.startNewNote())"

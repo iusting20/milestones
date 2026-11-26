@@ -568,8 +568,6 @@ class LinkHub extends Component
         $docmostAvailable = Docmost::available();
         $spaceSlug = $selected?->docmost_space_slug;
         $docmostPages = $spaceSlug ? Docmost::topLevelPages($spaceSlug) : [];
-        $docmostSpaceUrl = $spaceSlug ? Docmost::spaceUrl($spaceSlug) : null;
-        $docmostSpaceName = $spaceSlug ? Docmost::spaceName($spaceSlug) : null;
 
         return view('livewire.link-hub', [
             'projects' => $projects,
@@ -577,8 +575,6 @@ class LinkHub extends Component
             'docmostSpaces' => $docmostSpaces,
             'docmostAvailable' => $docmostAvailable,
             'docmostPages' => $docmostPages,
-            'docmostSpaceUrl' => $docmostSpaceUrl,
-            'docmostSpaceName' => $docmostSpaceName,
         ])->layout('layouts.app', ['hub' => $this->hub]);
     }
 

@@ -103,12 +103,6 @@
                     <section class="mb-8 border-b border-dashed border-white/15 pb-8">
                         <h3 class="mb-3 text-lg font-bold text-body">Docs (Docmost)</h3>
                         <ul class="space-y-2">
-                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                                <span class="text-link" aria-hidden="true">◆</span>
-                                <a href="{{ $docmostSpaceUrl }}" target="_blank" rel="noopener noreferrer"
-                                   class="font-medium text-link no-underline hover:underline">{{ $docmostSpaceName ?? $docmostSpaceSlug }}</a>
-                                <span class="text-xs text-muted">space home</span>
-                            </li>
                             @forelse ($docmostPages as $page)
                                 <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                                     <span class="text-link" aria-hidden="true">{{ $page['icon'] ?? '◆' }}</span>

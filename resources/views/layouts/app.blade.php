@@ -45,7 +45,7 @@
             @endphp
             @if ($showGigs)
                 <a href="{{ route('jobs.secret', config('jobs.page_token')) }}"
-                   class="ml-auto shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('jobs.secret') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
+                   class="ml-auto shrink-0 rounded px-3 py-1.5 no-underline {{ request()->routeIs('jobs.*') ? 'bg-panel text-body font-semibold' : 'text-muted hover:text-body' }}">
                     Gigs
                 </a>
             @endif

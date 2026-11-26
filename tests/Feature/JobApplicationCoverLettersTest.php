@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\JobApplicationController;
 use App\Livewire\JobApplications;
 use App\Models\JobApplication;
 use App\Models\JobApplicationMessage;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -117,81 +116,10 @@ class JobApplicationCoverLettersTest extends TestCase
             ->assertSet('viewingId', $with->id)
             ->assertSee('Open application')
             ->assertSee('ListedCo')
-            ->assertSee('Conversation');
+            ->assertSee('Comm. Threads');
     }
 
-    public function test_conversation_history_can_be_added_edited_and_deleted(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-11-18 18:00:00', 'Europe/Bucharest'));
-        $job = $this->job('msg', ['company' => 'MsgCo', 'role' => 'Msg Role']);
 
-        $c = Livewire::test(JobApplications::class)
-            ->call('openView', $job->id)
-            ->assertSee('Conversation')
-            ->assertSee('No emails logged yet')
-            ->set('messageForm.direction', 'sent')
-            ->set('messageForm.occurred_at', '2026-11-17T09:15')
-            ->set('messageForm.subject', 'Application for Msg Role')
-            ->set('messageForm.body', 'Hello, please find my CV attached.')
-            ->call('saveMessage')
-            ->assertSee('Added a conversation entry for Msg Role · MsgCo')
-            ->assertSee('Sent by me')
-            ->assertSee('Application for Msg Role')
-            ->assertSee('Hello, please find my CV attached.')
-            ->assertSee('Tue 17 Nov 2026, 09:15')
-            ->assertDontSee('No emails logged yet');
-
-        $this->assertSame(1, $job->messages()->count());
-        $message = $job->messages()->first();
-        $this->assertSame('sent', $message->direction);
-        $this->assertSame('Application for Msg Role', $message->subject);
-        $this->assertSame('2026-11-17 07:15:00', $message->occurred_at->copy()->utc()->format('Y-m-d H:i:s'));
-
-        $c->set('messageForm.direction', 'received')
-            ->set('messageForm.occurred_at', '2026-11-18T14:00')
-            ->set('messageForm.subject', 'Re: Application for Msg Role')
-            ->set('messageForm.body', 'Thanks, we will be in touch.')
-            ->call('saveMessage')
-            ->assertSee('Received')
-            ->assertSee('Thanks, we will be in touch.')
-            ->assertSee('Wed 18 Nov 2026, 14:00');
-
-        $this->assertSame(['sent', 'received'], $job->messages()->orderBy('occurred_at')->pluck('direction')->all());
-
-        $firstId = $message->id;
-        $c->call('startEditMessage', $firstId)
-            ->assertSet('editingMessageId', $firstId)
-            ->set('messageForm.body', 'Hello, please find my CV and portfolio attached.')
-            ->call('saveMessage')
-            ->assertSee('Updated the conversation entry.')
-            ->assertSee('Hello, please find my CV and portfolio attached.')
-            ->assertDontSee('Hello, please find my CV attached.');
-
-        $replyId = $job->messages()->where('direction', 'received')->value('id');
-        $c->call('deleteMessage', $replyId)
-            ->assertSee('Removed the conversation entry.')
-            ->assertDontSee('Thanks, we will be in touch.');
-        $this->assertSame(1, $job->messages()->count());
-
-        $this->get($this->url())->assertOk()->assertSee('1 message');
-
-        Carbon::setTestNow();
-    }
-
-    public function test_message_validation_requires_a_body_and_a_valid_direction(): void
-    {
-        $job = $this->job('val');
-
-        Livewire::test(JobApplications::class)
-            ->call('openView', $job->id)
-            ->set('messageForm.direction', 'sideways')
-            ->set('messageForm.occurred_at', '2026-11-18T12:00')
-            ->set('messageForm.body', '')
-            ->call('saveMessage')
-            ->assertHasErrors(['messageForm.direction', 'messageForm.body']);
-
-        $this->assertSame(0, JobApplicationMessage::query()->count());
-    }
 
     public function test_cover_letter_and_messages_stay_off_the_jobs_api(): void
     {
@@ -236,7 +164,7 @@ class JobApplicationCoverLettersTest extends TestCase
         Livewire::test(JobApplications::class)
             ->call('openView', $job->id)
             ->assertSee('Cover letter')
-            ->assertSee('Conversation')
+            ->assertSee('Comm. Threads')
             ->call('openCoverLetter', $job->id)
             ->assertSet('coverLetterJobId', $job->id)
             ->assertSet('viewingId', $job->id)

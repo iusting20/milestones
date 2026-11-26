@@ -4,7 +4,6 @@ namespace App\Livewire;
 
 use App\Models\JobApplication;
 use App\Models\JobApplicationEvent;
-use App\Models\JobApplicationMessage;
 use App\Support\Clock;
 use App\Support\JobApplicationWriter;
 use App\Support\Onboarding;
@@ -42,19 +41,13 @@ class JobApplications extends Component
     /** "My cover letters" list modal. */
     public bool $showCoverLetters = false;
 
-    /** @var array{direction: string, occurred_at: string, subject: string, body: string} */
-    public array $messageForm = [
-        'direction' => 'sent',
-        'occurred_at' => '',
-        'subject' => '',
-        'body' => '',
-    ];
-
-    public ?int $editingMessageId = null;
-
     /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
     #[Url(as: 'category', history: true, except: 'all')]
     public string $category = 'all';
+
+    /** List filter: all, open or closed. Default all is omitted from the URL. */
+    #[Url(as: 'closed', history: true, except: 'all')]
+    public string $closedFilter = 'all';
 
     public const STATUS_COLORS = [
         'Applied' => '#f0883e',
@@ -290,6 +283,7 @@ class JobApplications extends Component
     public function mount(): void
     {
         $this->normalizeCategoryFilter();
+        $this->normalizeClosedFilter();
     }
 
     public function updatedCategory(): void
@@ -297,10 +291,22 @@ class JobApplications extends Component
         $this->normalizeCategoryFilter();
     }
 
+    public function updatedClosedFilter(): void
+    {
+        $this->normalizeClosedFilter();
+    }
+
     private function normalizeCategoryFilter(): void
     {
         if (! in_array($this->category, ['all', ...JobApplicationWriter::CATEGORIES], true)) {
             $this->category = 'all';
+        }
+    }
+
+    private function normalizeClosedFilter(): void
+    {
+        if (! in_array($this->closedFilter, ['all', 'open', 'closed'], true)) {
+            $this->closedFilter = 'all';
         }
     }
 
@@ -342,7 +348,6 @@ class JobApplications extends Component
     {
         $this->showCoverLetters = false;
         $this->viewingId = JobApplication::query()->findOrFail($id)->id;
-        $this->resetMessageForm();
         Onboarding::complete('gigs.view');
     }
 
@@ -352,7 +357,6 @@ class JobApplications extends Component
             return;
         }
         $this->viewingId = null;
-        $this->resetMessageForm();
     }
 
     public function openCoverLetter(int $id): void
@@ -410,86 +414,31 @@ class JobApplications extends Component
         $this->showCoverLetters = false;
     }
 
-    /** @return array{direction: string, occurred_at: string, subject: string, body: string} */
-    private function blankMessageForm(): array
+    public function markClosed(int $id): void
     {
-        return [
-            'direction' => 'sent',
-            'occurred_at' => Clock::now()->format('Y-m-d\TH:i'),
-            'subject' => '',
-            'body' => '',
-        ];
-    }
+        $app = JobApplication::query()->findOrFail($id);
+        if ($app->isClosed()) {
+            $this->flash = $app->label().' is already closed.';
 
-    private function resetMessageForm(): void
-    {
-        $this->resetErrorBag(['messageForm.direction', 'messageForm.occurred_at', 'messageForm.subject', 'messageForm.body']);
-        $this->editingMessageId = null;
-        $this->messageForm = $this->blankMessageForm();
-    }
-
-    public function startEditMessage(int $id): void
-    {
-        $message = $this->findViewingMessage($id);
-        $this->resetErrorBag(['messageForm.direction', 'messageForm.occurred_at', 'messageForm.subject', 'messageForm.body']);
-        $this->editingMessageId = $message->id;
-        $this->messageForm = [
-            'direction' => $message->direction,
-            'occurred_at' => $message->occurred_at->copy()->timezone(Clock::timezone())->format('Y-m-d\TH:i'),
-            'subject' => (string) ($message->subject ?? ''),
-            'body' => (string) $message->body,
-        ];
-    }
-
-    public function cancelEditMessage(): void
-    {
-        $this->resetMessageForm();
-    }
-
-    public function saveMessage(): void
-    {
-        $app = JobApplication::query()->findOrFail((int) $this->viewingId);
-        $validated = $this->validate([
-            'messageForm.direction' => 'required|in:'.implode(',', JobApplicationMessage::DIRECTIONS),
-            'messageForm.occurred_at' => 'required|date',
-            'messageForm.subject' => 'nullable|string|max:255',
-            'messageForm.body' => 'required|string|max:20000',
-        ]);
-        $data = $validated['messageForm'];
-        $subject = trim((string) ($data['subject'] ?? ''));
-        $payload = [
-            'direction' => $data['direction'],
-            'occurred_at' => Carbon::parse($data['occurred_at'], Clock::timezone())->utc(),
-            'subject' => $subject === '' ? null : $subject,
-            'body' => trim((string) $data['body']),
-        ];
-
-        if ($this->editingMessageId) {
-            $message = $this->findViewingMessage($this->editingMessageId);
-            $message->fill($payload)->save();
-            $this->flash = 'Updated the conversation entry.';
-        } else {
-            $app->messages()->create($payload);
-            $this->flash = 'Added a conversation entry for '.$app->label().'.';
+            return;
         }
 
-        $this->resetMessageForm();
+        JobApplicationWriter::update($app, ['status' => 'closed'], 'manual');
+        $this->flash = 'Marked '.$app->fresh()->label().' as closed.';
     }
 
-    public function deleteMessage(int $id): void
+    public function reopen(int $id): void
     {
-        $this->findViewingMessage($id)->delete();
-        if ($this->editingMessageId === $id) {
-            $this->resetMessageForm();
+        $app = JobApplication::query()->findOrFail($id);
+        if (! $app->isClosed()) {
+            $this->flash = $app->label().' is not closed.';
+
+            return;
         }
-        $this->flash = 'Removed the conversation entry.';
-    }
 
-    private function findViewingMessage(int $id): JobApplicationMessage
-    {
-        return JobApplicationMessage::query()
-            ->where('job_application_id', (int) $this->viewingId)
-            ->findOrFail($id);
+        $status = $app->reopenStatus();
+        JobApplicationWriter::update($app, ['status' => $status], 'manual');
+        $this->flash = 'Reopened '.$app->fresh()->label().' as '.$app->fresh()->status.'.';
     }
 
     /** "Done, I applied" from Next Steps: status Applied + date applied today, logged like any manual edit. */
@@ -537,10 +486,22 @@ class JobApplications extends Component
     {
         $today = Clock::today();
         $this->normalizeCategoryFilter();
+        $this->normalizeClosedFilter();
         $apps = JobApplication::query()->whereNull('removed_at')
             ->withCount('messages')
             ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
             ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
+        $openCount = $apps->reject(fn ($a) => $a->isClosed())->count();
+        $closedCount = $apps->filter(fn ($a) => $a->isClosed())->count();
+        $listed = match ($this->closedFilter) {
+            'open' => $apps->reject(fn ($a) => $a->isClosed())->values(),
+            'closed' => $apps->filter(fn ($a) => $a->isClosed())->values(),
+            default => $apps->sortBy([
+                fn ($a) => $a->isClosed() ? 1 : 0,
+                fn ($a) => $a->sheet_row ?? PHP_INT_MAX,
+                fn ($a) => $a->id,
+            ])->values(),
+        };
 
         $statusCounts = [];
         foreach (array_keys(self::STATUS_COLORS) as $s) {
@@ -586,7 +547,7 @@ class JobApplications extends Component
         $weekly = self::weekly($apps, $today);
         $maxWeek = max(1, ...array_map(fn ($w) => max($w['added'], $w['applied']), $weekly ?: [['added' => 0, 'applied' => 0]]));
 
-        $followUps = $apps->filter(fn ($a) => $a->follow_up_date && $a->follow_up_date->gte($today))
+        $followUps = $apps->filter(fn ($a) => ! $a->isClosed() && $a->follow_up_date && $a->follow_up_date->gte($today))
             ->sortBy(fn ($a) => $a->follow_up_date->toDateString())->values();
 
         $events = JobApplicationEvent::query()->with('application')
@@ -600,6 +561,9 @@ class JobApplications extends Component
 
         return view('livewire.job-applications', [
             'apps' => $apps,
+            'listed' => $listed,
+            'openCount' => $openCount,
+            'closedCount' => $closedCount,
             'statusCounts' => $statusCounts,
             'maxStatus' => max(1, ...array_values($statusCounts ?: [0])),
             'typeCounts' => $typeCounts,
@@ -617,7 +581,7 @@ class JobApplications extends Component
             'nextUp' => $queue->first(),
             'nextQueueCount' => $queue->count(),
             'viewing' => $this->viewingId
-                ? JobApplication::query()->with(['messages' => fn ($q) => $q->orderBy('occurred_at')->orderBy('id')])->find($this->viewingId)
+                ? JobApplication::query()->withCount('messages')->find($this->viewingId)
                 : null,
             'coverLetterJob' => $this->coverLetterJobId ? JobApplication::query()->find($this->coverLetterJobId) : null,
             'savedCoverLetters' => JobApplication::query()
@@ -637,3 +601,4 @@ class JobApplications extends Component
         ]);
     }
 }
+ 

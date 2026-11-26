@@ -5,6 +5,7 @@ use App\Http\Controllers\LoginController;
 use App\Livewire\BacklogDripMatrix;
 use App\Livewire\DripMatrix;
 use App\Livewire\JobApplications;
+use App\Livewire\JobCommThread;
 use App\Livewire\LinkHub;
 use App\Livewire\Read;
 use App\Livewire\ReadStats;
@@ -46,6 +47,10 @@ if (filled(config('jobs.page_token'))) {
     Route::get('/x/{token}', JobApplications::class)
         ->where('token', preg_quote((string) config('jobs.page_token'), '/'))
         ->name('jobs.secret');
+    Route::get('/x/{token}/{application}/threads', JobCommThread::class)
+        ->where('token', preg_quote((string) config('jobs.page_token'), '/'))
+        ->whereNumber('application')
+        ->name('jobs.threads');
 }
 
 Route::redirect('/links', '/links/partners');

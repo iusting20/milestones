@@ -253,7 +253,18 @@
                                     $latestReview = $panel['reviews']->get($row->id);
                                 @endphp
                                 <tr wire:key="panel-row-{{ $panel['title'] }}-{{ $row->id }}" class="border-b border-white/5">
-                                    <td class="border-b border-white/5 py-2 pr-4 text-left text-sm text-body">{{ $row->name }}</td>
+                                    <td class="border-b border-white/5 py-2 pr-4 text-left text-sm text-body">
+                                        @if (($panel['kind'] ?? 'person') === 'project')
+                                            <button type="button"
+                                                    wire:click="openNotes({{ $row->id }})"
+                                                    class="text-left text-link hover:underline"
+                                                    aria-haspopup="dialog">
+                                                {{ $row->name }}
+                                            </button>
+                                        @else
+                                            {{ $row->name }}
+                                        @endif
+                                    </td>
                                     <td class="whitespace-nowrap border-b border-white/5 py-2 pr-8 text-left {{ $this->lastCommClass($latest?->occurred_on) }}">{{ $latest ? $this->lastCommLabel($latest->occurred_on) : 'Last comm.: none yet' }}</td>
                                     @if ($latestReview)
                                         <td class="whitespace-nowrap border-b border-white/5 py-2 text-left text-base font-medium text-muted">{{ $this->lastReviewLabel($latestReview->occurred_on) }}</td>
@@ -272,4 +283,101 @@
             </section>
         @endforeach
     </div>
+
+    @if ($notesOpen)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data="{
+                leave(fn) {
+                    if (! $wire.noteDirty || confirm('Discard unsaved changes?')) {
+                        fn();
+                    }
+                }
+             }"
+             x-on:keydown.escape.window="leave(() => $wire.closeNotes())"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="comm-notes-title">
+            <div class="absolute inset-0 bg-black/60" x-on:click="leave(() => $wire.closeNotes())" aria-hidden="true"></div>
+
+            <div class="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <h2 id="comm-notes-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        Notes · {{ $notesProjectName }}
+                    </h2>
+                    <button type="button"
+                            x-on:click="leave(() => $wire.closeNotes())"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Close">×</button>
+                </div>
+
+                @if ($noteId === null && $noteDate === '')
+                    <p class="mb-4 text-sm text-muted">No notes yet.</p>
+                    <div class="flex justify-end">
+                        <button type="button"
+                                wire:click="startNewNote"
+                                class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
+                            New note
+                        </button>
+                    </div>
+                @else
+                    <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                        <p class="text-sm text-body">
+                            {{ \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $noteDate)->format('j M Y') }}
+                            @if ($noteId === null)
+                                <span class="text-xs text-muted">new</span>
+                            @endif
+                        </p>
+                        <p class="text-xs tabular-nums text-muted">
+                            @if ($noteId === null)
+                                New
+                            @elseif ($noteCount > 0)
+                                {{ $noteIndex }} of {{ $noteCount }}
+                            @endif
+                        </p>
+                    </div>
+
+                    <label class="block">
+                        <span class="sr-only">Note</span>
+                        <textarea wire:model.live="noteBody"
+                                  rows="10"
+                                  x-data
+                                  x-init="$nextTick(() => $el.focus())"
+                                  class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                  placeholder="Write a note…"></textarea>
+                    </label>
+
+                    @if ($noteUpdatedAt)
+                        <p class="mt-2 text-xs text-muted">Updated {{ $noteUpdatedAt }}</p>
+                    @endif
+
+                    <div class="mt-4 flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                x-on:click="leave(() => $wire.previousNote())"
+                                @disabled($noteId === null ? $noteCount === 0 : $noteIndex >= $noteCount)
+                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label="Previous (older) note">
+                            Prev
+                        </button>
+                        <button type="button"
+                                x-on:click="leave(() => $wire.nextNote())"
+                                @disabled($noteId === null || $noteIndex <= 1)
+                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-muted hover:text-body disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label="Next (newer) note">
+                            Next
+                        </button>
+                        <button type="button"
+                                x-on:click="leave(() => $wire.startNewNote())"
+                                class="rounded border border-white/10 px-3 py-1.5 text-sm text-link hover:bg-panel">
+                            New note
+                        </button>
+                        <button type="button"
+                                wire:click="saveNote"
+                                class="ml-auto rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
+                            Save
+                        </button>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
 </div>

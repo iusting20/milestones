@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Enums\CommunicationType;
+use App\Models\CommNote;
 use App\Models\Communication;
 use App\Models\Person;
 use App\Models\Project;
@@ -35,6 +36,26 @@ class Comms extends Component
     public bool $adding = false;
 
     public bool $addingPerson = false;
+
+    public bool $notesOpen = false;
+
+    public ?int $notesProjectId = null;
+
+    public string $notesProjectName = '';
+
+    public ?int $noteId = null;
+
+    public string $noteBody = '';
+
+    public string $noteDate = '';
+
+    public ?string $noteUpdatedAt = null;
+
+    public bool $noteDirty = false;
+
+    public int $noteIndex = 0;
+
+    public int $noteCount = 0;
 
     public function mount(): void
     {
@@ -218,6 +239,87 @@ class Comms extends Component
         Communication::query()->whereKey($id)->delete();
     }
 
+    public function openNotes(int $projectId): void
+    {
+        $project = $this->findNoteProject($projectId);
+        if (! $project) {
+            return;
+        }
+
+        $this->notesOpen = true;
+        $this->notesProjectId = $project->id;
+        $this->notesProjectName = $project->name;
+        $this->loadLatestNote();
+    }
+
+    public function closeNotes(): void
+    {
+        $this->notesOpen = false;
+        $this->notesProjectId = null;
+        $this->notesProjectName = '';
+        $this->resetNoteForm();
+    }
+
+    public function startNewNote(): void
+    {
+        if (! $this->notesProjectId) {
+            return;
+        }
+
+        $this->noteId = null;
+        $this->noteBody = '';
+        $this->noteDate = Clock::todayString();
+        $this->noteUpdatedAt = null;
+        $this->noteDirty = false;
+        $this->noteIndex = 0;
+        $this->noteCount = $this->notesQuery($this->notesProjectId)->count();
+    }
+
+    public function saveNote(): void
+    {
+        $project = $this->notesProjectId ? $this->findNoteProject($this->notesProjectId) : null;
+        if (! $project) {
+            return;
+        }
+
+        $body = trim($this->noteBody);
+        if ($body === '') {
+            return;
+        }
+
+        if ($this->noteId) {
+            $note = $this->notesQuery($project->id)->whereKey($this->noteId)->first();
+            if (! $note) {
+                return;
+            }
+
+            $note->update(['body' => $body]);
+        } else {
+            $note = CommNote::query()->create([
+                'project_id' => $project->id,
+                'body' => $body,
+                'note_date' => Clock::todayString(),
+            ]);
+        }
+
+        $this->loadNote($note);
+    }
+
+    public function previousNote(): void
+    {
+        $this->stepNote(1);
+    }
+
+    public function nextNote(): void
+    {
+        $this->stepNote(-1);
+    }
+
+    public function updatedNoteBody(): void
+    {
+        $this->noteDirty = true;
+    }
+
     public function monthStart(): Carbon
     {
         return $this->parseMonth($this->month) ?? Clock::today()->startOfMonth()->startOfDay();
@@ -332,6 +434,7 @@ class Comms extends Component
             'panels' => [
                 [
                     'title' => 'Clients',
+                    'kind' => 'project',
                     'rows' => $this->byStaleness($clients, $latestByProject),
                     'latest' => $latestByProject,
                     'reviews' => $latestReviewByProject,
@@ -339,6 +442,7 @@ class Comms extends Component
                 ],
                 [
                     'title' => 'Key people',
+                    'kind' => 'person',
                     'rows' => $this->byStaleness($people, $latestByPerson),
                     'latest' => $latestByPerson,
                     'reviews' => $latestReviewByPerson,
@@ -346,6 +450,7 @@ class Comms extends Component
                 ],
                 [
                     'title' => 'Assets',
+                    'kind' => 'project',
                     'rows' => $this->byStaleness($assets, $latestByProject),
                     'latest' => $latestByProject,
                     'reviews' => $latestReviewByProject,
@@ -470,5 +575,113 @@ class Comms extends Component
         }
 
         return $parsed;
+    }
+
+    private function findNoteProject(int $projectId): ?Project
+    {
+        return Project::query()
+            ->whereKey($projectId)
+            ->where('is_delimiter', false)
+            ->whereIn('hub', ['partners', 'assets'])
+            ->first();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<CommNote>
+     */
+    private function notesQuery(int $projectId): Builder
+    {
+        return CommNote::query()
+            ->where('project_id', $projectId)
+            ->orderByDesc('note_date')
+            ->orderByDesc('id');
+    }
+
+    private function loadLatestNote(): void
+    {
+        if (! $this->notesProjectId) {
+            $this->resetNoteForm();
+
+            return;
+        }
+
+        $note = $this->notesQuery($this->notesProjectId)->first();
+        if ($note) {
+            $this->loadNote($note);
+
+            return;
+        }
+
+        $this->noteId = null;
+        $this->noteBody = '';
+        $this->noteDate = '';
+        $this->noteUpdatedAt = null;
+        $this->noteDirty = false;
+        $this->noteIndex = 0;
+        $this->noteCount = 0;
+    }
+
+    private function loadNote(CommNote $note): void
+    {
+        $notes = $this->notesQuery($note->project_id)->get(['id']);
+        $index = $notes->search(fn (CommNote $row) => $row->id === $note->id);
+        if ($index === false) {
+            $index = 0;
+        }
+
+        $this->noteId = $note->id;
+        $this->noteBody = $note->body;
+        $this->noteDate = $note->note_date?->toDateString() ?? '';
+        $this->noteUpdatedAt = $note->updated_at
+            ? $note->updated_at->timezone(Clock::timezone())->format('j M Y, H:i')
+            : null;
+        $this->noteDirty = false;
+        $this->noteIndex = (int) $index + 1;
+        $this->noteCount = $notes->count();
+    }
+
+    private function stepNote(int $delta): void
+    {
+        if (! $this->notesProjectId) {
+            return;
+        }
+
+        $notes = $this->notesQuery($this->notesProjectId)->get();
+        if ($notes->isEmpty()) {
+            return;
+        }
+
+        if ($this->noteId === null) {
+            if ($delta > 0) {
+                $this->loadNote($notes->first());
+            }
+
+            return;
+        }
+
+        $index = $notes->search(fn (CommNote $row) => $row->id === $this->noteId);
+        if ($index === false) {
+            $this->loadNote($notes->first());
+
+            return;
+        }
+
+        $next = $index + $delta;
+        if ($next < 0 || $next >= $notes->count()) {
+            return;
+        }
+
+        $this->loadNote($notes[$next]);
+    }
+
+    private function resetNoteForm(): void
+    {
+        $this->noteId = null;
+        $this->noteBody = '';
+        $this->noteDate = '';
+        $this->noteUpdatedAt = null;
+        $this->noteDirty = false;
+        $this->noteIndex = 0;
+        $this->noteCount = 0;
     }
 }

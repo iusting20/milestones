@@ -39,6 +39,11 @@ class Project extends Model
         return $this->hasMany(Communication::class)->orderBy('occurred_on')->orderBy('id');
     }
 
+    public function commNotes(): HasMany
+    {
+        return $this->hasMany(CommNote::class)->orderByDesc('note_date')->orderByDesc('id');
+    }
+
     public static function uniqueSlug(string $hub, string $name, ?int $ignoreId = null): string
     {
         $base = Str::slug($name) ?: 'project';

@@ -20,4 +20,9 @@ class Person extends Model
     {
         return $this->hasMany(Communication::class)->orderBy('occurred_on')->orderBy('id');
     }
+
+    public function commNotes(): HasMany
+    {
+        return $this->hasMany(CommNote::class)->orderByDesc('note_date')->orderByDesc('id');
+    }
 }

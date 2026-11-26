@@ -41,7 +41,9 @@ class Comms extends Component
 
     public ?int $notesProjectId = null;
 
-    public string $notesProjectName = '';
+    public ?int $notesPersonId = null;
+
+    public string $notesSubjectName = '';
 
     public ?int $noteId = null;
 
@@ -239,16 +241,31 @@ class Comms extends Component
         Communication::query()->whereKey($id)->delete();
     }
 
-    public function openNotes(int $projectId): void
+    public function openNotes(string $kind, int $id): void
     {
-        $project = $this->findNoteProject($projectId);
-        if (! $project) {
+        if ($kind === 'project') {
+            $project = $this->findNoteProject($id);
+            if (! $project) {
+                return;
+            }
+
+            $this->notesProjectId = $project->id;
+            $this->notesPersonId = null;
+            $this->notesSubjectName = $project->name;
+        } elseif ($kind === 'person') {
+            $person = Person::query()->whereKey($id)->first();
+            if (! $person) {
+                return;
+            }
+
+            $this->notesPersonId = $person->id;
+            $this->notesProjectId = null;
+            $this->notesSubjectName = $person->name;
+        } else {
             return;
         }
 
         $this->notesOpen = true;
-        $this->notesProjectId = $project->id;
-        $this->notesProjectName = $project->name;
         $this->loadLatestNote();
     }
 
@@ -256,13 +273,14 @@ class Comms extends Component
     {
         $this->notesOpen = false;
         $this->notesProjectId = null;
-        $this->notesProjectName = '';
+        $this->notesPersonId = null;
+        $this->notesSubjectName = '';
         $this->resetNoteForm();
     }
 
     public function startNewNote(): void
     {
-        if (! $this->notesProjectId) {
+        if (! $this->hasNotesSubject()) {
             return;
         }
 
@@ -272,13 +290,13 @@ class Comms extends Component
         $this->noteUpdatedAt = null;
         $this->noteDirty = false;
         $this->noteIndex = 0;
-        $this->noteCount = $this->notesQuery($this->notesProjectId)->count();
+        $this->noteCount = $this->notesQuery()->count();
     }
 
     public function saveNote(): void
     {
-        $project = $this->notesProjectId ? $this->findNoteProject($this->notesProjectId) : null;
-        if (! $project) {
+        $attributes = $this->notesSubjectAttributes();
+        if ($attributes === null) {
             return;
         }
 
@@ -288,7 +306,7 @@ class Comms extends Component
         }
 
         if ($this->noteId) {
-            $note = $this->notesQuery($project->id)->whereKey($this->noteId)->first();
+            $note = $this->notesQuery()->whereKey($this->noteId)->first();
             if (! $note) {
                 return;
             }
@@ -296,7 +314,7 @@ class Comms extends Component
             $note->update(['body' => $body]);
         } else {
             $note = CommNote::query()->create([
-                'project_id' => $project->id,
+                ...$attributes,
                 'body' => $body,
                 'note_date' => Clock::todayString(),
             ]);
@@ -586,26 +604,66 @@ class Comms extends Component
             ->first();
     }
 
+    private function hasNotesSubject(): bool
+    {
+        return $this->notesProjectId !== null || $this->notesPersonId !== null;
+    }
+
+    /**
+     * @return array{project_id: int, person_id: null}|array{project_id: null, person_id: int}|null
+     */
+    private function notesSubjectAttributes(): ?array
+    {
+        if ($this->notesProjectId) {
+            $project = $this->findNoteProject($this->notesProjectId);
+            if (! $project) {
+                return null;
+            }
+
+            return ['project_id' => $project->id, 'person_id' => null];
+        }
+
+        if ($this->notesPersonId) {
+            $person = Person::query()->whereKey($this->notesPersonId)->first();
+            if (! $person) {
+                return null;
+            }
+
+            return ['project_id' => null, 'person_id' => $person->id];
+        }
+
+        return null;
+    }
+
     /**
      * @return \Illuminate\Database\Eloquent\Builder<CommNote>
      */
-    private function notesQuery(int $projectId): Builder
+    private function notesQuery(): Builder
     {
-        return CommNote::query()
-            ->where('project_id', $projectId)
+        $query = CommNote::query()
             ->orderByDesc('note_date')
             ->orderByDesc('id');
+
+        if ($this->notesPersonId) {
+            return $query->where('person_id', $this->notesPersonId)->whereNull('project_id');
+        }
+
+        if ($this->notesProjectId) {
+            return $query->where('project_id', $this->notesProjectId)->whereNull('person_id');
+        }
+
+        return $query->whereRaw('0 = 1');
     }
 
     private function loadLatestNote(): void
     {
-        if (! $this->notesProjectId) {
+        if (! $this->hasNotesSubject()) {
             $this->resetNoteForm();
 
             return;
         }
 
-        $note = $this->notesQuery($this->notesProjectId)->first();
+        $note = $this->notesQuery()->first();
         if ($note) {
             $this->loadNote($note);
 
@@ -623,7 +681,7 @@ class Comms extends Component
 
     private function loadNote(CommNote $note): void
     {
-        $notes = $this->notesQuery($note->project_id)->get(['id']);
+        $notes = $this->notesQuery()->get(['id']);
         $index = $notes->search(fn (CommNote $row) => $row->id === $note->id);
         if ($index === false) {
             $index = 0;
@@ -642,11 +700,11 @@ class Comms extends Component
 
     private function stepNote(int $delta): void
     {
-        if (! $this->notesProjectId) {
+        if (! $this->hasNotesSubject()) {
             return;
         }
 
-        $notes = $this->notesQuery($this->notesProjectId)->get();
+        $notes = $this->notesQuery()->get();
         if ($notes->isEmpty()) {
             return;
         }

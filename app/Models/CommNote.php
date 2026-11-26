@@ -9,6 +9,7 @@ class CommNote extends Model
 {
     protected $fillable = [
         'project_id',
+        'person_id',
         'body',
         'note_date',
     ];
@@ -23,5 +24,10 @@ class CommNote extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function person(): BelongsTo
+    {
+        return $this->belongsTo(Person::class);
     }
 }

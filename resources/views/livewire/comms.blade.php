@@ -254,16 +254,12 @@
                                 @endphp
                                 <tr wire:key="panel-row-{{ $panel['title'] }}-{{ $row->id }}" class="border-b border-white/5">
                                     <td class="border-b border-white/5 py-2 pr-4 text-left text-sm text-body">
-                                        @if (($panel['kind'] ?? 'person') === 'project')
-                                            <button type="button"
-                                                    wire:click="openNotes({{ $row->id }})"
-                                                    class="text-left text-link hover:underline"
-                                                    aria-haspopup="dialog">
-                                                {{ $row->name }}
-                                            </button>
-                                        @else
+                                        <button type="button"
+                                                wire:click="openNotes('{{ $panel['kind'] }}', {{ $row->id }})"
+                                                class="text-left text-link hover:underline"
+                                                aria-haspopup="dialog">
                                             {{ $row->name }}
-                                        @endif
+                                        </button>
                                     </td>
                                     <td class="whitespace-nowrap border-b border-white/5 py-2 pr-8 text-left {{ $this->lastCommClass($latest?->occurred_on) }}">{{ $latest ? $this->lastCommLabel($latest->occurred_on) : 'Last comm.: none yet' }}</td>
                                     @if ($latestReview)
@@ -302,7 +298,7 @@
             <div class="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <h2 id="comm-notes-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                        Notes · {{ $notesProjectName }}
+                        Notes · {{ $notesSubjectName }}
                     </h2>
                     <button type="button"
                             x-on:click="leave(() => $wire.closeNotes())"

@@ -95,6 +95,7 @@ class JobApplicationsTest extends TestCase
         $kinds = array_map(fn ($e) => $e['date'].' '.$e['kind'], $log);
         $this->assertSame(['2026-11-07 added', '2026-10-12 rejected', '2026-09-22 applied'], $kinds);
     }
+
     public function test_category_is_inferred_from_role_title(): void
     {
         $ai = [
@@ -213,9 +214,22 @@ class JobApplicationsTest extends TestCase
 
         $c = Livewire::test(JobApplications::class)
             ->assertSee('Next Steps:')->assertSee('Done, I applied')
+            ->assertSee('Comm. thread')->assertSee('Mark as closed')
+            ->assertSee('data-next-step-comm-thread', false)
+            ->assertSee('data-next-step-mark-closed', false)
+            ->assertSee('View all (3)')
+            ->call('openNextQueue')
+            ->assertSee('data-next-queue-modal', false)
+            ->assertSee('data-next-queue-card="'.$ai->id.'"', false)
+            ->assertSee('data-next-queue-card="'.$soft->id.'"', false)
+            ->assertSee('data-next-queue-card="'.$soft2->id.'"', false)
+            ->call('closeNextQueue')
+            ->assertDontSee('data-next-queue-modal', false)
+            ->assertSeeHtml('href="'.$ai->threadsUrl().'"')
             ->assertViewHas('nextUp', fn ($a) => $a->id === $ai->id)
             ->set('category', 'software')
             ->assertViewHas('nextUp', fn ($a) => $a->id === $soft->id)
+            ->assertSeeHtml('href="'.$soft->threadsUrl().'"')
             ->call('markApplied', $soft->id)
             ->assertViewHas('nextUp', fn ($a) => $a->id === $soft2->id)
             ->assertSee('as applied');
@@ -230,7 +244,11 @@ class JobApplicationsTest extends TestCase
         $c->call('markApplied', $soft->id)->assertSee('no longer waiting');
         $this->assertSame(2, JobApplicationEvent::query()->where('job_application_id', $soft->id)->count());
 
-        $c->call('markApplied', $soft2->id)->assertViewHas('nextUp', null)->assertSee('Nothing left to apply to in this category');
+        $c->call('markClosed', $soft2->id)
+            ->assertViewHas('nextUp', null)
+            ->assertSee('Marked Engineer soft2 · NextSoftTwo as closed.')
+            ->assertSee('Nothing left to apply to in this category');
+        $this->assertTrue($soft2->fresh()->isClosed());
         Carbon::setTestNow();
     }
 

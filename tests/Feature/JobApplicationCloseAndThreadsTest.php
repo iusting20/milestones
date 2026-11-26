@@ -36,7 +36,7 @@ class JobApplicationCloseAndThreadsTest extends TestCase
         $closed = $this->job('already', ['company' => 'ShutCo', 'role' => 'Shut Role', 'status' => 'closed']);
 
         $this->get($this->url())->assertOk()
-            ->assertDontSee('Mark as closed')
+            ->assertSee('Mark as closed')
             ->assertSee('Reopen')
             ->assertSee('Comm. Threads')
             ->assertSee('data-mark-closed="'.$open->id.'"', false)
@@ -94,23 +94,30 @@ class JobApplicationCloseAndThreadsTest extends TestCase
     public function test_closed_filter_does_not_hide_closed_gigs_by_default(): void
     {
         $this->job('open-one', ['company' => 'VisibleOpen']);
+        $this->job('applied-one', ['company' => 'VisibleApplied', 'status' => 'Applied', 'date_applied' => '2026-11-10']);
         $this->job('closed-one', ['company' => 'VisibleClosed', 'status' => 'closed']);
 
         $c = Livewire::test(JobApplications::class)
             ->assertSee('VisibleOpen')
+            ->assertSee('VisibleApplied')
             ->assertSee('VisibleClosed')
-            ->assertSee('Open (1)')
+            ->assertSee('Open (2)')
+            ->assertSee('Applied (1)')
             ->assertSee('Closed (1)');
-        $this->assertEqualsCanonicalizing(['VisibleOpen', 'VisibleClosed'], $c->viewData('listed')->pluck('company')->all());
+        $this->assertEqualsCanonicalizing(['VisibleOpen', 'VisibleApplied', 'VisibleClosed'], $c->viewData('listed')->pluck('company')->all());
 
         $c->set('closedFilter', 'open');
-        $this->assertSame(['VisibleOpen'], $c->viewData('listed')->pluck('company')->all());
+        $this->assertEqualsCanonicalizing(['VisibleOpen', 'VisibleApplied'], $c->viewData('listed')->pluck('company')->all());
+
+        $c->set('closedFilter', 'applied');
+        $this->assertSame(['VisibleApplied'], $c->viewData('listed')->pluck('company')->all());
+        $c->assertSee('Applied (1)');
 
         $c->set('closedFilter', 'closed');
         $this->assertSame(['VisibleClosed'], $c->viewData('listed')->pluck('company')->all());
 
         $c->set('closedFilter', 'all');
-        $this->assertEqualsCanonicalizing(['VisibleOpen', 'VisibleClosed'], $c->viewData('listed')->pluck('company')->all());
+        $this->assertEqualsCanonicalizing(['VisibleOpen', 'VisibleApplied', 'VisibleClosed'], $c->viewData('listed')->pluck('company')->all());
     }
 
     public function test_closed_gigs_are_excluded_from_upcoming_follow_ups(): void

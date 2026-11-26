@@ -41,16 +41,19 @@ class JobApplications extends Component
     /** "My cover letters" list modal. */
     public bool $showCoverLetters = false;
 
+    /** Next Steps queue, shown as cards. */
+    public bool $showNextQueue = false;
+
     /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
     #[Url(as: 'category', history: true, except: 'all')]
     public string $category = 'all';
 
-    /** List filter: all, open or closed. Default all is omitted from the URL. */
+    /** List filter: all, open, applied or closed. Default all is omitted from the URL. */
     #[Url(as: 'closed', history: true, except: 'all')]
     public string $closedFilter = 'all';
 
     public const STATUS_COLORS = [
-        'Applied' => '#f0883e',
+        'Applied' => '#4CAF50',
         'To apply' => '#39c5cf',
         'Low priority (perm)' => '#6e7681',
         'closed' => '#da3633',
@@ -305,9 +308,14 @@ class JobApplications extends Component
 
     private function normalizeClosedFilter(): void
     {
-        if (! in_array($this->closedFilter, ['all', 'open', 'closed'], true)) {
+        if (! in_array($this->closedFilter, ['all', 'open', 'applied', 'closed'], true)) {
             $this->closedFilter = 'all';
         }
+    }
+
+    public static function isAppliedStatus(?string $status): bool
+    {
+        return strcasecmp((string) $status, 'Applied') === 0;
     }
 
     public function openCreate(): void
@@ -342,6 +350,19 @@ class JobApplications extends Component
         $this->showForm = false;
         $this->editingId = null;
         $this->form = [];
+    }
+
+    public function openNextQueue(): void
+    {
+        $this->showNextQueue = true;
+    }
+
+    public function closeNextQueue(): void
+    {
+        if ($this->viewingId !== null || $this->coverLetterJobId !== null) {
+            return;
+        }
+        $this->showNextQueue = false;
     }
 
     public function openView(int $id): void
@@ -492,9 +513,11 @@ class JobApplications extends Component
             ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
             ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
         $openCount = $apps->reject(fn ($a) => $a->isClosed())->count();
+        $appliedCount = $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->count();
         $closedCount = $apps->filter(fn ($a) => $a->isClosed())->count();
         $listed = match ($this->closedFilter) {
             'open' => $apps->reject(fn ($a) => $a->isClosed())->values(),
+            'applied' => $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->values(),
             'closed' => $apps->filter(fn ($a) => $a->isClosed())->values(),
             default => $apps->sortBy([
                 fn ($a) => $a->isClosed() ? 1 : 0,
@@ -563,6 +586,7 @@ class JobApplications extends Component
             'apps' => $apps,
             'listed' => $listed,
             'openCount' => $openCount,
+            'appliedCount' => $appliedCount,
             'closedCount' => $closedCount,
             'statusCounts' => $statusCounts,
             'maxStatus' => max(1, ...array_values($statusCounts ?: [0])),
@@ -579,6 +603,7 @@ class JobApplications extends Component
             'followUps' => $followUps,
             'log' => $log,
             'nextUp' => $queue->first(),
+            'nextQueue' => $queue,
             'nextQueueCount' => $queue->count(),
             'viewing' => $this->viewingId
                 ? JobApplication::query()->withCount('messages')->find($this->viewingId)
@@ -601,4 +626,3 @@ class JobApplications extends Component
         ]);
     }
 }
- 

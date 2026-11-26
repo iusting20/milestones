@@ -1,7 +1,7 @@
 @php
     use App\Livewire\JobApplications as JA;
     $kindColors = [
-        'added' => '#39c5cf', 'applied' => '#f0883e', 'follow-up' => '#f778ba', 'rejected' => '#da3633',
+        'added' => '#39c5cf', 'applied' => '#4CAF50', 'follow-up' => '#f778ba', 'rejected' => '#da3633',
         'closed' => '#da3633', 'removed' => '#6e7681', 'status' => '#a371f7', 'interview' => '#f0883e', 'offer' => '#f0883e', 'note' => '#6e7681',
     ];
 @endphp
@@ -39,8 +39,8 @@
         @endforeach
     </div>
 
-    <div class="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter closed gigs">
-        @foreach (['all' => 'All', 'open' => 'Open ('.$openCount.')', 'closed' => 'Closed ('.$closedCount.')'] as $value => $label)
+    <div class="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter gigs">
+        @foreach (['all' => 'All', 'open' => 'Open ('.$openCount.')', 'applied' => 'Applied ('.$appliedCount.')', 'closed' => 'Closed ('.$closedCount.')'] as $value => $label)
             <button type="button" wire:click="$set('closedFilter', '{{ $value }}')"
                     class="rounded border px-3 py-1.5 text-sm {{ $closedFilter === $value ? 'border-[#39c5cf]/70 bg-[#39c5cf]/10 font-medium text-body' : 'border-white/15 text-muted hover:border-white/30 hover:text-body' }}"
                     data-closed-filter="{{ $value }}"
@@ -70,14 +70,14 @@
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Per week</h2>
     <div class="mb-3 flex flex-wrap gap-4 text-xs text-muted">
         <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#39c5cf"></span>Added</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#f0883e"></span>Applied</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm" style="background:#4CAF50"></span>Applied</span>
     </div>
     <div class="mb-10 overflow-x-auto rounded border border-white/10 bg-sidebar p-4">
         <div class="flex min-w-max gap-2 sm:gap-4" style="min-width: 100%">
             @foreach ($weekly as $w)
                 <div class="flex min-w-[2.5rem] flex-1 flex-col items-center">
                     <div class="flex h-40 w-full items-end justify-center gap-0.5">
-                        @foreach (['added' => '#39c5cf', 'applied' => '#f0883e'] as $series => $color)
+                        @foreach (['added' => '#39c5cf', 'applied' => '#4CAF50'] as $series => $color)
                             <div class="flex h-full flex-1 flex-col justify-end">
                                 @if ($w[$series] > 0)
                                     <div class="text-center text-[10px] tabular-nums text-muted">{{ $w[$series] }}</div>
@@ -112,42 +112,21 @@
 
     {{-- Next steps --}}
     <h2 class="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">Next Steps:</h2>
-    <div class="mb-10 rounded border border-white/10 bg-sidebar p-4" data-next-steps>
-        @if ($nextUp)
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0">
-                    <p class="text-xs text-muted">Apply next{{ $nextQueueCount > 1 ? ' · '.($nextQueueCount - 1).' more waiting' : '' }}</p>
-                    <button type="button" wire:click="openView({{ $nextUp->id }})" class="mt-0.5 text-left text-base font-semibold text-body hover:text-link" data-next-step-id="{{ $nextUp->id }}">{{ $nextUp->role ?: 'Role' }}</button>
-                    <div class="text-sm text-body">{{ $nextUp->company }}</div>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                        <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full" style="background: {{ JA::statusColor($nextUp->status) }}"></span>{{ $nextUp->status }}</span>
-                        @foreach (array_filter([$categories[$nextUp->category] ?? null, $nextUp->type, $nextUp->rate, $nextUp->ir35 && $nextUp->ir35 !== 'N/A' ? 'IR35 '.$nextUp->ir35 : null, $nextUp->location]) as $bit)
-                            <span>· {{ $bit }}</span>
-                        @endforeach
-                    </div>
-                    @if ($nextUp->next_step)<div class="mt-1 text-xs text-muted">{{ $nextUp->next_step }}</div>@endif
-                </div>
-                <div class="flex shrink-0 flex-wrap gap-2">
-                    @if ($nextUp->link)
-                        <a href="{{ $nextUp->link }}" target="_blank" rel="noopener noreferrer"
-                           class="rounded border border-white/15 px-3 py-1.5 text-sm text-link no-underline hover:border-[#39c5cf]/60">Open job ↗</a>
-                    @endif
-                    <button type="button" wire:click="openCoverLetter({{ $nextUp->id }})" data-cover-letter-btn="{{ $nextUp->id }}"
-                            class="rounded border px-3 py-1.5 text-sm font-medium {{ $nextUp->hasCoverLetter() ? 'border-[#39c5cf]/60 bg-[#39c5cf]/10 text-body hover:bg-[#39c5cf]/20' : ($nextUp->cover_letter_not_needed ? 'border-white/10 text-muted hover:border-white/30 hover:text-body' : 'border-white/15 text-body hover:border-[#39c5cf]/60') }}">
-                        @if ($nextUp->hasCoverLetter())
-                            Cover letter ✓
-                        @elseif ($nextUp->cover_letter_not_needed)
-                            No cover letter
-                        @else
-                            Cover letter
-                        @endif
-                    </button>
-                    <button type="button" wire:click="markApplied({{ $nextUp->id }})" wire:loading.attr="disabled"
-                            class="rounded border border-[#f0883e]/60 bg-[#f0883e]/10 px-3 py-1.5 text-sm font-medium text-body hover:bg-[#f0883e]/20">Done, I applied</button>
-                </div>
-            </div>
-        @else
-            <p class="text-sm text-muted">Nothing left to apply to{{ $category !== 'all' ? ' in this category' : '' }}.</p>
+    <div class="mb-10">
+        <div class="rounded border border-white/10 bg-sidebar p-4" data-next-steps>
+            @if ($nextUp)
+                @include('livewire.partials.next-step-panel', [
+                    'job' => $nextUp,
+                    'caption' => 'Apply next'.($nextQueueCount > 1 ? ' · '.($nextQueueCount - 1).' more waiting' : ''),
+                    'markCurrent' => true,
+                ])
+            @else
+                <p class="text-sm text-muted">Nothing left to apply to{{ $category !== 'all' ? ' in this category' : '' }}.</p>
+            @endif
+        </div>
+        @if ($nextUp && $nextQueueCount > 1)
+            <button type="button" wire:click="openNextQueue" data-next-step-view-all
+                    class="mt-3 w-full rounded border border-white/15 bg-sidebar px-3 py-2 text-sm text-muted hover:border-[#39c5cf]/60 hover:text-body">View all ({{ $nextQueueCount }})</button>
         @endif
     </div>
 
@@ -237,10 +216,12 @@
         <summary class="cursor-pointer px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-muted">
             @if ($closedFilter === 'open')
                 Open applications ({{ $listed->count() }})
+            @elseif ($closedFilter === 'applied')
+                Applied ({{ $listed->count() }})
             @elseif ($closedFilter === 'closed')
                 Closed applications ({{ $listed->count() }})
             @else
-                All applications ({{ $listed->count() }})
+                All open positions
             @endif
         </summary>
         <ul class="divide-y divide-white/10 border-t border-white/10">
@@ -286,6 +267,32 @@
             @endforelse
         </ul>
     </details>
+    @if ($showNextQueue)
+        @teleport('body')
+        <div class="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4"
+             wire:keydown.escape.window="closeNextQueue"
+             role="dialog" aria-modal="true" aria-labelledby="next-queue-title" data-next-queue-modal>
+            <div class="absolute inset-0 bg-canvas" wire:click="closeNextQueue" aria-hidden="true"></div>
+            <div class="relative z-10 flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h2 id="next-queue-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">Next Steps:</h2>
+                    <button type="button" wire:click="closeNextQueue"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body" aria-label="Close">×</button>
+                </div>
+                <div class="space-y-3 overflow-y-auto">
+                    @forelse ($nextQueue as $a)
+                        <article wire:key="next-card-{{ $a->id }}" data-next-queue-card="{{ $a->id }}"
+                                 class="rounded border border-white/10 bg-sidebar p-4">
+                            @include('livewire.partials.next-step-panel', ['job' => $a])
+                        </article>
+                    @empty
+                        <p class="rounded border border-white/10 bg-sidebar p-4 text-sm text-muted">Nothing left to apply to{{ $category !== 'all' ? ' in this category' : '' }}.</p>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+        @endteleport
+    @endif
     @if ($viewing)
         @php
             $rows = [

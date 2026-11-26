@@ -10,7 +10,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class DayList extends Component
@@ -23,12 +22,6 @@ class DayList extends Component
     public string $dayLabel = '';
 
     public bool $isToday = false;
-
-    #[Reactive]
-    public bool $showTags = false;
-
-    #[Reactive]
-    public bool $showLogControls = false;
 
     public bool $expanded = false;
 

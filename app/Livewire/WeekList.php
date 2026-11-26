@@ -12,7 +12,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class WeekList extends Component
@@ -21,12 +20,6 @@ class WeekList extends Component
     use SetsDripTags;
 
     public string $week = '';
-
-    #[Reactive]
-    public bool $showTags = false;
-
-    #[Reactive]
-    public bool $showLogControls = false;
 
     public string $newTitle = '';
 

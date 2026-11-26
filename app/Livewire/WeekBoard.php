@@ -15,10 +15,6 @@ class WeekBoard extends Component
     #[Url(as: 'week', history: true)]
     public string $week = '';
 
-    public bool $showTags = false;
-
-    public bool $showLogControls = false;
-
     public bool $showOpenItems = false;
 
     public function mount(): void

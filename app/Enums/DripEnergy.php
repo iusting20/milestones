@@ -19,7 +19,7 @@ enum DripEnergy: string
     {
         return match ($this) {
             self::Drains => '🌧️',
-            self::Lights => '💡',
+            self::Lights => '🌞',
         };
     }
 

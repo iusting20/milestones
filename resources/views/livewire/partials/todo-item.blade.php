@@ -11,26 +11,18 @@
         'ml-7' => $nested,
     ])
 >
-    <div class="group flex items-start gap-2 rounded px-1 py-1.5 hover:bg-white/5">
-                        <button type="button"
-                                data-drag-handle
-                                class="mt-0.5 shrink-0 cursor-grab touch-none px-0.5 text-muted/50 opacity-0 transition group-hover:opacity-100 {{ $weekScoped ? 'hover:text-[#ffe600] focus-visible:text-[#ffe600]' : 'hover:text-muted' }} focus:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-70"
-                                aria-label="Drag to reorder">
-                            <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                                <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
-                                <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
-                                <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
-                            </svg>
-                        </button>
-
-                        @if ($showTags)
+    <div class="group flex items-start gap-2 rounded px-1 py-1.5 hover:bg-white/5"
+         x-data="{ actionsOpen: false }"
+         @click.outside="actionsOpen = false"
+         @keydown.escape="actionsOpen = false">
+                        @if ($showTags ?? false)
                             @include('livewire.partials.drip-chips-row', ['item' => $item])
                         @endif
 
                         @if ($weekScoped ?? false)
                             <button type="button"
                                     wire:click="openMoveModal({{ $item->id }}, false)"
-                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted/60 opacity-0 transition group-hover:opacity-100 hover:text-[#ffe600] focus:opacity-100 focus-visible:text-[#ffe600] [@media(hover:none)]:opacity-70"
+                                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-muted/60 transition hover:text-[#ffe600] focus-visible:text-[#ffe600]"
                                     title="Move to day"
                                     aria-label="Move to day">
                                 <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
@@ -163,89 +155,130 @@
                             @endif
                         @endif
 
-                        @if ($showLogControls && ! ($weekScoped ?? false))
-                            <div class="mt-0.5 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-70">
-                                <button type="button"
-                                        wire:click.stop="startLogging({{ $item->id }})"
-                                        @class([
-                                            'rounded px-1.5 py-0.5 text-xs transition',
-                                            'text-muted hover:text-link' => ! $item->isLogging(),
-                                            'text-faint cursor-default' => $item->isLogging(),
-                                        ])
-                                        @disabled($item->isLogging())
-                                        aria-label="Start logging">
-                                    Start
-                                </button>
-                                <button type="button"
-                                        wire:click.stop="finishLogging({{ $item->id }})"
-                                        @class([
-                                            'rounded px-1.5 py-0.5 text-xs transition',
-                                            'text-muted hover:text-link' => $item->isLogging(),
-                                            'text-faint cursor-default' => ! $item->isLogging(),
-                                        ])
-                                        @disabled(! $item->isLogging())
-                                        aria-label="Finish logging">
-                                    Finish
-                                </button>
+                        <div class="mt-0.5 flex shrink-0 items-center">
+                            <div class="grid transition-[grid-template-columns] duration-200 ease-out"
+                                 :class="actionsOpen ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]'">
+                                <div class="min-w-0 overflow-hidden">
+                                    <div class="flex items-center gap-1 pr-0.5 transition-opacity duration-200 ease-out"
+                                         :class="actionsOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'">
+                                        <button type="button"
+                                                data-drag-handle
+                                                class="shrink-0 cursor-grab touch-none px-0.5 text-muted/50 transition {{ $weekScoped ? 'hover:text-[#ffe600] focus-visible:text-[#ffe600]' : 'hover:text-muted' }} active:cursor-grabbing"
+                                                :tabindex="actionsOpen ? 0 : -1"
+                                                aria-label="Drag to reorder">
+                                            <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+                                                <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+                                                <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+                                            </svg>
+                                        </button>
+
+                                        @unless ($weekScoped ?? false)
+                                            @if ($item->isLogging())
+                                                <button type="button"
+                                                        wire:click.stop="finishLogging({{ $item->id }})"
+                                                        :tabindex="actionsOpen ? 0 : -1"
+                                                        class="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-xs text-muted transition hover:text-link"
+                                                        aria-label="Finish logging">
+                                                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                                        <circle cx="12" cy="14" r="7"/>
+                                                    </svg>
+                                                    Finish
+                                                </button>
+                                            @else
+                                                <button type="button"
+                                                        wire:click.stop="startLogging({{ $item->id }})"
+                                                        :tabindex="actionsOpen ? 0 : -1"
+                                                        class="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-xs text-muted transition hover:text-link"
+                                                        aria-label="Start logging">
+                                                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4l2.5 1.5M12 5.5V3m-2 0h4"/>
+                                                        <circle cx="12" cy="14" r="7"/>
+                                                    </svg>
+                                                    Start
+                                                </button>
+                                            @endif
+                                        @endunless
+
+                                        @unless ($nested)
+                                            <button type="button"
+                                                    wire:click.stop="startAddingChild({{ $item->id }})"
+                                                    :tabindex="actionsOpen ? 0 : -1"
+                                                    class="{{ $glyphHover }} shrink-0 px-1 text-xs text-muted"
+                                                    aria-label="Add sub-item">
+                                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M8 6h12M8 12h12M8 18h12"/>
+                                                    <path d="M4 6h.01M4 12h.01M4 18h.01"/>
+                                                    <path d="M4 9v6"/>
+                                                </svg>
+                                            </button>
+                                        @endunless
+
+                                        @if (($isToday ?? false) && ! $weekScoped)
+                                            <button type="button"
+                                                    wire:click.stop="moveToThisWeek({{ $item->id }})"
+                                                    :tabindex="actionsOpen ? 0 : -1"
+                                                    class="shrink-0 px-1 text-muted hover:text-[#ffe600] focus-visible:text-[#ffe600]"
+                                                    title="Move to For this week"
+                                                    aria-label="Move to For this week">
+                                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M12 16V4"/>
+                                                    <path d="M7 9l5-5 5 5"/>
+                                                    <path d="M4 20h16"/>
+                                                </svg>
+                                            </button>
+                                        @endif
+
+                                        @if ($weekScoped)
+                                            <button type="button"
+                                                    wire:click.stop="moveToBacklog({{ $item->id }})"
+                                                    :tabindex="actionsOpen ? 0 : -1"
+                                                    class="shrink-0 px-1 text-muted hover:text-[#c10e34] focus-visible:text-[#c10e34]"
+                                                    title="Move to backlog"
+                                                    aria-label="Move to backlog">
+                                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M12 16V4"/>
+                                                    <path d="M7 9l5-5 5 5"/>
+                                                    <path d="M4 20h16"/>
+                                                </svg>
+                                            </button>
+                                        @endif
+
+                                        <button type="button"
+                                                wire:click.stop="startLinking({{ $item->id }})"
+                                                :tabindex="actionsOpen ? 0 : -1"
+                                                class="{{ $glyphHover }} shrink-0 px-1 text-xs text-muted"
+                                                aria-label="{{ $item->links->isNotEmpty() ? 'Edit links' : 'Add link' }}">
+                                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                                            </svg>
+                                        </button>
+
+                                        <button type="button"
+                                                wire:click="delete({{ $item->id }})"
+                                                wire:confirm="Delete this item?"
+                                                :tabindex="actionsOpen ? 0 : -1"
+                                                class="shrink-0 px-1 text-xs text-muted hover:text-red-400"
+                                                aria-label="Delete">×</button>
+                                    </div>
+                                </div>
                             </div>
-                        @endif
 
-                        @unless ($nested)
                             <button type="button"
-                                    wire:click.stop="startAddingChild({{ $item->id }})"
-                                    class="{{ $glyphHover }} mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-70"
-                                    aria-label="Add sub-item">
-                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M8 6h12M8 12h12M8 18h12"/>
-                                    <path d="M4 6h.01M4 12h.01M4 18h.01"/>
-                                    <path d="M4 9v6"/>
+                                    @click.stop="actionsOpen = !actionsOpen"
+                                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted/50 transition hover:text-body focus-visible:text-body"
+                                    :class="actionsOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-70'"
+                                    :aria-expanded="actionsOpen.toString()"
+                                    aria-label="Toggle item actions">
+                                <svg class="h-3.5 w-3.5 transition-transform duration-200 ease-out"
+                                     :class="actionsOpen ? 'rotate-180' : ''"
+                                     viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                    <path d="M7.5 2.5L4 6l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </button>
-                        @endunless
-
-                        @if (($isToday ?? false) && ! $weekScoped)
-                            <button type="button"
-                                    wire:click.stop="moveToThisWeek({{ $item->id }})"
-                                    class="mt-0.5 shrink-0 px-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-[#ffe600] focus:opacity-100 focus-visible:text-[#ffe600] [@media(hover:none)]:opacity-70"
-                                    title="Move to For this week"
-                                    aria-label="Move to For this week">
-                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M12 16V4"/>
-                                    <path d="M7 9l5-5 5 5"/>
-                                    <path d="M4 20h16"/>
-                                </svg>
-                            </button>
-                        @endif
-
-                        @if ($weekScoped)
-                            <button type="button"
-                                    wire:click.stop="moveToBacklog({{ $item->id }})"
-                                    class="mt-0.5 shrink-0 px-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-[#c10e34] focus:opacity-100 focus-visible:text-[#c10e34] [@media(hover:none)]:opacity-70"
-                                    title="Move to backlog"
-                                    aria-label="Move to backlog">
-                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M12 16V4"/>
-                                    <path d="M7 9l5-5 5 5"/>
-                                    <path d="M4 20h16"/>
-                                </svg>
-                            </button>
-                        @endif
-
-                        <button type="button"
-                                wire:click.stop="startLinking({{ $item->id }})"
-                                class="{{ $glyphHover }} mt-0.5 shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-70"
-                                aria-label="{{ $item->links->isNotEmpty() ? 'Edit links' : 'Add link' }}">
-                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                            </svg>
-                        </button>
-
-                        <button type="button"
-                                wire:click="delete({{ $item->id }})"
-                                wire:confirm="Delete this item?"
-                                class="shrink-0 px-1 text-xs text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-400 focus:opacity-100"
-                                aria-label="Delete">×</button>
+                        </div>
                         </div>
 
     @unless ($nested)

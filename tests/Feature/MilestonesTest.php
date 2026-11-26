@@ -611,14 +611,11 @@ class MilestonesTest extends TestCase
         );
     }
 
-    public function test_week_board_can_toggle_show_tags(): void
+    public function test_week_board_links_to_drip_matrix_with_label_glyph(): void
     {
         Livewire::test(WeekBoard::class)
-            ->assertSet('showTags', false)
-            ->assertSeeHtml('aria-label="Show task tags"')
-            ->set('showTags', true)
-            ->assertSet('showTags', true)
-            ->assertSeeHtml('aria-label="Hide task tags"');
+            ->assertSee('DRIP Matrix')
+            ->assertSeeHtml('M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z');
     }
 
     public function test_can_set_and_clear_drip_tag(): void
@@ -635,10 +632,8 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ])
-            ->call('setDripTag', $item->id, 'R')
-            ->assertSee('R');
+            ->call('setDripTag', $item->id, 'R');
 
         $this->assertSame('R', $item->fresh()->drip_tag?->value);
 
@@ -646,7 +641,6 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ])
             ->call('setDripTag', $item->id, 'R');
 
@@ -656,7 +650,6 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ])
             ->call('setDripTag', $item->id, 'P')
             ->call('setDripTag', $item->id, null);
@@ -679,7 +672,6 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ])
             ->call('setDripTag', $item->id, 'X');
 
@@ -700,11 +692,12 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ]);
 
         $component->call('setDripTag', $item->id, 'D');
         $this->assertSame('D', $item->fresh()->drip_tag?->value);
+        $this->assertSame('low', $item->fresh()->drip_money?->value);
+        $this->assertSame('drains', $item->fresh()->drip_energy?->value);
 
         $component->call('setDripMoney', $item->id, 'high');
         $this->assertSame('R', $item->fresh()->drip_tag?->value);
@@ -716,10 +709,13 @@ class MilestonesTest extends TestCase
         $this->assertSame('I', $item->fresh()->drip_tag?->value);
 
         $component->call('setDripEnergy', $item->id, 'lights');
-        $this->assertNull($item->fresh()->drip_tag);
+        $fresh = $item->fresh();
+        $this->assertNull($fresh->drip_tag);
+        $this->assertSame('low', $fresh->drip_money?->value);
+        $this->assertNull($fresh->drip_energy);
     }
 
-    public function test_setting_money_without_drip_defaults_energy_to_drains(): void
+    public function test_setting_one_axis_alone_keeps_drip_tag_null(): void
     {
         $date = now()->toDateString();
 
@@ -733,10 +729,24 @@ class MilestonesTest extends TestCase
             'date' => $date,
             'dayLabel' => 'MONDAY',
             'isToday' => true,
-            'showTags' => true,
         ])
             ->call('setDripMoney', $item->id, 'high');
 
-        $this->assertSame('R', $item->fresh()->drip_tag?->value);
+        $fresh = $item->fresh();
+        $this->assertNull($fresh->drip_tag);
+        $this->assertSame('high', $fresh->drip_money?->value);
+        $this->assertNull($fresh->drip_energy);
+
+        Livewire::test(DayList::class, [
+            'date' => $date,
+            'dayLabel' => 'MONDAY',
+            'isToday' => true,
+        ])
+            ->call('setDripEnergy', $item->id, 'lights');
+
+        $fresh = $item->fresh();
+        $this->assertSame('P', $fresh->drip_tag?->value);
+        $this->assertSame('high', $fresh->drip_money?->value);
+        $this->assertSame('lights', $fresh->drip_energy?->value);
     }
 }

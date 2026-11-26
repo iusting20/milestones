@@ -18,7 +18,7 @@ enum DripMoney: string
     public function shortLabel(): string
     {
         return match ($this) {
-            self::Low => '😡',
+            self::Low => '🐜',
             self::High => '💰',
         };
     }

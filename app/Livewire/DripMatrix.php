@@ -3,12 +3,14 @@
 namespace App\Livewire;
 
 use App\Enums\DripTag;
+use App\Livewire\Concerns\SetsDripTags;
 use App\Models\TodoItem;
 use App\Support\Clock;
 use App\Support\Onboarding;
 use App\Support\WeekLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -19,17 +21,22 @@ use Livewire\Component;
 #[Title('DRIP Matrix')]
 class DripMatrix extends Component
 {
+    use SetsDripTags;
+
     #[Url(as: 'week', history: true)]
     public string $week = '';
 
-    public string $status = 'all';
-
-    public bool $todayOnly = true;
+    #[Url(as: 'period', history: true)]
+    public string $period = 'today';
 
     public function mount(): void
     {
         if ($this->week === '' || ! $this->parseWeek($this->week)) {
             $this->week = Clock::currentWeek();
+        }
+
+        if (! in_array($this->period, ['today', 'week', 'month'], true)) {
+            $this->period = 'today';
         }
 
         Onboarding::complete('milestone.matrix');
@@ -113,21 +120,28 @@ class DripMatrix extends Component
             ->orderBy('position')
             ->orderBy('id');
 
-        if ($this->todayOnly) {
-            $query->whereDate('date', Clock::todayString());
-        } else {
-            $start = $this->weekStart()->toDateString();
-            $end = $this->weekStart()->copy()->endOfWeek(Carbon::SUNDAY)->toDateString();
-
-            $query->whereDate('date', '>=', $start)
-                ->whereDate('date', '<=', $end);
-        }
-
-        return match ($this->status) {
-            'pending' => $query->where('is_completed', false),
-            'completed' => $query->where('is_completed', true),
-            default => $query,
+        [$start, $end] = match ($this->period) {
+            'today' => [Clock::todayString(), Clock::todayString()],
+            'month' => [
+                Clock::now()->copy()->startOfMonth()->toDateString(),
+                Clock::now()->copy()->endOfMonth()->toDateString(),
+            ],
+            default => [
+                $this->weekStart()->toDateString(),
+                $this->weekStart()->copy()->endOfWeek(Carbon::SUNDAY)->toDateString(),
+            ],
         };
+
+        return $query->whereDate('date', '>=', $start)
+            ->whereDate('date', '<=', $end);
+    }
+
+    protected function findDripTaggable(int $id): Model
+    {
+        return TodoItem::query()
+            ->where('is_separator', false)
+            ->whereKey($id)
+            ->firstOrFail();
     }
 
     private function parseWeek(string $week): ?Carbon

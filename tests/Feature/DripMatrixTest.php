@@ -64,7 +64,7 @@ class DripMatrixTest extends TestCase
 
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(DripMatrix::class)
-            ->set('todayOnly', false)
+            ->set('period', 'week')
             ->assertSee('Delegate inbox')
             ->assertSee('Replace sales calls')
             ->assertSee('Invest in mastermind')
@@ -100,7 +100,7 @@ class DripMatrixTest extends TestCase
 
         $component = Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(DripMatrix::class)
-            ->set('todayOnly', false)
+            ->set('period', 'week')
             ->assertSee('Visible child')
             ->assertSee('Standalone task')
             ->assertSeeHtml('data-tooltip="from: Hidden parent"');
@@ -117,38 +117,6 @@ class DripMatrixTest extends TestCase
             ->assertOk()
             ->assertSee('DRIP Matrix')
             ->assertSee(route('milestones.drip-matrix', ['week' => '2026-W12'], absolute: false), false);
-    }
-
-    public function test_status_filter_limits_to_pending_or_completed(): void
-    {
-        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
-
-        TodoItem::query()->create([
-            'date' => $monday->toDateString(),
-            'title' => 'Open task',
-            'drip_tag' => 'D',
-            'is_completed' => false,
-            'position' => 1,
-        ]);
-        TodoItem::query()->create([
-            'date' => $monday->toDateString(),
-            'title' => 'Done task',
-            'drip_tag' => 'D',
-            'is_completed' => true,
-            'position' => 2,
-        ]);
-
-        Livewire::withQueryParams(['week' => '2026-W12'])
-            ->test(DripMatrix::class)
-            ->set('todayOnly', false)
-            ->assertSee('Open task')
-            ->assertSee('Done task')
-            ->set('status', 'pending')
-            ->assertSee('Open task')
-            ->assertDontSee('Done task')
-            ->set('status', 'completed')
-            ->assertSee('Done task')
-            ->assertDontSee('Open task');
     }
 
     public function test_today_only_filter_limits_to_todays_tasks(): void
@@ -171,10 +139,16 @@ class DripMatrixTest extends TestCase
             'drip_tag' => 'P',
             'position' => 1,
         ]);
+        TodoItem::query()->create([
+            'date' => '2026-10-01',
+            'title' => 'Next month drip',
+            'drip_tag' => 'P',
+            'position' => 1,
+        ]);
 
         $component = Livewire::withQueryParams(['week' => $week])
             ->test(DripMatrix::class)
-            ->assertSet('todayOnly', true)
+            ->assertSet('period', 'today')
             ->assertSee('Today drip')
             ->assertDontSee('Yesterday drip');
 
@@ -183,7 +157,7 @@ class DripMatrixTest extends TestCase
             $component->html(),
         );
 
-        $component->set('todayOnly', false)
+        $component->set('period', 'week')
             ->assertSee('Today drip')
             ->assertSee('Yesterday drip');
 
@@ -195,6 +169,11 @@ class DripMatrixTest extends TestCase
             '/tracking-wide text-muted">\s*Tue\s*</',
             $component->html(),
         );
+
+        $component->set('period', 'month')
+            ->assertSee('Today drip')
+            ->assertSee('Yesterday drip')
+            ->assertDontSee('Next month drip');
     }
 
     public function test_completed_tasks_are_prefixed_with_checkmark(): void
@@ -218,7 +197,7 @@ class DripMatrixTest extends TestCase
 
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(DripMatrix::class)
-            ->set('todayOnly', false)
+            ->set('period', 'week')
             ->assertSee('✔')
             ->assertSee('○')
             ->assertSee('Finished drip')
@@ -244,8 +223,114 @@ class DripMatrixTest extends TestCase
 
         Livewire::withQueryParams(['week' => '2026-W12'])
             ->test(DripMatrix::class)
-            ->set('todayOnly', false)
+            ->set('period', 'week')
             ->assertSee('Visible task')
-            ->assertSee('Untagged (1)');
+            ->assertSee('Untagged WIP (1)');
+    }
+
+    public function test_untagged_items_expose_money_and_energy_chip_pickers(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Needs a tag',
+            'drip_tag' => null,
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('period', 'week')
+            ->assertSee('Needs a tag')
+            ->assertDontSeeHtml('aria-label="Set drip tag"')
+            ->assertSeeHtml('aria-label="Set money axis"')
+            ->assertSeeHtml('aria-label="Set energy axis"');
+    }
+
+    public function test_untagged_items_split_into_wip_and_done_columns(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Open untagged',
+            'drip_tag' => null,
+            'is_completed' => false,
+            'position' => 1,
+        ]);
+        TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Finished untagged',
+            'drip_tag' => null,
+            'is_completed' => true,
+            'position' => 2,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('period', 'week')
+            ->assertSee('Untagged WIP (1)')
+            ->assertSee('Untagged done (1)')
+            ->assertSee('Open untagged')
+            ->assertSee('Finished untagged');
+    }
+
+    public function test_can_tag_untagged_item_from_matrix(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        $item = TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Tag from matrix',
+            'drip_tag' => null,
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('period', 'week')
+            ->call('setDripMoney', $item->id, 'high')
+            ->assertSee('Untagged WIP (1)')
+            ->assertSee('Tag from matrix');
+
+        $partial = $item->fresh();
+        $this->assertNull($partial->drip_tag);
+        $this->assertSame('high', $partial->drip_money?->value);
+        $this->assertNull($partial->drip_energy);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('period', 'week')
+            ->call('setDripEnergy', $item->id, 'lights')
+            ->assertDontSee('Untagged WIP')
+            ->assertDontSee('Untagged done')
+            ->assertSee('Tag from matrix');
+
+        $this->assertSame('P', $item->fresh()->drip_tag?->value);
+    }
+
+    public function test_single_energy_axis_keeps_item_in_untagged(): void
+    {
+        $monday = Carbon::now()->setISODate(2026, 12)->startOfWeek(Carbon::MONDAY);
+
+        $item = TodoItem::query()->create([
+            'date' => $monday->toDateString(),
+            'title' => 'Only energy',
+            'drip_tag' => null,
+            'position' => 1,
+        ]);
+
+        Livewire::withQueryParams(['week' => '2026-W12'])
+            ->test(DripMatrix::class)
+            ->set('period', 'week')
+            ->call('setDripEnergy', $item->id, 'lights')
+            ->assertSee('Untagged WIP (1)')
+            ->assertSee('Only energy');
+
+        $fresh = $item->fresh();
+        $this->assertNull($fresh->drip_tag);
+        $this->assertNull($fresh->drip_money);
+        $this->assertSame('lights', $fresh->drip_energy?->value);
     }
 }

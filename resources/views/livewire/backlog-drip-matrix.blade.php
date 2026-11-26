@@ -9,12 +9,12 @@
             Backlog DRIP Matrix
         </h1>
 
-        <select wire:model.live="status"
-                aria-label="Task status filter"
+        <select wire:model.live="period"
+                aria-label="Time period filter"
                 class="ml-auto min-w-0 rounded border border-white/10 bg-panel px-2 py-1.5 text-sm text-body focus:outline-none focus:ring-1 focus:ring-link">
-            <option value="all">all</option>
-            <option value="pending">pending</option>
-            <option value="completed">completed</option>
+            <option value="today">today</option>
+            <option value="week">this week</option>
+            <option value="month">this month</option>
         </select>
     </div>
 

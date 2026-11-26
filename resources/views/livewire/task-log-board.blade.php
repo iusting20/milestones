@@ -1,4 +1,4 @@
-<div class="mx-auto max-w-6xl px-3 py-6 sm:px-4"
+<div class="mx-auto max-w-7xl px-3 py-6 sm:px-4"
      x-data="{
         hoverTitle: null,
         glowTitle: null,
@@ -24,9 +24,7 @@
         },
      }">
     <div class="mb-6 flex flex-wrap items-center gap-2">
-        <h1 class="inline-block bg-mark px-3 py-1 text-sm font-bold uppercase tracking-wide text-black sm:text-base">
-            Log
-        </h1>
+        <h1 class="text-2xl font-bold uppercase tracking-widest text-body sm:text-3xl">Log</h1>
 
         @include('livewire.partials.week-cycler', ['weekKey' => $week, 'todayAction' => 'goToToday'])
 
@@ -35,11 +33,6 @@
                     class="flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted transition hover:bg-panel hover:text-link"
                     aria-label="Add log entry">
                 +
-            </button>
-
-            <button type="button" wire:click="goToToday"
-                    class="rounded border border-white/10 px-3 py-1.5 text-sm text-link no-underline hover:bg-panel">
-                Today
             </button>
 
             <a href="{{ route('milestones', ['week' => $week]) }}"
@@ -189,8 +182,8 @@
         $weekend = array_slice($days, 5, 2);
     @endphp
 
-    <div class="overflow-x-auto">
-        <div class="min-w-[48rem] space-y-2">
+    <div class="overflow-x-auto overflow-y-hidden">
+        <div class="min-w-[72rem] space-y-2">
             <div class="grid grid-cols-5 items-stretch gap-2">
                 @foreach ($weekdays as $day)
                     @include('livewire.partials.task-log-day', ['day' => $day])

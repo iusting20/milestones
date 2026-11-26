@@ -428,35 +428,6 @@ class TaskLogBoard extends Component
             ->get()
             ->groupBy(fn (TodoItem $item): string => $item->date->toDateString());
 
-        $titles = $logs->pluck('title')
-            ->merge($completedUntimedByDate->flatten(1)->pluck('title'))
-            ->unique()
-            ->values();
-
-        $colorByTitle = $this->colorByTitle($titles);
-
-        $dayGroups = [];
-        $dayClock = [];
-
-        for ($i = 0; $i < 7; $i++) {
-            $day = $start->copy()->addDays($i);
-            $dateKey = $day->toDateString();
-
-            $dayTimedLogs = $logs
-                ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
-                ->values();
-
-            $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
-            $dayClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle);
-        }
-
-        $maxMinutes = max(1, (int) collect($dayGroups)
-            ->flatten(1)
-            ->max(fn (Collection $group): int => $this->groupMinutes($group)));
-
-        // Running timers count as busy on the idle bars (display only, no task_logs written).
-        // Like loggingWindow(), a timer only covers the day it was started on: a timer left
-        // running for days is stale and must not hide idle time on later days.
         $runningIntervals = TodoItem::query()
             ->whereNotNull('logging_started_at')
             ->get(['title', 'logging_started_at'])
@@ -467,6 +438,38 @@ class TaskLogBoard extends Component
                 return [$started, now()->min($endOfStartDay), (string) $item->title];
             });
 
+        $titles = $logs->pluck('title')
+            ->merge($completedUntimedByDate->flatten(1)->pluck('title'))
+            ->merge($runningIntervals->map(fn (array $timer): string => $timer[2]))
+            ->unique()
+            ->values();
+
+        $colorByTitle = $this->colorByTitle($titles);
+
+        $dayGroups = [];
+        $dayClock = [];
+        $nightClock = [];
+
+        for ($i = 0; $i < 7; $i++) {
+            $day = $start->copy()->addDays($i);
+            $dateKey = $day->toDateString();
+
+            $dayTimedLogs = $logs
+                ->filter(fn (TaskLog $log): bool => $log->finished_at->timezone('Europe/Bucharest')->toDateString() === $dateKey)
+                ->values();
+
+            $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
+            $dayClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 8, 17, $runningIntervals);
+            $nightClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 17, 24, $runningIntervals);
+        }
+
+        $maxMinutes = max(1, (int) collect($dayGroups)
+            ->flatten(1)
+            ->max(fn (Collection $group): int => $this->groupMinutes($group)));
+
+        // Running timers count as busy on the idle bars (display only, no task_logs written).
+        // Like loggingWindow(), a timer only covers the day it was started on: a timer left
+        // running for days is stale and must not hide idle time on later days.
         $days = [];
 
         for ($i = 0; $i < 7; $i++) {
@@ -495,6 +498,7 @@ class TaskLogBoard extends Component
                 'logs' => $dayLogs,
                 'pieSlices' => $this->pieSlices($timedDayLogs, $totalMinutes),
                 'clockArcs' => $dayClock[$dateKey],
+                'nightClockArcs' => $nightClock[$dateKey],
                 'idle' => IdleTimeline::forDay(
                     $dateKey,
                     $logs->map(fn (TaskLog $log): array => [$log->started_at, $log->finished_at])
@@ -941,21 +945,27 @@ class TaskLogBoard extends Component
     }
 
     /**
-     * Sessions of one day on a 12h dial: normal clock face (12 top, 3 right), 08:00/20:00 at 8 o'clock, clockwise, Europe/Bucharest.
-     * Each session is clipped to 08:00-20:00 of that day; chronological, so later ones draw on top.
+     * Sessions on a normal clock face (12 top, 3 right), one hour per 30 degrees, 08:00 at 8 o'clock.
+     * Each session is clipped to [$startHour, $endHour) of that day (24 = midnight). Later arcs draw on top.
      *
      * Uses the same merged groups as the list (touching same-title sessions = one arc).
      *
      * @param  Collection<int, Collection<int, TaskLog>>  $groups
      * @param  array<string, string>  $colorByTitle
-     * @return list<array{title: string, color: string, started: string, finished: string, path: string|null, full: bool}>
+     * @param  Collection<int, array{0: Carbon, 1: Carbon, 2: string}>  $runningIntervals
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool}>
      */
-    private function clockArcs(Collection $groups, string $dateKey, array $colorByTitle): array
+    private function clockArcs(Collection $groups, string $dateKey, array $colorByTitle, int $startHour, int $endHour, Collection $runningIntervals): array
     {
         $tz = 'Europe/Bucharest';
-        $from = Carbon::parse($dateKey.' 08:00:00', $tz);
-        $to = $from->copy()->addHours(12);
-        $arcs = [];
+        $anchor = Carbon::parse($dateKey.' 08:00:00', $tz);
+        $from = Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $startHour), $tz);
+        $to = $endHour >= 24
+            ? Carbon::parse($dateKey, $tz)->addDay()->startOfDay()
+            : Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $endHour), $tz);
+
+        /** @var list<array{title: string, color: string, start: Carbon, end: Carbon, wip: bool}> $spans */
+        $spans = [];
 
         foreach ($groups->sortBy(fn (Collection $g) => $g->min(fn (TaskLog $l) => $l->started_at->getTimestamp()))->values() as $group) {
             $log = $group->first();
@@ -966,24 +976,126 @@ class TaskLogBoard extends Component
             if ($e->lte($s)) {
                 continue;
             }
-            $a = $from->diffInSeconds($s) / 43200 * 360 + 150; // 08:00 sits at 8 o'clock (240deg from top)
-            $b = $from->diffInSeconds($e) / 43200 * 360 + 150; // 08:00 sits at 8 o'clock (240deg from top)
-            $full = $b - $a >= 359.9;
-            $p1 = $this->polarToCartesian(50, 50, 36, $a);
-            $p2 = $this->polarToCartesian(50, 50, 36, $b);
-            $large = ($b - $a) > 180 ? 1 : 0;
-
-            $arcs[] = [
+            $spans[] = [
                 'title' => (string) $log->title,
                 'color' => $colorByTitle[$log->title] ?? '#888888',
-                'started' => $startedAt->copy()->timezone($tz)->format('H:i'),
-                'finished' => $finishedAt->copy()->timezone($tz)->format('H:i'),
-                'path' => $full ? null : "M {$p1['x']} {$p1['y']} A 36 36 0 {$large} 1 {$p2['x']} {$p2['y']}",
-                'full' => $full,
+                'start' => $s,
+                'end' => $e,
+                'wip' => false,
             ];
         }
 
+        foreach ($runningIntervals as [$startedAt, $finishedAt, $title]) {
+            if ($startedAt->copy()->timezone($tz)->toDateString() !== $dateKey) {
+                continue;
+            }
+            $s = $startedAt->copy()->timezone($tz)->max($from);
+            $e = $finishedAt->copy()->timezone($tz)->min($to);
+            if ($e->lte($s)) {
+                continue;
+            }
+            $spans[] = [
+                'title' => (string) $title,
+                'color' => $colorByTitle[$title] ?? '#58a6ff',
+                'start' => $s,
+                'end' => $e,
+                'wip' => true,
+            ];
+        }
+
+        return $this->layoutClockSpans($spans, $anchor);
+    }
+
+    /**
+     * Split the 9-unit ring into one lane per concurrent session.
+     *
+     * @param  list<array{title: string, color: string, start: Carbon, end: Carbon, wip: bool}>  $spans
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool}>
+     */
+    private function layoutClockSpans(array $spans, Carbon $anchor): array
+    {
+        $events = [];
+        foreach ($spans as $index => $span) {
+            $events[] = [$span['start']->getTimestamp(), -1, $index];
+            $events[] = [$span['end']->getTimestamp(), 1, $index];
+        }
+        usort($events, fn (array $a, array $b): int => $a[0] <=> $b[0] ?: $b[1] <=> $a[1]);
+
+        $active = [];
+        $cursor = null;
+        $arcs = [];
+
+        foreach ($events as [$at, $leaving, $index]) {
+            if ($cursor !== null && $at > $cursor && $active !== []) {
+                $ids = array_keys($active);
+                usort($ids, function (int $a, int $b) use ($spans): int {
+                    return $spans[$a]['start']->getTimestamp() <=> $spans[$b]['start']->getTimestamp() ?: $a <=> $b;
+                });
+                $lanes = count($ids);
+                $gap = $lanes > 1 ? 0.7 : 0.0;
+                $stroke = (9 - $gap * ($lanes - 1)) / $lanes;
+                foreach ($ids as $lane => $id) {
+                    $span = $spans[$id];
+                    $radius = 31.5 + ($stroke / 2) + ($lane * ($stroke + $gap));
+                    $angleA = ($cursor - $anchor->getTimestamp()) / 43200 * 360 + 150;
+                    $angleB = ($at - $anchor->getTimestamp()) / 43200 * 360 + 150;
+                    $arcs[] = [
+                        'title' => $span['title'],
+                        'color' => $span['color'],
+                        'started' => $span['start']->format('H:i'),
+                        'finished' => $span['wip'] ? 'now' : $span['end']->format('H:i'),
+                        'path' => $this->arcPath($radius, $angleA, $angleB),
+                        'stroke' => round($stroke, 3),
+                        'wip' => $span['wip'],
+                    ];
+                }
+            }
+            if ($leaving === 1) {
+                unset($active[$index]);
+            } else {
+                $active[$index] = true;
+            }
+            $cursor = $at;
+        }
+
         return $arcs;
+    }
+
+    private function arcPath(float $radius, float $startAngle, float $endAngle): string
+    {
+        $p1 = self::clockPoint(50, 50, $radius, $startAngle);
+        $p2 = self::clockPoint(50, 50, $radius, $endAngle);
+        $large = ($endAngle - $startAngle) > 180 ? 1 : 0;
+        $radius = round($radius, 3);
+
+        return "M {$p1['x']} {$p1['y']} A {$radius} {$radius} 0 {$large} 1 {$p2['x']} {$p2['y']}";
+    }
+
+    /**
+     * Visible ring for a clock window. Hours are clock positions (8 = 8 o'clock); 24 = midnight at 12.
+     */
+    public static function clockTrackPath(int $startHour, int $endHour): string
+    {
+        $a = ($startHour - 8) * 30 + 150;
+        $b = ($endHour - 8) * 30 + 150;
+        $p1 = self::clockPoint(50, 50, 36, $a);
+        $p2 = self::clockPoint(50, 50, 36, $b);
+        $large = ($b - $a) > 180 ? 1 : 0;
+
+        return "M {$p1['x']} {$p1['y']} A 36 36 0 {$large} 1 {$p2['x']} {$p2['y']}";
+    }
+
+    /**
+     * @return array{x: float, y: float}
+     */
+    private static function clockPoint(float $cx, float $cy, float $radius, float $angleInDegrees): array
+    {
+        $radians = deg2rad($angleInDegrees);
+
+        return [
+            'x' => round($cx + ($radius * cos($radians)), 3),
+            'y' => round($cy + ($radius * sin($radians)), 3),
+        ];
     }
 
     /** @return list<array{label: string, x: float, y: float, tx: float, ty: float, ix: float, iy: float}> */
@@ -1018,12 +1130,7 @@ class TaskLogBoard extends Component
      */
     private function polarToCartesian(float $cx, float $cy, float $radius, float $angleInDegrees): array
     {
-        $radians = deg2rad($angleInDegrees);
-
-        return [
-            'x' => round($cx + ($radius * cos($radians)), 3),
-            'y' => round($cy + ($radius * sin($radians)), 3),
-        ];
+        return self::clockPoint($cx, $cy, $radius, $angleInDegrees);
     }
 
     private function durationMinutes(TaskLog $log): int

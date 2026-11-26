@@ -23,7 +23,6 @@ class LoggingElapsedTimeTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])->assertDontSeeHtml('data-elapsed-since=');
 
         $component->call('startLogging', $item->id);

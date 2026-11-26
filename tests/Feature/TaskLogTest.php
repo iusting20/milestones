@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Livewire\DayList;
 use App\Livewire\TaskLogBoard;
 use App\Livewire\WeekBoard;
+use App\Models\Project;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
+use App\Models\WeekBoardItem;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -25,16 +27,12 @@ class TaskLogTest extends TestCase
             ->assertSeeLivewire(TaskLogBoard::class);
     }
 
-    public function test_week_board_links_to_log_page_and_toggles_log_controls(): void
+    public function test_week_board_links_to_log_page(): void
     {
         Livewire::test(WeekBoard::class)
-            ->assertSet('showLogControls', false)
             ->assertSee('Log')
             ->assertSee(route('milestones.log', absolute: false), false)
-            ->assertSeeHtml('aria-label="Show log controls"')
-            ->set('showLogControls', true)
-            ->assertSet('showLogControls', true)
-            ->assertSeeHtml('aria-label="Hide log controls"');
+            ->assertSeeHtml('M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z');
     }
 
     public function test_start_logging_prefixes_emoji_and_stores_started_at(): void
@@ -53,7 +51,6 @@ class TaskLogTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->call('startLogging', $item->id)
             ->assertSeeHtml('aria-label="Edit logging start 12:15"')
@@ -85,7 +82,6 @@ class TaskLogTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->call('finishLogging', $item->id)
             ->assertDontSeeHtml('aria-label="Logging since');
@@ -117,7 +113,6 @@ class TaskLogTest extends TestCase
             'date' => '2026-03-16',
             'dayLabel' => 'MONDAY',
             'isToday' => false,
-            'showLogControls' => true,
         ])->call('startLogging', $item->id);
 
         Carbon::setTestNow('2026-03-18 10:40:00');
@@ -126,7 +121,6 @@ class TaskLogTest extends TestCase
             'date' => '2026-03-16',
             'dayLabel' => 'MONDAY',
             'isToday' => false,
-            'showLogControls' => true,
         ])->call('finishLogging', $item->id);
 
         $log = TaskLog::query()->first();
@@ -157,7 +151,7 @@ class TaskLogTest extends TestCase
             'position' => 1,
         ]);
 
-        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => false, 'showLogControls' => true];
+        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => false];
 
         Livewire::test(DayList::class, $props)->call('startLogging', $item->id);
 
@@ -181,7 +175,7 @@ class TaskLogTest extends TestCase
             'position' => 1,
         ]);
 
-        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => true, 'showLogControls' => true];
+        $props = ['date' => '2026-10-30', 'dayLabel' => 'FRIDAY', 'isToday' => true];
 
         Livewire::test(DayList::class, $props)->call('startLogging', $item->id);
 
@@ -209,7 +203,6 @@ class TaskLogTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->call('finishLogging', $item->id);
 
@@ -237,7 +230,6 @@ class TaskLogTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->call('toggle', $item->id)
             ->assertDontSeeHtml('aria-label="Logging since');
@@ -277,27 +269,101 @@ class TaskLogTest extends TestCase
         $this->assertDatabaseCount('task_logs', 0);
     }
 
-    public function test_log_page_renders_clock_arcs_for_the_day_clipped_to_8am_8pm(): void
+    public function test_log_page_renders_clock_arcs_split_into_day_and_night_windows(): void
     {
-        // 07:00-09:00 UTC = 09:00-11:00 Bucharest; 15:30-19:00 UTC = 17:30-21:00 Bucharest (clipped at 20:00).
+        // 07:00-09:00 UTC = 09:00-11:00 Bucharest (day window).
+        // 15:30-19:00 UTC = 17:30-21:00 Bucharest (night window, 5pm-midnight).
         TaskLog::query()->create(['todo_item_id' => null, 'title' => 'Morning work', 'started_at' => Carbon::parse('2026-03-18 07:00:00'), 'finished_at' => Carbon::parse('2026-03-18 09:00:00')]);
         TaskLog::query()->create(['todo_item_id' => null, 'title' => 'Evening work', 'started_at' => Carbon::parse('2026-03-18 15:30:00'), 'finished_at' => Carbon::parse('2026-03-18 19:00:00')]);
 
         $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
         $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
 
-        $this->assertCount(2, $wed['clockArcs']);
+        $this->assertCount(1, $wed['clockArcs']);
         $this->assertSame(['09:00', '11:00'], [$wed['clockArcs'][0]['started'], $wed['clockArcs'][0]['finished']]);
         // Normal clock face: 11:00 ends at 11 o'clock (32, 18.823).
         $this->assertStringEndsWith('32 18.823', $wed['clockArcs'][0]['path']);
-        // Clipped at 20:00 = 8 o'clock (18.823, 68).
-        $this->assertStringEndsWith('18.823 68', $wed['clockArcs'][1]['path']);
+        $this->assertCount(1, $wed['nightClockArcs']);
+        $this->assertSame(['17:30', '21:00'], [$wed['nightClockArcs'][0]['started'], $wed['nightClockArcs'][0]['finished']]);
+        // 21:00 sits at 9 o'clock.
+        $this->assertStringEndsWith('14 50', $wed['nightClockArcs'][0]['path']);
         $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
+        $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['nightClockArcs']);
 
         $component->assertSeeHtml('data-clock="2026-03-18"')
+            ->assertSeeHtml('data-day-track')
+            ->assertSeeHtml('data-night-track')
             ->assertSeeHtml('data-clock-arc')
+            ->assertSeeHtml('data-night-arc')
             ->assertSee('Morning work (09:00–11:00)')
-            ->assertSee("pieMode: 'total'", false);
+            ->assertSee('Evening work (17:30–21:00)')
+            ->assertSee('8am - 5pm')
+            ->assertSee('5pm - 12am')
+            ->assertSee('Day dial, 8am to 5pm')
+            ->assertSee('night: false', false);
+    }
+
+    public function test_log_page_hides_day_night_toggle_when_no_sessions_after_5pm(): void
+    {
+        // 07:00-09:00 UTC = 09:00-11:00 Bucharest (day window only).
+        TaskLog::query()->create(['todo_item_id' => null, 'title' => 'Morning only', 'started_at' => Carbon::parse('2026-03-18 07:00:00'), 'finished_at' => Carbon::parse('2026-03-18 09:00:00')]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
+
+        $this->assertCount(1, $wed['clockArcs']);
+        $this->assertSame([], $wed['nightClockArcs']);
+        $component->assertDontSee('Day dial, 8am to 5pm')
+            ->assertDontSee('Night dial, 5pm to midnight');
+    }
+
+    public function test_log_page_draws_running_timers_as_hashed_arcs(): void
+    {
+        Carbon::setTestNow('2026-03-18 08:00:00');
+
+        TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Live timer',
+            'position' => 1,
+            'logging_started_at' => Carbon::parse('2026-03-18 07:00:00'),
+        ]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
+
+        $this->assertTrue(collect($wed['clockArcs'])->contains(fn (array $arc): bool => $arc['title'] === 'Live timer' && $arc['wip'] === true && $arc['stroke'] === 9.0));
+        $component->assertSeeHtml('data-wip-arc');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_overlapping_running_timers_use_thinner_lanes(): void
+    {
+        Carbon::setTestNow('2026-03-18 14:00:00');
+
+        TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Overlap A',
+            'position' => 1,
+            'logging_started_at' => Carbon::parse('2026-03-18 11:00:00'),
+        ]);
+        TodoItem::query()->create([
+            'date' => '2026-03-18',
+            'title' => 'Overlap B',
+            'position' => 2,
+            'logging_started_at' => Carbon::parse('2026-03-18 11:00:00'),
+        ]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
+        $wip = collect($wed['clockArcs'])->where('wip', true);
+
+        $this->assertCount(2, $wip);
+        $this->assertTrue($wip->every(fn (array $arc): bool => $arc['stroke'] === 4.15));
+        $component->assertSeeHtml('stroke-width="4.15"')
+            ->assertSeeHtml('data-wip-arc');
+
+        Carbon::setTestNow();
     }
 
     public function test_log_page_lists_finished_entries_for_week(): void
@@ -552,7 +618,6 @@ class TaskLogTest extends TestCase
             'date' => $date,
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->call('startLogging', $item->id);
 
@@ -904,7 +969,6 @@ class TaskLogTest extends TestCase
             'date' => '2026-03-18',
             'dayLabel' => 'WEDNESDAY',
             'isToday' => true,
-            'showLogControls' => true,
         ])
             ->assertSee('10:15')
             ->call('startEditingLoggingStart', $item->id)
@@ -977,7 +1041,7 @@ class TaskLogTest extends TestCase
         Carbon::setTestNow('2026-03-18 10:00:00');
 
         foreach ([['partners', 'Saints Nearby', false], ['partners', 'Vibrant Health Edu', false], ['partners', 'Tudia', false], ['partners', 'Old Client', true], ['assets', 'Story Creator (cu Sam)', false], ['assets', 'Neo Wars', false]] as $i => [$hub, $name, $archived]) {
-            \App\Models\Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
+            Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
         }
 
         foreach (['SAINTS - web portal', 'VHE - fix topic images', 'Old Client - x', 'story creator - script'] as $title) {
@@ -1002,12 +1066,12 @@ class TaskLogTest extends TestCase
     public function test_week_activity_charts_group_by_client_and_asset_with_others(): void
     {
         foreach ([['partners', 'Saints Nearby', false], ['partners', 'Old Client', true], ['partners', 'Tudia', false], ['assets', 'Neo Wars', false]] as $i => [$hub, $name, $archived]) {
-            \App\Models\Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
+            Project::query()->create(['hub' => $hub, 'name' => $name, 'slug' => 'p'.$i, 'position' => $i, 'is_archived' => $archived]);
         }
 
-        $tudia = \App\Models\Project::query()->where('name', 'Tudia')->first();
+        $tudia = Project::query()->where('name', 'Tudia')->first();
         $todo = TodoItem::query()->create(['date' => '2026-03-17', 'title' => 'Untagged milestone', 'position' => 0]);
-        \App\Models\WeekBoardItem::query()->create(['project_id' => $tudia->id, 'todo_item_id' => $todo->id, 'title' => 'Card', 'status' => 'wip', 'position' => 0]);
+        WeekBoardItem::query()->create(['project_id' => $tudia->id, 'todo_item_id' => $todo->id, 'title' => 'Card', 'status' => 'wip', 'position' => 0]);
 
         foreach ([['SN - portal', 120, null], ['Old Client - x', 30, null], ['Neo Wars - art', 45, null], ['Emails', 15, null], ['Untagged milestone', 60, $todo->id]] as [$title, $minutes, $todoId]) {
             TaskLog::query()->create([
@@ -1056,7 +1120,7 @@ class TaskLogTest extends TestCase
 
     public function test_clicking_a_client_row_lists_its_items(): void
     {
-        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+        Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
 
         foreach ([['SN - portal', 90], ['SN - api', 30], ['Emails', 15]] as [$title, $minutes]) {
             TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 08:00:00')->addMinutes($minutes)]);
@@ -1078,8 +1142,8 @@ class TaskLogTest extends TestCase
 
     public function test_others_items_can_be_assigned_to_a_client_and_stay_assigned(): void
     {
-        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
-        $asset = \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
+        $client = Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        $asset = Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
 
         foreach ([['Emails', 15, '2026-03-17'], ['Planning', 45, '2026-03-17'], ['Emails', 20, '2026-03-24']] as [$title, $minutes, $day]) {
             TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
@@ -1113,8 +1177,8 @@ class TaskLogTest extends TestCase
 
     public function test_assignment_never_overrides_a_prefix_match_and_only_applies_from_others(): void
     {
-        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
-        $tudia = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 1]);
+        Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+        $tudia = Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 1]);
         TaskLog::query()->create(['todo_item_id' => null, 'title' => 'SN - portal', 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 09:00:00')]);
 
         Livewire::withQueryParams(['week' => '2026-W12'])
@@ -1129,7 +1193,7 @@ class TaskLogTest extends TestCase
 
     public function test_activity_modal_groups_items_by_weekday_with_that_days_duration(): void
     {
-        \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
+        Project::query()->create(['hub' => 'partners', 'name' => 'Saints Nearby', 'slug' => 'sn', 'position' => 0]);
 
         foreach ([['SN - portal', 30, '2026-03-18'], ['SN - portal', 90, '2026-03-16'], ['SN - api', 100, '2026-03-16'], ['Emails', 15, '2026-03-17']] as [$title, $minutes, $day]) {
             TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
@@ -1154,8 +1218,8 @@ class TaskLogTest extends TestCase
 
     public function test_others_modal_client_asset_toggle_switches_items_and_dropdown(): void
     {
-        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
-        $asset = \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
+        $client = Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        $asset = Project::query()->create(['hub' => 'assets', 'name' => 'Neo Wars', 'slug' => 'nw', 'position' => 0]);
 
         foreach ([['Tudia - lesson', 60, '2026-03-16'], ['Emails', 15, '2026-03-16'], ['Emails', 20, '2026-03-17'], ['Artwork', 40, '2026-03-17'], ['Artwork', 25, '2026-03-24']] as [$title, $minutes, $day]) {
             TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse($day.' 08:00:00'), 'finished_at' => Carbon::parse($day.' 08:00:00')->addMinutes($minutes)]);
@@ -1205,8 +1269,8 @@ class TaskLogTest extends TestCase
 
     public function test_others_is_shared_by_both_charts_and_assigning_removes_it_from_both(): void
     {
-        $client = \App\Models\Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
-        \App\Models\Project::query()->create(['hub' => 'assets', 'name' => 'Impactful Tech', 'slug' => 'it', 'position' => 0]);
+        $client = Project::query()->create(['hub' => 'partners', 'name' => 'Tudia', 'slug' => 'tudia', 'position' => 0]);
+        Project::query()->create(['hub' => 'assets', 'name' => 'Impactful Tech', 'slug' => 'it', 'position' => 0]);
 
         foreach ([['Tudia - lesson', 60], ['Impactful Tech - site', 30], ['Emails', 15], ['Planning', 20]] as [$title, $minutes]) {
             TaskLog::query()->create(['todo_item_id' => null, 'title' => $title, 'started_at' => Carbon::parse('2026-03-17 08:00:00'), 'finished_at' => Carbon::parse('2026-03-17 08:00:00')->addMinutes($minutes)]);

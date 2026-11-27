@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Book;
+use App\Models\BookFeedbackEntry;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
@@ -57,6 +58,22 @@ class Read extends Component
 
     public string $editSessionPagesRead = '';
 
+    public bool $feedbackOpen = false;
+
+    public ?int $feedbackBookId = null;
+
+    public string $feedbackBookTitle = '';
+
+    public string $feedbackDescription = '';
+
+    /** @var list<array{id: int|null, body: string}> */
+    public array $feedbackLikes = [];
+
+    /** @var list<array{id: int|null, body: string}> */
+    public array $feedbackDislikes = [];
+
+    public bool $feedbackDirty = false;
+
     public function mount(?int $selectedBookId = null): void
     {
         if (request()->routeIs('read.articles')) {
@@ -79,6 +96,7 @@ class Read extends Component
         $this->findBook($id);
         $this->selectedBookId = $id;
         $this->cancelForms();
+        $this->closeFeedback();
     }
 
     public function startAddBook(): void
@@ -190,6 +208,7 @@ class Read extends Component
     public function markBookReading(int $id): void
     {
         $this->findBook($id)->update(['status' => Book::STATUS_READING]);
+        $this->closeFeedback();
     }
 
     public function markStartedToday(int $id): void
@@ -461,6 +480,201 @@ class Read extends Component
         $this->resetSessionForm();
     }
 
+    public function openFeedback(int $id): void
+    {
+        $book = $this->findBook($id);
+        if (! $book->isFinished()) {
+            return;
+        }
+
+        $this->feedbackOpen = true;
+        $this->feedbackBookId = $book->id;
+        $this->feedbackBookTitle = $book->title;
+        $this->feedbackDescription = (string) ($book->feedback?->description ?? '');
+        $this->feedbackLikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_LIKE);
+        $this->feedbackDislikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_DISLIKE);
+        $this->feedbackDirty = false;
+    }
+
+    public function closeFeedback(): void
+    {
+        $this->feedbackOpen = false;
+        $this->feedbackBookId = null;
+        $this->feedbackBookTitle = '';
+        $this->feedbackDescription = '';
+        $this->feedbackLikes = [];
+        $this->feedbackDislikes = [];
+        $this->feedbackDirty = false;
+    }
+
+    public function addFeedbackEntry(string $kind): void
+    {
+        if (! $this->feedbackOpen) {
+            return;
+        }
+
+        if ($kind === BookFeedbackEntry::KIND_LIKE) {
+            $this->feedbackLikes[] = ['id' => null, 'body' => ''];
+        } elseif ($kind === BookFeedbackEntry::KIND_DISLIKE) {
+            $this->feedbackDislikes[] = ['id' => null, 'body' => ''];
+        } else {
+            return;
+        }
+
+        $this->feedbackDirty = true;
+    }
+
+    public function removeFeedbackEntry(string $kind, int $index): void
+    {
+        if (! $this->feedbackOpen) {
+            return;
+        }
+
+        if ($kind === BookFeedbackEntry::KIND_LIKE) {
+            if (! array_key_exists($index, $this->feedbackLikes)) {
+                return;
+            }
+            array_splice($this->feedbackLikes, $index, 1);
+            $this->feedbackLikes = array_values($this->feedbackLikes);
+        } elseif ($kind === BookFeedbackEntry::KIND_DISLIKE) {
+            if (! array_key_exists($index, $this->feedbackDislikes)) {
+                return;
+            }
+            array_splice($this->feedbackDislikes, $index, 1);
+            $this->feedbackDislikes = array_values($this->feedbackDislikes);
+        } else {
+            return;
+        }
+
+        $this->feedbackDirty = true;
+    }
+
+    public function saveFeedback(): void
+    {
+        if ($this->feedbackBookId === null) {
+            return;
+        }
+
+        $book = $this->findBook($this->feedbackBookId);
+        if (! $book->isFinished()) {
+            return;
+        }
+
+        $description = trim($this->feedbackDescription);
+        $likes = $this->normalizedFeedbackEntries($this->feedbackLikes);
+        $dislikes = $this->normalizedFeedbackEntries($this->feedbackDislikes);
+
+        if ($description === '' && $likes === [] && $dislikes === []) {
+            $book->feedbackEntries()->delete();
+            $book->feedback()->delete();
+        } else {
+            $book->feedback()->updateOrCreate(
+                ['book_id' => $book->id],
+                ['description' => $description === '' ? null : $description],
+            );
+            $this->syncFeedbackEntries($book, BookFeedbackEntry::KIND_LIKE, $likes);
+            $this->syncFeedbackEntries($book, BookFeedbackEntry::KIND_DISLIKE, $dislikes);
+        }
+
+        $book->unsetRelation('feedback');
+        $book->unsetRelation('feedbackEntries');
+        $this->feedbackDescription = (string) ($book->feedback?->description ?? '');
+        $this->feedbackLikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_LIKE);
+        $this->feedbackDislikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_DISLIKE);
+        $this->feedbackDirty = false;
+        $this->dispatch('book-feedback-saved');
+    }
+
+    public function updatedFeedbackDescription(): void
+    {
+        $this->feedbackDirty = true;
+    }
+
+    public function updatedFeedbackLikes(): void
+    {
+        $this->feedbackDirty = true;
+    }
+
+    public function updatedFeedbackDislikes(): void
+    {
+        $this->feedbackDirty = true;
+    }
+
+    /**
+     * @return list<array{id: int|null, body: string}>
+     */
+    private function feedbackEntryPayloads(Book $book, string $kind): array
+    {
+        return $book->feedbackEntries
+            ->where('kind', $kind)
+            ->values()
+            ->map(fn (BookFeedbackEntry $entry) => [
+                'id' => $entry->id,
+                'body' => $entry->body,
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  list<array{id?: int|null, body?: mixed}>  $entries
+     * @return list<array{id: int|null, body: string}>
+     */
+    private function normalizedFeedbackEntries(array $entries): array
+    {
+        $normalized = [];
+
+        foreach ($entries as $entry) {
+            $body = trim((string) ($entry['body'] ?? ''));
+            if ($body === '') {
+                continue;
+            }
+
+            $id = $entry['id'] ?? null;
+            $normalized[] = [
+                'id' => $id !== null && $id !== '' ? (int) $id : null,
+                'body' => $body,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  list<array{id: int|null, body: string}>  $entries
+     */
+    private function syncFeedbackEntries(Book $book, string $kind, array $entries): void
+    {
+        $keepIds = [];
+
+        foreach (array_values($entries) as $index => $entry) {
+            $model = null;
+            if ($entry['id'] !== null) {
+                $model = $book->feedbackEntries()->whereKey($entry['id'])->where('kind', $kind)->first();
+            }
+
+            if ($model) {
+                $model->update([
+                    'body' => $entry['body'],
+                    'position' => $index + 1,
+                ]);
+            } else {
+                $model = $book->feedbackEntries()->create([
+                    'kind' => $kind,
+                    'body' => $entry['body'],
+                    'position' => $index + 1,
+                ]);
+            }
+
+            $keepIds[] = $model->id;
+        }
+
+        $query = $book->feedbackEntries()->where('kind', $kind);
+        if ($keepIds !== []) {
+            $query->whereNotIn('id', $keepIds);
+        }
+        $query->delete();
+    }
+
     public function openBookStats(int $id): void
     {
         $this->dispatch('open-book-stats', id: $id);
@@ -470,7 +684,7 @@ class Read extends Component
     {
         $all = $this->catalog()
             ->withCount('readingSessions')
-            ->with(['latestSession', 'earliestSession', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
+            ->with(['latestSession', 'earliestSession', 'feedback', 'feedbackEntries', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
             ->orderBy('position')
             ->orderBy('id')
             ->get();

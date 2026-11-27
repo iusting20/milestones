@@ -324,6 +324,13 @@
                                 class="text-left text-xs text-muted hover:text-body">Mark as 'finished'</button>
                     @endif
                 </div>
+                @if ($selected->isFinished())
+                    <button type="button"
+                            wire:click="openFeedback({{ $selected->id }})"
+                            class="read-feedback-btn col-span-2 sm:col-span-4 rounded px-3 py-2 text-sm font-semibold hover:brightness-105">
+                        {{ $selected->hasFeedback() ? 'View feedback' : 'Give feedback' }}
+                    </button>
+                @endif
                 </div>
             </div>
 
@@ -615,5 +622,159 @@
         }
     </script>
     <livewire:read-book-stats-modal />
+    @if ($feedbackOpen)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             x-data="{
+                tab: 'description',
+                leave(fn) {
+                    if (! $wire.feedbackDirty || confirm('Discard unsaved changes?')) {
+                        fn();
+                    }
+                },
+                saved: false,
+                savedTimer: null,
+                flashSaved() {
+                    this.saved = false;
+                    this.$nextTick(() => {
+                        this.saved = true;
+                        clearTimeout(this.savedTimer);
+                        this.savedTimer = setTimeout(() => { this.saved = false }, 1000);
+                    });
+                }
+             }"
+             x-on:book-feedback-saved.window="flashSaved()"
+             x-on:keydown.escape.window="leave(() => $wire.closeFeedback())"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="read-feedback-title">
+            <div class="absolute inset-0 bg-black/60" x-on:click="leave(() => $wire.closeFeedback())" aria-hidden="true"></div>
+
+            <div class="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-white/10 bg-sidebar p-4 shadow-xl sm:p-5"
+                 :class="{ 'modal-saved-glow': saved }">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <h2 id="read-feedback-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        Feedback · {{ $feedbackBookTitle }}
+                    </h2>
+                    <button type="button"
+                            x-on:click="leave(() => $wire.closeFeedback())"
+                            class="rounded px-1 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Close">×</button>
+                </div>
+
+                <div class="mb-4 grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-panel p-1" role="tablist" aria-label="Feedback sections">
+                    <button type="button"
+                            role="tab"
+                            :aria-selected="tab === 'description'"
+                            x-on:click="tab = 'description'"
+                            :class="tab === 'description' ? 'bg-sidebar text-body' : 'text-muted hover:text-body'"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium">
+                        <svg class="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M8 1.8A4.2 4.2 0 0 0 5.2 8c.3.6.8 1.1 1.1 1.7.2.4.2.8.2 1.2h3c0-.4 0-.8.2-1.2.3-.6.8-1.1 1.1-1.7A4.2 4.2 0 0 0 8 1.8Z" stroke-linejoin="round"/>
+                            <path d="M6.5 12.8h3M7 14.2h2" stroke-linecap="round"/>
+                        </svg>
+                        Description
+                    </button>
+                    <button type="button"
+                            role="tab"
+                            :aria-selected="tab === 'like'"
+                            x-on:click="tab = 'like'"
+                            :class="tab === 'like' ? 'bg-sidebar text-body' : 'text-muted hover:text-body'"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium">
+                        <svg class="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M5.2 7.2v6.3H3.4A1.2 1.2 0 0 1 2.2 12.3V8.4A1.2 1.2 0 0 1 3.4 7.2h1.8Z" stroke-linejoin="round"/>
+                            <path d="M5.2 7.2 7 3.4c.3-.6.9-.9 1.5-.8.7.1 1.2.7 1.2 1.4V6h3c.8 0 1.4.7 1.3 1.5l-.7 5.2a1.3 1.3 0 0 1-1.3 1.1H5.2" stroke-linejoin="round" stroke-linecap="round"/>
+                        </svg>
+                        Like
+                    </button>
+                    <button type="button"
+                            role="tab"
+                            :aria-selected="tab === 'dislike'"
+                            x-on:click="tab = 'dislike'"
+                            :class="tab === 'dislike' ? 'bg-sidebar text-body' : 'text-muted hover:text-body'"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium">
+                        <svg class="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M5.2 8.8V2.5H3.4A1.2 1.2 0 0 0 2.2 3.7v3.9A1.2 1.2 0 0 0 3.4 8.8h1.8Z" stroke-linejoin="round"/>
+                            <path d="M5.2 8.8 7 12.6c.3.6.9.9 1.5.8.7-.1 1.2-.7 1.2-1.4V10h3c.8 0 1.4-.7 1.3-1.5l-.7-5.2A1.3 1.3 0 0 0 12 2.2H5.2" stroke-linejoin="round" stroke-linecap="round"/>
+                        </svg>
+                        Dislike
+                    </button>
+                </div>
+
+                <div x-show="tab === 'description'" role="tabpanel">
+                    <label class="block">
+                        <span class="sr-only">Description</span>
+                        <textarea wire:model.live="feedbackDescription"
+                                  rows="10"
+                                  class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                  placeholder="Write a description…"></textarea>
+                    </label>
+                </div>
+
+                <div x-show="tab === 'like'" role="tabpanel">
+                    <div class="space-y-2">
+                        @forelse ($feedbackLikes as $i => $entry)
+                            <div wire:key="feedback-like-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
+                                <label class="block min-w-0 flex-1">
+                                    <span class="sr-only">Like {{ $i + 1 }}</span>
+                                    <textarea wire:model.live="feedbackLikes.{{ $i }}.body"
+                                              rows="2"
+                                              class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                              placeholder="What did you like?"></textarea>
+                                </label>
+                                <button type="button"
+                                        wire:click="removeFeedbackEntry('like', {{ $i }})"
+                                        class="mt-1 rounded px-1 text-lg leading-none text-muted hover:text-red-400"
+                                        aria-label="Remove like"
+                                        title="Remove">×</button>
+                            </div>
+                        @empty
+                            <p class="text-sm text-muted">No likes yet.</p>
+                        @endforelse
+                    </div>
+                    <button type="button"
+                            wire:click="addFeedbackEntry('like')"
+                            class="mt-3 inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Add like"
+                            title="Add like">+</button>
+                </div>
+
+                <div x-show="tab === 'dislike'" role="tabpanel">
+                    <div class="space-y-2">
+                        @forelse ($feedbackDislikes as $i => $entry)
+                            <div wire:key="feedback-dislike-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
+                                <label class="block min-w-0 flex-1">
+                                    <span class="sr-only">Dislike {{ $i + 1 }}</span>
+                                    <textarea wire:model.live="feedbackDislikes.{{ $i }}.body"
+                                              rows="2"
+                                              class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                              placeholder="What did you dislike?"></textarea>
+                                </label>
+                                <button type="button"
+                                        wire:click="removeFeedbackEntry('dislike', {{ $i }})"
+                                        class="mt-1 rounded px-1 text-lg leading-none text-muted hover:text-red-400"
+                                        aria-label="Remove dislike"
+                                        title="Remove">×</button>
+                            </div>
+                        @empty
+                            <p class="text-sm text-muted">No dislikes yet.</p>
+                        @endforelse
+                    </div>
+                    <button type="button"
+                            wire:click="addFeedbackEntry('dislike')"
+                            class="mt-3 inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted hover:text-body"
+                            aria-label="Add dislike"
+                            title="Add dislike">+</button>
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button type="button"
+                            wire:click="saveFeedback"
+                            class="rounded border border-white/15 bg-panel px-4 py-1.5 text-sm font-medium hover:border-link/40">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
  

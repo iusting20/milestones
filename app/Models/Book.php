@@ -53,6 +53,35 @@ class Book extends Model
         return $this->hasMany(ReadingSession::class);
     }
 
+    public function feedback(): HasOne
+    {
+        return $this->hasOne(BookFeedback::class);
+    }
+
+    public function feedbackEntries(): HasMany
+    {
+        return $this->hasMany(BookFeedbackEntry::class)->orderBy('kind')->orderBy('position')->orderBy('id');
+    }
+
+    public function hasFeedback(): bool
+    {
+        $description = $this->relationLoaded('feedback')
+            ? $this->feedback?->description
+            : $this->feedback()->value('description');
+
+        if (trim((string) $description) !== '') {
+            return true;
+        }
+
+        if ($this->relationLoaded('feedbackEntries')) {
+            return $this->feedbackEntries->contains(
+                fn (BookFeedbackEntry $entry) => trim($entry->body) !== ''
+            );
+        }
+
+        return $this->feedbackEntries()->where('body', '!=', '')->exists();
+    }
+
     public function latestSession(): HasOne
     {
         return $this->hasOne(ReadingSession::class)->latestOfMany('started_at');

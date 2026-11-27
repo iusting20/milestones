@@ -652,9 +652,11 @@
                 growAll() {
                     this.$root.querySelectorAll('textarea').forEach((el) => this.grow(el));
                 },
+                pane: 'form',
                 init() {
                     this.$nextTick(() => this.growAll());
                     this.$watch('tab', () => this.$nextTick(() => this.growAll()));
+                    this.$watch('pane', () => this.$nextTick(() => this.growAll()));
                     const el = this.$el;
                     const run = () => {
                         if (el.isConnected) {
@@ -690,7 +692,7 @@
                             aria-label="Close">×</button>
                 </div>
 
-                <div class="mb-4 grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-panel p-1" role="tablist" aria-label="Feedback sections">
+                <div x-show="pane === 'form'" class="mb-4 grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-panel p-1" role="tablist" aria-label="Feedback sections">
                     <button type="button"
                             role="tab"
                             :aria-selected="tab === 'description'"
@@ -729,7 +731,7 @@
                     </button>
                 </div>
 
-                <div x-show="tab === 'description'" role="tabpanel">
+                <div x-show="pane === 'form' && tab === 'description'" role="tabpanel">
                     <label class="block">
                         <span class="sr-only">Description</span>
                         <textarea wire:model.live="feedbackDescription"
@@ -737,9 +739,14 @@
                                   class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
                                   placeholder="Write a description…"></textarea>
                     </label>
+                    <button type="button"
+                            x-on:click="pane = 'ideas'"
+                            class="mt-3 w-full rounded border border-white/15 bg-panel px-3 py-2 text-sm font-medium hover:border-link/40">
+                        View ideas by chapter
+                    </button>
                 </div>
 
-                <div x-show="tab === 'like'" role="tabpanel">
+                <div x-show="pane === 'form' && tab === 'like'" role="tabpanel">
                     <div class="space-y-2">
                         @forelse ($feedbackLikes as $i => $entry)
                             <div wire:key="feedback-like-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
@@ -767,7 +774,7 @@
                             title="Add like">+</button>
                 </div>
 
-                <div x-show="tab === 'dislike'" role="tabpanel">
+                <div x-show="pane === 'form' && tab === 'dislike'" role="tabpanel">
                     <div class="space-y-2">
                         @forelse ($feedbackDislikes as $i => $entry)
                             <div wire:key="feedback-dislike-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
@@ -793,6 +800,102 @@
                             class="mt-3 inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted hover:text-body"
                             aria-label="Add dislike"
                             title="Add dislike">+</button>
+                </div>
+
+
+                <div x-show="pane === 'ideas'" x-cloak>
+                    <button type="button"
+                            x-on:click="pane = 'form'; tab = 'description'"
+                            class="mb-4 text-sm text-link hover:opacity-80">
+                        ← Description
+                    </button>
+
+                    <div class="mb-3 flex flex-wrap items-center gap-1.5" x-data="{ addingSection: false, newTitle: '' }">
+                        @foreach ($feedbackChapters as $chapter)
+                            @php
+                                $ideaCount = collect($chapter['ideas'] ?? [])->filter(fn ($idea) => trim((string) ($idea['body'] ?? '')) !== '')->count();
+                            @endphp
+                            <button type="button"
+                                    wire:click="$set('feedbackChapterKey', @js($chapter['key']))"
+                                    @class([
+                                        'rounded-md border px-2 py-1 text-xs font-medium',
+                                        'border-link bg-link/10 text-body' => $feedbackChapterKey === $chapter['key'],
+                                        'border-white/10 text-muted hover:text-body' => $feedbackChapterKey !== $chapter['key'],
+                                    ])>
+                                {{ $chapter['title'] }}@if ($ideaCount > 0)<span class="text-muted"> ({{ $ideaCount }})</span>@endif
+                            </button>
+                        @endforeach
+                        <button type="button"
+                                x-show="! addingSection"
+                                x-on:click="addingSection = true; $nextTick(() => $refs.newSectionTitle.focus())"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded border border-white/10 text-sm leading-none text-muted hover:text-body"
+                                aria-label="Add section"
+                                title="Add section">+</button>
+                        <div x-show="addingSection" x-cloak class="flex items-center gap-1">
+                            <input type="text"
+                                   x-ref="newSectionTitle"
+                                   x-model="newTitle"
+                                   x-on:keydown.enter.prevent="if (newTitle.trim()) { $wire.addFeedbackSection(newTitle.trim()); newTitle = ''; addingSection = false; }"
+                                   x-on:keydown.escape.prevent="addingSection = false; newTitle = ''"
+                                   class="w-36 rounded border border-white/10 bg-panel px-2 py-1 text-xs text-body focus:border-link focus:outline-none"
+                                   placeholder="Section title" />
+                            <button type="button"
+                                    x-on:click="if (newTitle.trim()) { $wire.addFeedbackSection(newTitle.trim()); newTitle = ''; addingSection = false; }"
+                                    class="rounded border border-white/10 px-2 py-1 text-xs text-muted hover:text-body">Add</button>
+                        </div>
+                    </div>
+
+                    @foreach ($feedbackChapters as $chapterIndex => $chapter)
+                        @if ($feedbackChapterKey === $chapter['key'])
+                            <div wire:key="feedback-chapter-{{ $chapter['key'] }}">
+                                @if ($chapter['key'] !== 'general')
+                                    <div class="mb-3 flex items-center gap-2">
+                                        <label class="block min-w-0 flex-1">
+                                            <span class="sr-only">Section title</span>
+                                            <input type="text"
+                                                   wire:model.live="feedbackChapters.{{ $chapterIndex }}.title"
+                                                   class="w-full rounded border border-white/10 bg-panel px-3 py-1.5 text-sm text-body focus:border-link focus:outline-none" />
+                                        </label>
+                                        <button type="button"
+                                                @if (collect($chapter['ideas'] ?? [])->contains(fn ($idea) => trim((string) ($idea['body'] ?? '')) !== ''))
+                                                    x-on:click="if (confirm('Remove this section and its ideas?')) $wire.removeFeedbackSection(@js($chapter['key']))"
+                                                @else
+                                                    wire:click="removeFeedbackSection(@js($chapter['key']))"
+                                                @endif
+                                                class="rounded px-1 text-lg leading-none text-muted hover:text-red-400"
+                                                aria-label="Remove section"
+                                                title="Remove section">×</button>
+                                    </div>
+                                @endif
+
+                                <div class="space-y-2">
+                                    @forelse ($chapter['ideas'] as $ideaIndex => $idea)
+                                        <div wire:key="feedback-idea-{{ $chapter['key'] }}-{{ $idea['id'] ?? 'new-'.$ideaIndex }}" class="flex items-start gap-2">
+                                            <label class="block min-w-0 flex-1">
+                                                <span class="sr-only">Idea {{ $ideaIndex + 1 }}</span>
+                                                <textarea wire:model.live="feedbackChapters.{{ $chapterIndex }}.ideas.{{ $ideaIndex }}.body"
+                                                          rows="2"
+                                                          class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                                          placeholder="Write an idea…"></textarea>
+                                            </label>
+                                            <button type="button"
+                                                    wire:click="removeFeedbackIdea(@js($chapter['key']), {{ $ideaIndex }})"
+                                                    class="mt-1 rounded px-1 text-lg leading-none text-muted hover:text-red-400"
+                                                    aria-label="Remove idea"
+                                                    title="Remove">×</button>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-muted">No ideas yet.</p>
+                                    @endforelse
+                                </div>
+                                <button type="button"
+                                        wire:click="addFeedbackIdea(@js($chapter['key']))"
+                                        class="mt-3 inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-lg leading-none text-muted hover:text-body"
+                                        aria-label="Add idea"
+                                        title="Add idea">+</button>
+                            </div>
+                        @endif
+                    @endforeach
                 </div>
 
                 <div class="mt-4 flex justify-end">

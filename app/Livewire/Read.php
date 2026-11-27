@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Book;
 use App\Models\BookFeedbackEntry;
+use App\Models\BookFeedbackIdea;
 use App\Models\ReadingSession;
 use App\Support\Clock;
 use App\Support\Onboarding;
@@ -73,6 +74,13 @@ class Read extends Component
     public array $feedbackDislikes = [];
 
     public bool $feedbackDirty = false;
+
+    /** @var list<array{id: int|null, key: string, title: string, ideas: list<array{id: int|null, body: string}>}> */
+    public array $feedbackChapters = [];
+
+    public string $feedbackChapterKey = 'general';
+
+    public int $feedbackNewSectionSeq = 0;
 
     public function mount(?int $selectedBookId = null): void
     {
@@ -493,6 +501,9 @@ class Read extends Component
         $this->feedbackDescription = (string) ($book->feedback?->description ?? '');
         $this->feedbackLikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_LIKE);
         $this->feedbackDislikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_DISLIKE);
+        $this->feedbackChapters = $this->feedbackChapterPayloads($book);
+        $this->feedbackChapterKey = 'general';
+        $this->feedbackNewSectionSeq = 0;
         $this->feedbackDirty = false;
     }
 
@@ -504,6 +515,9 @@ class Read extends Component
         $this->feedbackDescription = '';
         $this->feedbackLikes = [];
         $this->feedbackDislikes = [];
+        $this->feedbackChapters = [];
+        $this->feedbackChapterKey = 'general';
+        $this->feedbackNewSectionSeq = 0;
         $this->feedbackDirty = false;
     }
 
@@ -549,6 +563,87 @@ class Read extends Component
         $this->feedbackDirty = true;
     }
 
+    public function addFeedbackSection(string $title = ''): void
+    {
+        if (! $this->feedbackOpen) {
+            return;
+        }
+
+        $title = trim($title);
+        if ($title === '') {
+            return;
+        }
+
+        $this->feedbackNewSectionSeq++;
+        $key = 'new-'.$this->feedbackNewSectionSeq;
+        $chapters = $this->feedbackChapters;
+        $chapters[] = [
+            'id' => null,
+            'key' => $key,
+            'title' => $title,
+            'ideas' => [],
+        ];
+        $this->feedbackChapters = $chapters;
+        $this->feedbackChapterKey = $key;
+        $this->feedbackDirty = true;
+    }
+
+    public function removeFeedbackSection(string $key): void
+    {
+        if (! $this->feedbackOpen || $key === 'general') {
+            return;
+        }
+
+        $index = $this->feedbackChapterIndex($key);
+        if ($index === null) {
+            return;
+        }
+
+        $chapters = $this->feedbackChapters;
+        array_splice($chapters, $index, 1);
+        $this->feedbackChapters = array_values($chapters);
+        if ($this->feedbackChapterKey === $key) {
+            $this->feedbackChapterKey = 'general';
+        }
+        $this->feedbackDirty = true;
+    }
+
+    public function addFeedbackIdea(?string $key = null): void
+    {
+        if (! $this->feedbackOpen) {
+            return;
+        }
+
+        $key = $key ?: $this->feedbackChapterKey;
+        $index = $this->feedbackChapterIndex($key);
+        if ($index === null) {
+            return;
+        }
+
+        $chapters = $this->feedbackChapters;
+        $chapters[$index]['ideas'][] = ['id' => null, 'body' => ''];
+        $this->feedbackChapters = $chapters;
+        $this->feedbackDirty = true;
+    }
+
+    public function removeFeedbackIdea(string $key, int $ideaIndex): void
+    {
+        if (! $this->feedbackOpen) {
+            return;
+        }
+
+        $index = $this->feedbackChapterIndex($key);
+        if ($index === null || ! array_key_exists($ideaIndex, $this->feedbackChapters[$index]['ideas'] ?? [])) {
+            return;
+        }
+
+        $chapters = $this->feedbackChapters;
+        array_splice($chapters[$index]['ideas'], $ideaIndex, 1);
+        $chapters[$index]['ideas'] = array_values($chapters[$index]['ideas']);
+        $this->feedbackChapters = $chapters;
+        $this->feedbackDirty = true;
+    }
+
     public function saveFeedback(): void
     {
         if ($this->feedbackBookId === null) {
@@ -563,8 +658,17 @@ class Read extends Component
         $description = trim($this->feedbackDescription);
         $likes = $this->normalizedFeedbackEntries($this->feedbackLikes);
         $dislikes = $this->normalizedFeedbackEntries($this->feedbackDislikes);
+        $chapters = $this->normalizedFeedbackChapters();
+        $hasIdeas = collect($chapters)->contains(
+            fn (array $chapter) => $chapter['ideas'] !== []
+        );
+        $hasSections = collect($chapters)->contains(
+            fn (array $chapter) => $chapter['key'] !== 'general'
+        );
 
-        if ($description === '' && $likes === [] && $dislikes === []) {
+        if ($description === '' && $likes === [] && $dislikes === [] && ! $hasIdeas && ! $hasSections) {
+            $book->feedbackIdeas()->delete();
+            $book->feedbackSections()->delete();
             $book->feedbackEntries()->delete();
             $book->feedback()->delete();
         } else {
@@ -574,13 +678,20 @@ class Read extends Component
             );
             $this->syncFeedbackEntries($book, BookFeedbackEntry::KIND_LIKE, $likes);
             $this->syncFeedbackEntries($book, BookFeedbackEntry::KIND_DISLIKE, $dislikes);
+            $this->syncFeedbackChapters($book, $chapters);
         }
 
+        $previousKey = $this->feedbackChapterKey;
+        $previousTitle = $this->feedbackChapterTitle($previousKey);
         $book->unsetRelation('feedback');
         $book->unsetRelation('feedbackEntries');
+        $book->unsetRelation('feedbackSections');
+        $book->unsetRelation('feedbackIdeas');
         $this->feedbackDescription = (string) ($book->feedback?->description ?? '');
         $this->feedbackLikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_LIKE);
         $this->feedbackDislikes = $this->feedbackEntryPayloads($book, BookFeedbackEntry::KIND_DISLIKE);
+        $this->feedbackChapters = $this->feedbackChapterPayloads($book);
+        $this->feedbackChapterKey = $this->resolvedFeedbackChapterKey($previousKey, $previousTitle);
         $this->feedbackDirty = false;
         $this->dispatch('book-feedback-saved');
     }
@@ -596,6 +707,11 @@ class Read extends Component
     }
 
     public function updatedFeedbackDislikes(): void
+    {
+        $this->feedbackDirty = true;
+    }
+
+    public function updatedFeedbackChapters(): void
     {
         $this->feedbackDirty = true;
     }
@@ -675,6 +791,199 @@ class Read extends Component
         $query->delete();
     }
 
+    /**
+     * @return list<array{id: int|null, key: string, title: string, ideas: list<array{id: int|null, body: string}>}>
+     */
+    private function feedbackChapterPayloads(Book $book): array
+    {
+        $book->loadMissing(['feedbackSections', 'feedbackIdeas']);
+
+        $ideas = $book->feedbackIdeas->groupBy(
+            fn (BookFeedbackIdea $idea) => $idea->section_id === null ? 'general' : 'sec-'.$idea->section_id
+        );
+
+        $chapters = [[
+            'id' => null,
+            'key' => 'general',
+            'title' => 'General',
+            'ideas' => $this->feedbackIdeaPayloads($ideas->get('general', collect())),
+        ]];
+
+        foreach ($book->feedbackSections as $section) {
+            $key = 'sec-'.$section->id;
+            $chapters[] = [
+                'id' => $section->id,
+                'key' => $key,
+                'title' => $section->title,
+                'ideas' => $this->feedbackIdeaPayloads($ideas->get($key, collect())),
+            ];
+        }
+
+        return $chapters;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, BookFeedbackIdea>  $ideas
+     * @return list<array{id: int|null, body: string}>
+     */
+    private function feedbackIdeaPayloads($ideas): array
+    {
+        return $ideas
+            ->sortBy([
+                fn (BookFeedbackIdea $idea) => $idea->position,
+                fn (BookFeedbackIdea $idea) => $idea->id,
+            ])
+            ->values()
+            ->map(fn (BookFeedbackIdea $idea) => [
+                'id' => $idea->id,
+                'body' => $idea->body,
+            ])
+            ->all();
+    }
+
+    /**
+     * @return list<array{id: int|null, key: string, title: string, ideas: list<array{id: int|null, body: string}>}>
+     */
+    private function normalizedFeedbackChapters(): array
+    {
+        $normalized = [];
+
+        foreach ($this->feedbackChapters as $chapter) {
+            $key = (string) ($chapter['key'] ?? '');
+            $ideas = $this->normalizedFeedbackEntries($chapter['ideas'] ?? []);
+            if ($key === 'general') {
+                $normalized[] = [
+                    'id' => null,
+                    'key' => 'general',
+                    'title' => 'General',
+                    'ideas' => $ideas,
+                ];
+                continue;
+            }
+
+            $title = trim((string) ($chapter['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+
+            $id = $chapter['id'] ?? null;
+            $normalized[] = [
+                'id' => $id !== null && $id !== '' ? (int) $id : null,
+                'key' => $key,
+                'title' => $title,
+                'ideas' => $ideas,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  list<array{id: int|null, key: string, title: string, ideas: list<array{id: int|null, body: string}>}>  $chapters
+     */
+    private function syncFeedbackChapters(Book $book, array $chapters): void
+    {
+        $keepSectionIds = [];
+        $keepIdeaIds = [];
+        $sectionPosition = 1;
+
+        foreach ($chapters as $chapter) {
+            $sectionId = null;
+            if ($chapter['key'] !== 'general') {
+                $section = null;
+                if ($chapter['id'] !== null) {
+                    $section = $book->feedbackSections()->whereKey($chapter['id'])->first();
+                }
+                if ($section) {
+                    $section->update([
+                        'title' => $chapter['title'],
+                        'position' => $sectionPosition,
+                    ]);
+                } else {
+                    $section = $book->feedbackSections()->create([
+                        'title' => $chapter['title'],
+                        'position' => $sectionPosition,
+                    ]);
+                }
+                $keepSectionIds[] = $section->id;
+                $sectionId = $section->id;
+                $sectionPosition++;
+            }
+
+            foreach (array_values($chapter['ideas']) as $index => $idea) {
+                $model = null;
+                if ($idea['id'] !== null) {
+                    $model = $book->feedbackIdeas()->whereKey($idea['id'])->first();
+                }
+                $payload = [
+                    'section_id' => $sectionId,
+                    'body' => $idea['body'],
+                    'position' => $index + 1,
+                ];
+                if ($model) {
+                    $model->update($payload);
+                } else {
+                    $model = $book->feedbackIdeas()->create($payload);
+                }
+                $keepIdeaIds[] = $model->id;
+            }
+        }
+
+        $ideaQuery = $book->feedbackIdeas();
+        if ($keepIdeaIds !== []) {
+            $ideaQuery->whereNotIn('id', $keepIdeaIds);
+        }
+        $ideaQuery->delete();
+
+        $sectionQuery = $book->feedbackSections();
+        if ($keepSectionIds !== []) {
+            $sectionQuery->whereNotIn('id', $keepSectionIds);
+        }
+        $sectionQuery->delete();
+    }
+
+    private function feedbackChapterIndex(string $key): ?int
+    {
+        foreach ($this->feedbackChapters as $index => $chapter) {
+            if (($chapter['key'] ?? null) === $key) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    private function feedbackChapterTitle(string $key): ?string
+    {
+        $index = $this->feedbackChapterIndex($key);
+        if ($index === null) {
+            return null;
+        }
+
+        $title = trim((string) ($this->feedbackChapters[$index]['title'] ?? ''));
+
+        return $title !== '' ? $title : null;
+    }
+
+    private function resolvedFeedbackChapterKey(string $previousKey, ?string $previousTitle): string
+    {
+        foreach ($this->feedbackChapters as $chapter) {
+            if (($chapter['key'] ?? null) === $previousKey) {
+                return $previousKey;
+            }
+        }
+
+        if ($previousKey !== 'general' && $previousTitle !== null) {
+            foreach ($this->feedbackChapters as $chapter) {
+                if (($chapter['key'] ?? null) !== 'general' && ($chapter['title'] ?? null) === $previousTitle) {
+                    return (string) $chapter['key'];
+                }
+            }
+        }
+
+        return 'general';
+    }
+
     public function openBookStats(int $id): void
     {
         $this->dispatch('open-book-stats', id: $id);
@@ -684,7 +993,7 @@ class Read extends Component
     {
         $all = $this->catalog()
             ->withCount('readingSessions')
-            ->with(['latestSession', 'earliestSession', 'feedback', 'feedbackEntries', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
+            ->with(['latestSession', 'earliestSession', 'feedback', 'feedbackEntries', 'feedbackSections', 'feedbackIdeas', 'readingSessions' => fn ($q) => $q->whereNull('finished_at')])
             ->orderBy('position')
             ->orderBy('id')
             ->get();

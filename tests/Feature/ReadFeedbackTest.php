@@ -46,15 +46,13 @@ class ReadFeedbackTest extends TestCase
 
         Livewire::test(Read::class, ['selectedBookId' => $openBook->id])
             ->assertSee("Mark as 'finished'", false)
-            ->assertSee('Give feedback')
-            ->assertDontSee('View feedback')
+            ->assertSee('Takeaways')
             ->assertSeeHtml('read-feedback-btn-outline')
             ->assertSeeHtml('col-span-2 sm:col-span-4')
             ->assertDontSeeHtml('hover:brightness-105');
 
         Livewire::test(Read::class, ['selectedBookId' => $finishedBook->id])
-            ->assertSee('Give feedback')
-            ->assertDontSee('View feedback')
+            ->assertSee('Takeaways')
             ->assertSeeHtml('hover:brightness-105')
             ->assertSeeHtml('col-span-2 sm:col-span-4')
             ->assertDontSeeHtml('read-feedback-btn-outline')
@@ -62,25 +60,25 @@ class ReadFeedbackTest extends TestCase
             ->assertSee('Mark as unfinished');
 
         Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE, 'selectedBookId' => $openArticle->id])
-            ->assertDontSee('Give feedback')
+            ->assertDontSee('Takeaways')
             ->assertDontSeeHtml('read-feedback-btn-outline');
 
         Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE, 'selectedBookId' => $finishedArticle->id])
-            ->assertSee('Give feedback')
+            ->assertSee('Takeaways')
             ->assertSeeHtml('hover:brightness-105')
             ->assertDontSeeHtml('read-feedback-btn-outline');
     }
 
-    public function test_saving_description_likes_and_dislikes_switches_the_label(): void
+    public function test_saving_description_likes_and_dislikes_persists(): void
     {
         $book = $this->book(['title' => 'Atomic Habits']);
 
         $component = Livewire::test(Read::class, ['selectedBookId' => $book->id])
-            ->assertSee('Give feedback')
+            ->assertSee('Takeaways')
             ->call('openFeedback', $book->id)
             ->assertSet('feedbackOpen', true)
             ->assertSet('feedbackIdeasOnly', false)
-            ->assertSee('Feedback · Atomic Habits', false)
+            ->assertSee('Takeaways · Atomic Habits', false)
             ->assertSee('Ideas')
             ->assertSee('Likes')
             ->assertSee('Dislikes')
@@ -97,8 +95,7 @@ class ReadFeedbackTest extends TestCase
             ->call('saveFeedback')
             ->assertDispatched('book-feedback-saved')
             ->assertSet('feedbackDirty', false)
-            ->assertSee('View feedback')
-            ->assertDontSee('Give feedback');
+            ->assertSee('Takeaways');
 
         $this->assertDatabaseHas('book_feedback', [
             'book_id' => $book->id,
@@ -128,7 +125,7 @@ class ReadFeedbackTest extends TestCase
             ->set('feedbackDescription', 'Useful overview.')
             ->call('saveFeedback')
             ->assertDispatched('book-feedback-saved')
-            ->assertSee('View feedback');
+            ->assertSee('Takeaways');
     }
 
     public function test_unfinished_books_open_ideas_by_chapter_only(): void
@@ -139,12 +136,12 @@ class ReadFeedbackTest extends TestCase
         ]);
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
-            ->assertSee('Give feedback')
+            ->assertSee('Takeaways')
             ->call('openFeedback', $book->id)
             ->assertSet('feedbackOpen', true)
             ->assertSet('feedbackIdeasOnly', true)
             ->assertSee('Ideas by chapter')
-            ->assertDontSee('Feedback · Open Book', false)
+            ->assertDontSee('Takeaways · Open Book', false)
             ->assertDontSee('← Back to Ideas', false)
             ->assertDontSee('View ideas by chapter')
             ->assertDontSee('Likes')
@@ -160,8 +157,7 @@ class ReadFeedbackTest extends TestCase
             ->call('saveFeedback')
             ->assertDispatched('book-feedback-saved')
             ->assertSet('feedbackDirty', false)
-            ->assertSee('View feedback')
-            ->assertDontSee('Give feedback');
+            ->assertSee('Takeaways');
 
         $this->assertDatabaseHas('book_feedback_ideas', [
             'book_id' => $book->id,
@@ -192,8 +188,7 @@ class ReadFeedbackTest extends TestCase
         ]);
 
         Livewire::test(Read::class, ['selectedBookId' => $book->id])
-            ->assertSee('Give feedback')
-            ->assertDontSee('View feedback')
+            ->assertSee('Takeaways')
             ->call('openFeedback', $book->id)
             ->assertSet('feedbackIdeasOnly', true)
             ->assertSet('feedbackDescription', 'Keep me')
@@ -229,7 +224,7 @@ class ReadFeedbackTest extends TestCase
         ]);
 
         Livewire::test(Read::class, ['kind' => Book::KIND_ARTICLE, 'selectedBookId' => $article->id])
-            ->assertDontSee('Give feedback')
+            ->assertDontSee('Takeaways')
             ->call('openFeedback', $article->id)
             ->assertSet('feedbackOpen', false);
 
@@ -247,8 +242,7 @@ class ReadFeedbackTest extends TestCase
             ->set('feedbackLikes.0.body', '   ')
             ->call('saveFeedback')
             ->assertDispatched('book-feedback-saved')
-            ->assertSee('Give feedback')
-            ->assertDontSee('View feedback');
+            ->assertSee('Takeaways');
 
         $this->assertDatabaseCount('book_feedback', 0);
         $this->assertDatabaseCount('book_feedback_entries', 0);

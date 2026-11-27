@@ -357,13 +357,13 @@
                     <button type="button"
                             wire:click="openFeedback({{ $selected->id }})"
                             class="read-feedback-btn col-span-2 sm:col-span-4 rounded px-3 py-2 text-sm font-semibold hover:brightness-105">
-                        {{ $selected->hasFeedback() ? 'View feedback' : 'Give feedback' }}
+                        Takeaways
                     </button>
                 @elseif (! $selected->isArticle())
                     <button type="button"
                             wire:click="openFeedback({{ $selected->id }})"
                             class="read-feedback-btn-outline col-span-2 sm:col-span-4 rounded px-3 py-2 text-sm font-semibold">
-                        {{ $selected->hasChapterIdeas() ? 'View feedback' : 'Give feedback' }}
+                        Takeaways
                     </button>
                 @endif
                 </div>
@@ -723,7 +723,7 @@
                         @if ($feedbackIdeasOnly)
                             Ideas by chapter
                         @else
-                            Feedback · {{ $feedbackBookTitle }}
+                            Takeaways · {{ $feedbackBookTitle }}
                         @endif
                     </h2>
                     <button type="button"

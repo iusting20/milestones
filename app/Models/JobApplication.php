@@ -59,6 +59,30 @@ class JobApplication extends Model
         return JobApplicationWriter::canonical((string) $this->status, ['closed']) !== null;
     }
 
+    /** direct, agency, or upwork. Upwork wins; a named source is a recruiter or board; otherwise direct. */
+    public function channel(): string
+    {
+        $haystack = mb_strtolower(trim(($this->source ?? '').' '.($this->link ?? '')));
+        if (str_contains($haystack, 'upwork')) {
+            return 'upwork';
+        }
+        if (filled($this->source)) {
+            return 'agency';
+        }
+
+        return 'direct';
+    }
+
+    /** They replied, and the role is not closed or already decided. */
+    public function isInDiscussion(): bool
+    {
+        if ($this->isClosed() || ! $this->has_reply) {
+            return false;
+        }
+
+        return JobApplicationWriter::canonical((string) $this->status, ['Rejected', 'Offer']) === null;
+    }
+
     public function threadsUrl(): string
     {
         return route('jobs.threads', [
@@ -86,5 +110,36 @@ class JobApplication extends Model
         }
 
         return $this->date_applied ? 'Applied' : JobApplicationWriter::DEFAULT_STATUS;
+    }
+
+    /** Same-origin avatar URL. The PNG is fetched once and cached under storage/app/private/avatars. */
+    public function avatarUrl(): string
+    {
+        return route('jobs.avatar', [
+            'token' => config('jobs.page_token'),
+            'application' => $this,
+        ]);
+    }
+
+    /**
+     * Upstream DiceBear Micah Bare PNG. Seed alone varies the face; only the mouth list
+     * is constrained so sad / frown / nervous stay out.
+     */
+    public function dicebearSourceUrl(): string
+    {
+        return 'https://api.dicebear.com/9.x/micah/png?'.http_build_query([
+            'seed' => 'job-'.$this->id,
+            'size' => 256,
+            'radius' => 0,
+            'earringsProbability' => 0,
+            'glassesProbability' => 0,
+            'facialHairProbability' => 0,
+            'mouth' => 'surprised,laughing,smile,pucker,smirk',
+        ]);
+    }
+
+    public function avatarCachePath(): string
+    {
+        return 'avatars/job-'.$this->id.'-256.png';
     }
 }

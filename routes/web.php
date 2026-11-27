@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ImpactMapController;
+use App\Http\Controllers\JobApplicationAvatarController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\ActivityStats;
 use App\Livewire\BacklogDripMatrix;
@@ -53,6 +54,10 @@ if (filled(config('jobs.page_token'))) {
         ->where('token', preg_quote((string) config('jobs.page_token'), '/'))
         ->whereNumber('application')
         ->name('jobs.threads');
+    Route::get('/x/{token}/{application}/avatar', JobApplicationAvatarController::class)
+        ->where('token', preg_quote((string) config('jobs.page_token'), '/'))
+        ->whereNumber('application')
+        ->name('jobs.avatar');
 }
 
 Route::redirect('/links', '/links/partners');

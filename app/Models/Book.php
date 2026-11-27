@@ -25,6 +25,7 @@ class Book extends Model
         'total_pages',
         'status',
         'position',
+        'is_delimiter',
         'type',
         'kind',
         'started_on',
@@ -35,6 +36,7 @@ class Book extends Model
         return [
             'total_pages' => 'integer',
             'position' => 'integer',
+            'is_delimiter' => 'boolean',
             'started_on' => 'date',
         ];
     }
@@ -120,6 +122,11 @@ class Book extends Model
     public function isFinished(): bool
     {
         return $this->status === self::STATUS_FINISHED;
+    }
+
+    public function isDelimiter(): bool
+    {
+        return (bool) $this->is_delimiter;
     }
 
     public function isArticle(): bool

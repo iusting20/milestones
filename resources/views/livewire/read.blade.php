@@ -45,34 +45,51 @@
 
         <ul class="space-y-1" x-data="bookSortList()">
             @forelse ($books as $book)
-                <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" class="relative">
-                    <span data-drag-handle aria-label="Drag to reorder"
-                          class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-center text-faint hover:text-muted"
-                          style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
-                        @include('livewire.partials.drag-handle')
-                    </span>
-                    <button type="button" wire:click="selectBook({{ $book->id }})"
-                            @class([
-                                'flex w-full items-center gap-3 rounded border py-2 pl-3 pr-10 text-left text-sm transition',
-                                'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
-                                'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
-                            ])>
-                        <span class="flex min-w-0 flex-1 flex-col">
-                        <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->showsStartedGlyphToday(), 'finished' => false])</span>
-                        <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
-                            @if ($book->author)
-                                <span>{{ $book->author }}</span>
-                            @endif
-                            @if ($book->readingSessions->isNotEmpty())
-                                <span class="text-mark">● live</span>
-                            @endif
+                @if ($book->isDelimiter())
+                    <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" data-book-break
+                        class="group/break relative flex min-h-4 items-center gap-1 pr-10">
+                        <button type="button"
+                                wire:click="deleteBook({{ $book->id }})"
+                                wire:confirm="Remove this delimiter?"
+                                class="shrink-0 px-1 text-[10px] leading-none text-muted/40 opacity-0 transition hover:text-red-400 group-hover/break:opacity-100"
+                                aria-label="Remove delimiter">x</button>
+                        <span class="block h-4 flex-1" aria-hidden="true" role="separator"></span>
+                        <span data-drag-handle aria-label="Drag delimiter"
+                              class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-center text-faint hover:text-muted"
+                              style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
+                            @include('livewire.partials.drag-handle')
                         </span>
+                    </li>
+                @else
+                    <li wire:key="book-{{ $book->id }}" data-sort-item="{{ $book->id }}" class="relative">
+                        <span data-drag-handle aria-label="Drag to reorder"
+                              class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-center text-faint hover:text-muted"
+                              style="cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
+                            @include('livewire.partials.drag-handle')
                         </span>
-                        @if ($book->type)
-                            <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
-                        @endif
-                    </button>
-                </li>
+                        <button type="button" wire:click="selectBook({{ $book->id }})"
+                                @class([
+                                    'flex w-full items-center gap-3 rounded border py-2 pl-3 pr-10 text-left text-sm transition',
+                                    'border-link/40 bg-panel text-body' => $selected?->id === $book->id,
+                                    'border-white/10 bg-sidebar text-muted hover:text-body' => $selected?->id !== $book->id,
+                                ])>
+                            <span class="flex min-w-0 flex-1 flex-col">
+                            <span class="text-base font-semibold leading-snug text-body">@include('livewire.partials.read-item-name', ['title' => $book->title, 'startedToday' => $book->showsStartedGlyphToday(), 'finished' => false])</span>
+                            <span class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-x-2 text-[11px]">
+                                @if ($book->author)
+                                    <span>{{ $book->author }}</span>
+                                @endif
+                                @if ($book->readingSessions->isNotEmpty())
+                                    <span class="text-mark">● live</span>
+                                @endif
+                            </span>
+                            </span>
+                            @if ($book->type)
+                                <span class="shrink-0 text-lg font-semibold text-link">{{ $book->type }}</span>
+                            @endif
+                        </button>
+                    </li>
+                @endif
             @empty
                 <li class="rounded border border-dashed border-white/15 px-3 py-6 text-center text-sm text-muted">
                     @if ($finishedBooks->isNotEmpty())
@@ -83,6 +100,18 @@
                 </li>
             @endforelse
         </ul>
+        <div class="mt-2 flex items-center justify-end gap-3">
+            @unless ($isArticles)
+                <button type="button"
+                        wire:click="sortBooksByType"
+                        class="text-[10px] leading-none tracking-widest text-muted/40 transition hover:text-link"
+                        aria-label="Sort books by type A, B, and C"
+                        title="Sort by type A, then B, then C">A/B/C</button>
+            @endunless
+            <button type="button" wire:click="addDelimiter"
+                    class="text-[10px] leading-none tracking-widest text-muted/40 transition hover:text-link"
+                    aria-label="Add delimiter">---</button>
+        </div>
         <script>
             function bookSortList() {
                 return {
@@ -622,6 +651,7 @@
         }
     </script>
     <livewire:read-book-stats-modal />
+
     @if ($feedbackOpen)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              x-data="{

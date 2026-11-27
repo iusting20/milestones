@@ -161,6 +161,7 @@ class ActivityStats extends Component
     {
         Book::query()
             ->where('kind', Book::KIND_BOOK)
+            ->where('is_delimiter', false)
             ->where('status', Book::STATUS_FINISHED)
             ->with(['readingSessions' => fn ($query) => $query->whereNotNull('finished_at')->orderByDesc('finished_at')])
             ->get()

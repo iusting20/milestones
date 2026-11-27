@@ -101,10 +101,44 @@ class Read extends Component
 
     public function selectBook(int $id): void
     {
-        $this->findBook($id);
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $this->selectedBookId = $id;
         $this->cancelForms();
         $this->closeFeedback();
+    }
+
+    public function addDelimiter(): void
+    {
+        $open = $this->openItems();
+        if ($open->isEmpty()) {
+            return;
+        }
+
+        if ($open->count() === 1) {
+            $insertAt = (int) $open->first()->position;
+        } else {
+            $selectedIndex = $open->values()->search(
+                fn (Book $book) => $book->id === $this->selectedBookId && ! $book->isDelimiter()
+            );
+            if ($selectedIndex !== false && $selectedIndex < $open->count() - 1) {
+                $insertAt = (int) $open[$selectedIndex]->position + 1;
+            } else {
+                $insertAt = (int) $open->last()->position;
+            }
+        }
+
+        $this->catalog()->where('position', '>=', $insertAt)->increment('position');
+        $this->createDelimiter($insertAt);
+
+        $this->addingBook = false;
+        $this->newBookTitle = '';
+        $this->newBookAuthor = '';
+        $this->newBookTotalPages = '';
+        $this->pruneTrailingDelimiters();
     }
 
     public function startAddBook(): void
@@ -157,11 +191,16 @@ class Read extends Component
         $this->newBookAuthor = '';
         $this->newBookTotalPages = '';
         $this->selectedBookId = $book->id;
+        $this->pruneTrailingDelimiters();
     }
 
     public function startEditBook(int $id): void
     {
         $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $this->cancelForms();
         $this->editingBookId = $book->id;
         $this->editBookTitle = $book->title;
@@ -206,28 +245,46 @@ class Read extends Component
         ]);
 
         $this->editingBookId = null;
+        $this->pruneTrailingDelimiters();
     }
 
     public function markBookFinished(int $id): void
     {
-        $this->findBook($id)->update(['status' => Book::STATUS_FINISHED]);
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
+        $book->update(['status' => Book::STATUS_FINISHED]);
+        $this->pruneTrailingDelimiters();
     }
 
     public function markBookReading(int $id): void
     {
-        $this->findBook($id)->update(['status' => Book::STATUS_READING]);
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
+        $book->update(['status' => Book::STATUS_READING]);
         $this->closeFeedback();
+        $this->pruneTrailingDelimiters();
     }
 
     public function markStartedToday(int $id): void
     {
-        $this->findBook($id)->update(['started_on' => Clock::todayString()]);
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
+        $book->update(['started_on' => Clock::todayString()]);
     }
 
     public function clearStartedToday(int $id): void
     {
         $book = $this->findBook($id);
-        if (! $book->isStartedToday()) {
+        if ($book->isDelimiter() || ! $book->isStartedToday()) {
             return;
         }
 
@@ -241,11 +298,16 @@ class Read extends Component
         $book->delete();
 
         if ($wasSelected) {
-            $this->selectedBookId = $this->catalog()->orderBy('position')->orderBy('id')->value('id');
+            $this->selectedBookId = $this->catalog()
+                ->where('is_delimiter', false)
+                ->orderBy('position')
+                ->orderBy('id')
+                ->value('id');
             $this->selectedBookId = $this->selectedBookId ? (int) $this->selectedBookId : null;
         }
 
         $this->cancelForms();
+        $this->pruneTrailingDelimiters();
     }
 
     public function startAddSession(): void
@@ -254,7 +316,11 @@ class Read extends Component
             return;
         }
 
-        $this->findBook($this->selectedBookId);
+        $book = $this->findBook($this->selectedBookId);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $this->cancelForms();
         $this->addingSession = true;
 
@@ -272,6 +338,10 @@ class Read extends Component
         }
 
         $book = $this->findBook($this->selectedBookId);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $started = $this->parseDateTimeLocal($this->newSessionStartedAt, 'newSessionStartedAt');
         $finished = $this->parseDateTimeLocal($this->newSessionFinishedAt, 'newSessionFinishedAt');
 
@@ -309,6 +379,9 @@ class Read extends Component
         }
 
         $book = $this->findBook($this->selectedBookId);
+        if ($book->isDelimiter()) {
+            return;
+        }
 
         if ($this->runningSessionFor($book->id)) {
             return;
@@ -986,6 +1059,11 @@ class Read extends Component
 
     public function openBookStats(int $id): void
     {
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $this->dispatch('open-book-stats', id: $id);
     }
 
@@ -998,9 +1076,9 @@ class Read extends Component
             ->orderBy('id')
             ->get();
 
-        $books = $all->reject(fn (Book $book) => $book->isFinished())->values();
-        $finishedBooks = $all->filter(fn (Book $book) => $book->isFinished())->values();
-        $selected = $all->firstWhere('id', $this->selectedBookId);
+        $books = $all->reject(fn (Book $book) => $book->isFinished() && ! $book->isDelimiter())->values();
+        $finishedBooks = $all->filter(fn (Book $book) => $book->isFinished() && ! $book->isDelimiter())->values();
+        $selected = $all->first(fn (Book $book) => $book->id === $this->selectedBookId && ! $book->isDelimiter());
 
         $sessions = collect();
         $bookTotals = [
@@ -1143,21 +1221,118 @@ class Read extends Component
             return;
         }
 
+        $book = $this->findBook($id);
+        if ($book->isDelimiter()) {
+            return;
+        }
+
         $type = $type === null || $type === '' ? null : strtoupper($type);
         if ($type !== null && ! in_array($type, self::BOOK_TYPES, true)) {
             return;
         }
-        $this->findBook($id)->update(['type' => $type]);
+        $book->update(['type' => $type]);
     }
 
     public function reorderBooks(array $ids): void
     {
         $ids = array_values(array_unique(array_map(intval(...), $ids)));
-        if ($ids === [] || $this->catalog()->where('status', '!=', Book::STATUS_FINISHED)->whereIn('id', $ids)->count() !== count($ids)) {
+        if ($ids === [] || $this->openCatalog()->whereIn('id', $ids)->count() !== count($ids)) {
             return;
         }
         foreach ($ids as $i => $id) {
             $this->catalog()->whereKey($id)->update(['position' => $i + 1]);
+        }
+
+        $this->pruneTrailingDelimiters();
+    }
+
+    public function sortBooksByType(): void
+    {
+        if ($this->isArticles()) {
+            return;
+        }
+
+        $open = $this->openItems();
+        $delimiters = $open->filter(fn (Book $book) => $book->isDelimiter())->values();
+        $items = $open->reject(fn (Book $book) => $book->isDelimiter())->values();
+
+        $groups = [];
+        foreach (self::BOOK_TYPES as $type) {
+            $groups[$type] = $items->filter(fn (Book $book) => $book->type === $type)->values();
+        }
+        $ungrouped = $items->reject(
+            fn (Book $book) => in_array($book->type, self::BOOK_TYPES, true)
+        )->values();
+
+        $ordered = collect();
+        $typedGroups = array_values(array_filter($groups, fn ($group) => $group->isNotEmpty()));
+        foreach ($typedGroups as $index => $group) {
+            if ($index > 0) {
+                $ordered->push(null);
+            }
+            foreach ($group as $book) {
+                $ordered->push($book);
+            }
+        }
+        foreach ($ungrouped as $book) {
+            $ordered->push($book);
+        }
+
+        $dividerCount = $ordered->filter(fn ($item) => $item === null)->count();
+        while ($delimiters->count() < $dividerCount) {
+            $delimiters->push($this->createDelimiter(0));
+        }
+        foreach ($delimiters->slice($dividerCount) as $extra) {
+            $extra->delete();
+        }
+        $delimiters = $delimiters->take($dividerCount)->values();
+
+        $dividerIndex = 0;
+        $position = 1;
+        foreach ($ordered as $item) {
+            if ($item === null) {
+                $delimiters[$dividerIndex]->update(['position' => $position]);
+                $dividerIndex++;
+            } else {
+                $item->update(['position' => $position]);
+            }
+            $position++;
+        }
+
+        $this->pruneTrailingDelimiters();
+    }
+
+    private function openCatalog()
+    {
+        return $this->catalog()->where(function ($query): void {
+            $query->where('is_delimiter', true)
+                ->orWhere('status', '!=', Book::STATUS_FINISHED);
+        });
+    }
+
+    private function openItems()
+    {
+        return $this->openCatalog()->orderBy('position')->orderBy('id')->get()->values();
+    }
+
+    private function createDelimiter(int $position): Book
+    {
+        return $this->catalog()->create([
+            'title' => '',
+            'author' => null,
+            'total_pages' => null,
+            'status' => Book::STATUS_READING,
+            'position' => $position,
+            'is_delimiter' => true,
+            'kind' => $this->kind,
+        ]);
+    }
+
+    private function pruneTrailingDelimiters(): void
+    {
+        $open = $this->openItems();
+        while ($open->isNotEmpty() && $open->last()->isDelimiter()) {
+            $open->pop()->delete();
         }
     }
 

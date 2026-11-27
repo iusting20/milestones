@@ -34,7 +34,7 @@ class ReadFeedbackIdeasTest extends TestCase
             ->assertSeeHtml('w-full')
             ->assertSet('feedbackChapterKey', 'general')
             ->assertSee('General')
-            ->assertSee('← Description', false)
+            ->assertSee('← Back to Ideas', false)
             ->assertDontSeeHtml('autofocus');
     }
 

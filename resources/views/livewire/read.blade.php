@@ -703,7 +703,7 @@
                             <path d="M8 1.8A4.2 4.2 0 0 0 5.2 8c.3.6.8 1.1 1.1 1.7.2.4.2.8.2 1.2h3c0-.4 0-.8.2-1.2.3-.6.8-1.1 1.1-1.7A4.2 4.2 0 0 0 8 1.8Z" stroke-linejoin="round"/>
                             <path d="M6.5 12.8h3M7 14.2h2" stroke-linecap="round"/>
                         </svg>
-                        Description
+                        Ideas
                     </button>
                     <button type="button"
                             role="tab"
@@ -715,7 +715,7 @@
                             <path d="M5.2 7.2v6.3H3.4A1.2 1.2 0 0 1 2.2 12.3V8.4A1.2 1.2 0 0 1 3.4 7.2h1.8Z" stroke-linejoin="round"/>
                             <path d="M5.2 7.2 7 3.4c.3-.6.9-.9 1.5-.8.7.1 1.2.7 1.2 1.4V6h3c.8 0 1.4.7 1.3 1.5l-.7 5.2a1.3 1.3 0 0 1-1.3 1.1H5.2" stroke-linejoin="round" stroke-linecap="round"/>
                         </svg>
-                        Like
+                        Likes
                     </button>
                     <button type="button"
                             role="tab"
@@ -727,17 +727,17 @@
                             <path d="M5.2 8.8V2.5H3.4A1.2 1.2 0 0 0 2.2 3.7v3.9A1.2 1.2 0 0 0 3.4 8.8h1.8Z" stroke-linejoin="round"/>
                             <path d="M5.2 8.8 7 12.6c.3.6.9.9 1.5.8.7-.1 1.2-.7 1.2-1.4V10h3c.8 0 1.4-.7 1.3-1.5l-.7-5.2A1.3 1.3 0 0 0 12 2.2H5.2" stroke-linejoin="round" stroke-linecap="round"/>
                         </svg>
-                        Dislike
+                        Dislikes
                     </button>
                 </div>
 
                 <div x-show="pane === 'form' && tab === 'description'" role="tabpanel">
                     <label class="block">
-                        <span class="sr-only">Description</span>
+                        <span class="sr-only">Ideas</span>
                         <textarea wire:model.live="feedbackDescription"
                                   rows="3"
                                   class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
-                                  placeholder="Write a description…"></textarea>
+                                  placeholder="Write your ideas…"></textarea>
                     </label>
                     <button type="button"
                             x-on:click="pane = 'ideas'"
@@ -751,7 +751,7 @@
                         @forelse ($feedbackLikes as $i => $entry)
                             <div wire:key="feedback-like-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
                                 <label class="block min-w-0 flex-1">
-                                    <span class="sr-only">Like {{ $i + 1 }}</span>
+                                    <span class="sr-only">Likes entry {{ $i + 1 }}</span>
                                     <textarea wire:model.live="feedbackLikes.{{ $i }}.body"
                                               rows="2"
                                               class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
@@ -779,7 +779,7 @@
                         @forelse ($feedbackDislikes as $i => $entry)
                             <div wire:key="feedback-dislike-{{ $entry['id'] ?? 'new-'.$i }}" class="flex items-start gap-2">
                                 <label class="block min-w-0 flex-1">
-                                    <span class="sr-only">Dislike {{ $i + 1 }}</span>
+                                    <span class="sr-only">Dislikes entry {{ $i + 1 }}</span>
                                     <textarea wire:model.live="feedbackDislikes.{{ $i }}.body"
                                               rows="2"
                                               class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
@@ -807,7 +807,7 @@
                     <button type="button"
                             x-on:click="pane = 'form'; tab = 'description'"
                             class="mb-4 text-sm text-link hover:opacity-80">
-                        ← Description
+                        ← Back to Ideas
                     </button>
 
                     <div class="mb-3 flex flex-wrap items-center gap-1.5" x-data="{ addingSection: false, newTitle: '' }">

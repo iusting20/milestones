@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Livewire\DayList;
 use App\Livewire\TaskLogBoard;
 use App\Livewire\WeekBoard;
+use App\Models\Book;
 use App\Models\Project;
+use App\Models\ReadingSession;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
@@ -290,6 +292,8 @@ class TaskLogTest extends TestCase
         $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
         $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['nightClockArcs']);
 
+        $this->assertFalse($wed['clockArcs'][0]['hollow']);
+
         $component->assertSeeHtml('data-clock="2026-03-18"')
             ->assertSeeHtml('data-day-track')
             ->assertSeeHtml('data-night-track')
@@ -301,6 +305,37 @@ class TaskLogTest extends TestCase
             ->assertSee('5pm - 12am')
             ->assertSee('Day dial, 8am to 5pm')
             ->assertSee('night: false', false);
+    }
+
+    public function test_log_page_draws_reading_sessions_as_hollow_clock_arcs(): void
+    {
+        $book = Book::query()->create(['title' => 'Dune', 'status' => Book::STATUS_READING, 'position' => 1]);
+        // 07:00-08:30 UTC = 09:00-10:30 Bucharest (day). 16:00-18:00 UTC = 18:00-20:00 (night).
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-03-18 07:00:00'),
+            'finished_at' => Carbon::parse('2026-03-18 08:30:00'),
+        ]);
+        ReadingSession::query()->create([
+            'book_id' => $book->id,
+            'started_at' => Carbon::parse('2026-03-18 16:00:00'),
+            'finished_at' => Carbon::parse('2026-03-18 18:00:00'),
+        ]);
+
+        $component = Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class);
+        $wed = collect($component->viewData('days'))->firstWhere('date', '2026-03-18');
+
+        $dayRead = collect($wed['clockArcs'])->firstWhere('hollow', true);
+        $nightRead = collect($wed['nightClockArcs'])->firstWhere('hollow', true);
+
+        $this->assertSame(['Dune', '09:00', '10:30', 9.0], [$dayRead['title'], $dayRead['started'], $dayRead['finished'], $dayRead['stroke']]);
+        $this->assertSame(['Dune', '18:00', '20:00'], [$nightRead['title'], $nightRead['started'], $nightRead['finished']]);
+        $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
+
+        $component->assertSeeHtml('data-read-arc')
+            ->assertSeeHtml('data-read-arc-hole')
+            ->assertSee('Dune (09:00–10:30)')
+            ->assertSee('Dune (18:00–20:00)');
     }
 
     public function test_log_page_hides_day_night_toggle_when_no_sessions_after_5pm(): void

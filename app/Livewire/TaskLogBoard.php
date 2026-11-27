@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\ActivityAssignment;
 use App\Models\Project;
+use App\Models\ReadingSession;
 use App\Models\TaskLog;
 use App\Models\TodoItem;
 use App\Models\WeekBoardItem;
@@ -461,6 +462,26 @@ class TaskLogBoard extends Component
             $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
             $dayClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 8, 17, $runningIntervals);
             $nightClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 17, 24, $runningIntervals);
+        }
+
+        $readingSessions = ReadingSession::query()
+            ->with('book:id,title')
+            ->where('started_at', '<', $end)
+            ->where(function ($query) use ($start): void {
+                $query->whereNull('finished_at')->orWhere('finished_at', '>', $start);
+            })
+            ->get();
+
+        for ($i = 0; $i < 7; $i++) {
+            $dateKey = $start->copy()->addDays($i)->toDateString();
+            $dayClock[$dateKey] = array_merge(
+                $dayClock[$dateKey],
+                $this->readingClockArcs($readingSessions, $dateKey, 8, 17),
+            );
+            $nightClock[$dateKey] = array_merge(
+                $nightClock[$dateKey],
+                $this->readingClockArcs($readingSessions, $dateKey, 17, 24),
+            );
         }
 
         $maxMinutes = max(1, (int) collect($dayGroups)
@@ -956,7 +977,7 @@ class TaskLogBoard extends Component
      * @param  Collection<int, Collection<int, TaskLog>>  $groups
      * @param  array<string, string>  $colorByTitle
      * @param  Collection<int, array{0: Carbon, 1: Carbon, 2: string}>  $runningIntervals
-     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool}>
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool, hollow: bool}>
      */
     private function clockArcs(Collection $groups, string $dateKey, array $colorByTitle, int $startHour, int $endHour, Collection $runningIntervals): array
     {
@@ -1010,10 +1031,55 @@ class TaskLogBoard extends Component
     }
 
     /**
+     * Reading sessions drawn on top of task arcs as a hollow outline of the ring.
+     *
+     * @param  Collection<int, ReadingSession>  $sessions
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool, hollow: bool}>
+     */
+    private function readingClockArcs(Collection $sessions, string $dateKey, int $startHour, int $endHour): array
+    {
+        $tz = 'Europe/Bucharest';
+        $anchor = Carbon::parse($dateKey.' 08:00:00', $tz);
+        $from = Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $startHour), $tz);
+        $to = $endHour >= 24
+            ? Carbon::parse($dateKey, $tz)->addDay()->startOfDay()
+            : Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $endHour), $tz);
+        $now = now();
+
+        $arcs = [];
+
+        foreach ($sessions as $session) {
+            $startedAt = $session->started_at->copy()->timezone($tz);
+            $finishedAt = ($session->finished_at ?? $now)->copy()->timezone($tz);
+            $s = $startedAt->max($from);
+            $e = $finishedAt->min($to);
+            if ($e->lte($s)) {
+                continue;
+            }
+            $angleA = ($s->getTimestamp() - $anchor->getTimestamp()) / 43200 * 360 + 150;
+            $angleB = ($e->getTimestamp() - $anchor->getTimestamp()) / 43200 * 360 + 150;
+            $title = (string) ($session->book->title ?? 'Reading');
+            $runningInsideWindow = $session->finished_at === null && $now->gt($from) && $now->lte($to);
+            $arcs[] = [
+                'title' => $title,
+                'color' => '#e8c547',
+                'started' => $s->format('H:i'),
+                'finished' => $runningInsideWindow ? 'now' : $e->format('H:i'),
+                'path' => $this->arcPath(36, $angleA, $angleB),
+                'stroke' => 9.0,
+                'wip' => $session->finished_at === null,
+                'hollow' => true,
+            ];
+        }
+
+        return $arcs;
+    }
+
+    /**
      * Split the 9-unit ring into one lane per concurrent session.
      *
      * @param  list<array{title: string, color: string, start: Carbon, end: Carbon, wip: bool}>  $spans
-     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool}>
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool, hollow: bool}>
      */
     private function layoutClockSpans(array $spans, Carbon $anchor): array
     {
@@ -1050,6 +1116,7 @@ class TaskLogBoard extends Component
                         'path' => $this->arcPath($radius, $angleA, $angleB),
                         'stroke' => round($stroke, 3),
                         'wip' => $span['wip'],
+                        'hollow' => false,
                     ];
                 }
             }

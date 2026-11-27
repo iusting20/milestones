@@ -140,12 +140,16 @@
                                 @php($tip = $arc['title'].' ('.$arc['started'].'–'.$arc['finished'].')')
                                 <path d="{{ $arc['path'] }}" fill="none" stroke="{{ $arc['color'] }}" stroke-width="{{ $arc['stroke'] }}" stroke-linecap="butt"
                                       @if ($arc['wip']) data-wip-arc @endif
+                                      @if ($arc['hollow']) data-read-arc @endif
                                       data-clock-arc
                                       class="cursor-pointer transition-opacity duration-150"
                                       @mouseenter="hoverTitle = @js($arc['title']); clockHover = @js($tip)"
                                       @mouseleave="hoverTitle = null; clockHover = null"
                                       @click="clockHover = @js($tip); focusTitle(@js($arc['title']))"
                                       :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($arc['title']) }"><title>{{ $tip }}</title></path>
+                                @if ($arc['hollow'])
+                                    <path d="{{ $arc['path'] }}" fill="none" stroke="#1e1e1e" stroke-width="{{ max(1, $arc['stroke'] - 2.4) }}" stroke-linecap="butt" class="pointer-events-none" data-read-arc-hole/>
+                                @endif
                             @endforeach
                             <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="5" fill="currentColor" class="text-faint uppercase">{{ $day['clockArcs'] === [] ? 'no sessions' : '8am - 5pm' }}</text>
                         </g>
@@ -161,12 +165,16 @@
                                 @php($tip = $arc['title'].' ('.$arc['started'].'–'.$arc['finished'].')')
                                 <path d="{{ $arc['path'] }}" fill="none" stroke="{{ $arc['color'] }}" stroke-width="{{ $arc['stroke'] }}" stroke-linecap="butt"
                                       @if ($arc['wip']) data-wip-arc @endif
+                                      @if ($arc['hollow']) data-read-arc @endif
                                       data-night-arc
                                       class="cursor-pointer transition-opacity duration-150"
                                       @mouseenter="hoverTitle = @js($arc['title']); clockHover = @js($tip)"
                                       @mouseleave="hoverTitle = null; clockHover = null"
                                       @click="clockHover = @js($tip); focusTitle(@js($arc['title']))"
                                       :class="{ 'opacity-20': hoverTitle !== null && hoverTitle !== @js($arc['title']) }"><title>{{ $tip }}</title></path>
+                                @if ($arc['hollow'])
+                                    <path d="{{ $arc['path'] }}" fill="none" stroke="#1e1e1e" stroke-width="{{ max(1, $arc['stroke'] - 2.4) }}" stroke-linecap="butt" class="pointer-events-none" data-read-arc-hole/>
+                                @endif
                             @endforeach
                             <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="5" fill="currentColor" class="text-faint uppercase">{{ $day['nightClockArcs'] === [] ? 'no sessions' : '5pm - 12am' }}</text>
                         </g>

@@ -640,8 +640,37 @@
                         clearTimeout(this.savedTimer);
                         this.savedTimer = setTimeout(() => { this.saved = false }, 1000);
                     });
+                },
+                supportsFieldSizing: typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('field-sizing', 'content'),
+                grow(el) {
+                    if (! el || this.supportsFieldSizing || el.clientWidth === 0) {
+                        return;
+                    }
+                    el.style.height = 'auto';
+                    el.style.height = el.scrollHeight + 'px';
+                },
+                growAll() {
+                    this.$root.querySelectorAll('textarea').forEach((el) => this.grow(el));
+                },
+                init() {
+                    this.$nextTick(() => this.growAll());
+                    this.$watch('tab', () => this.$nextTick(() => this.growAll()));
+                    const el = this.$el;
+                    const run = () => {
+                        if (el.isConnected) {
+                            this.$nextTick(() => this.growAll());
+                        }
+                    };
+                    const off = Livewire.hook('morph.updated', run);
+                    this._offGrow = typeof off === 'function' ? off : null;
+                },
+                destroy() {
+                    if (typeof this._offGrow === 'function') {
+                        this._offGrow();
+                    }
                 }
              }"
+             x-on:input="if ($event.target.matches('textarea')) grow($event.target)"
              x-on:book-feedback-saved.window="flashSaved()"
              x-on:keydown.escape.window="leave(() => $wire.closeFeedback())"
              role="dialog"
@@ -704,8 +733,8 @@
                     <label class="block">
                         <span class="sr-only">Description</span>
                         <textarea wire:model.live="feedbackDescription"
-                                  rows="10"
-                                  class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                  rows="3"
+                                  class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
                                   placeholder="Write a description…"></textarea>
                     </label>
                 </div>
@@ -718,7 +747,7 @@
                                     <span class="sr-only">Like {{ $i + 1 }}</span>
                                     <textarea wire:model.live="feedbackLikes.{{ $i }}.body"
                                               rows="2"
-                                              class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                              class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
                                               placeholder="What did you like?"></textarea>
                                 </label>
                                 <button type="button"
@@ -746,7 +775,7 @@
                                     <span class="sr-only">Dislike {{ $i + 1 }}</span>
                                     <textarea wire:model.live="feedbackDislikes.{{ $i }}.body"
                                               rows="2"
-                                              class="w-full resize-y rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
+                                              class="autogrow-textarea w-full rounded border border-white/10 bg-panel px-3 py-2 text-sm text-body focus:border-link focus:outline-none"
                                               placeholder="What did you dislike?"></textarea>
                                 </label>
                                 <button type="button"

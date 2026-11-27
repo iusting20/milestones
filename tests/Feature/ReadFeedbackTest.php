@@ -79,6 +79,7 @@ class ReadFeedbackTest extends TestCase
             ->assertSee('Dislike')
             ->assertSeeHtml('x-on:book-feedback-saved.window')
             ->assertSeeHtml('modal-saved-glow')
+            ->assertSeeHtml('autogrow-textarea')
             ->assertDontSeeHtml('x-init="$nextTick(() => $el.focus())"')
             ->assertDontSeeHtml('autofocus')
             ->set('feedbackDescription', 'A clear, practical guide.')

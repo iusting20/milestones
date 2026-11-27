@@ -256,6 +256,13 @@
         background-color: #ffb300;
     }
 
+    .autogrow-textarea {
+        resize: none;
+        overflow-x: hidden;
+        overflow-y: hidden;
+        field-sizing: content;
+    }
+
     .has-parent-tip {
         @apply relative;
     }

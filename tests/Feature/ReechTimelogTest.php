@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\TaskLog;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -60,6 +61,10 @@ class ReechTimelogTest extends TestCase
         $this->assertSame(95, $component->viewData('stats')['totalMinutes']);
         $this->assertSame(3, $component->viewData('stats')['sessionCount']);
         $this->assertCount(3, $tue['clockArcs']);
+        $outlined = collect($tue['clockArcs'])->where('hollow', true);
+        $this->assertSame(['Make Products - Content', 'Make Products - Engage'], $outlined->pluck('title')->all());
+        $this->assertTrue($outlined->every(fn (array $arc): bool => $arc['color'] === '#ff9800' && str_ends_with($arc['path'], 'Z')));
+        $this->assertCount(1, collect($tue['clockArcs'])->where('hollow', false));
 
         $component->assertSeeHtml('data-reech-session')
             ->assertDontSeeHtml('data-reech-unavailable')
@@ -105,7 +110,7 @@ class ReechTimelogTest extends TestCase
             ->assertSee('Emails')
             ->assertSeeHtml('data-reech-unavailable');
 
-        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('timeout'));
+        Http::fake(fn () => throw new ConnectionException('timeout'));
         cache()->flush();
 
         Livewire::withQueryParams(['week' => '2026-W12'])->test(TaskLogBoard::class)

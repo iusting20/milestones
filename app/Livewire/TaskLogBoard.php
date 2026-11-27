@@ -460,8 +460,9 @@ class TaskLogBoard extends Component
                 ->values();
 
             $dayGroups[$dateKey] = $this->mergeTouchingLogs($dayTimedLogs);
-            $dayClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 8, 17, $runningIntervals);
-            $nightClock[$dateKey] = $this->clockArcs($dayGroups[$dateKey], $dateKey, $colorByTitle, 17, 24, $runningIntervals);
+            $taskGroups = $dayGroups[$dateKey]->reject(fn (Collection $group): bool => ReechTimelog::isExternalId($group->first()?->id));
+            $dayClock[$dateKey] = $this->clockArcs($taskGroups, $dateKey, $colorByTitle, 8, 17, $runningIntervals);
+            $nightClock[$dateKey] = $this->clockArcs($taskGroups, $dateKey, $colorByTitle, 17, 24, $runningIntervals);
         }
 
         $readingSessions = ReadingSession::query()
@@ -474,12 +475,15 @@ class TaskLogBoard extends Component
 
         for ($i = 0; $i < 7; $i++) {
             $dateKey = $start->copy()->addDays($i)->toDateString();
+            $reechGroups = $dayGroups[$dateKey]->filter(fn (Collection $group): bool => ReechTimelog::isExternalId($group->first()?->id));
             $dayClock[$dateKey] = array_merge(
                 $dayClock[$dateKey],
+                $this->outlineClockArcs($reechGroups, $dateKey, 8, 17, '#ff9800'),
                 $this->readingClockArcs($readingSessions, $dateKey, 8, 17),
             );
             $nightClock[$dateKey] = array_merge(
                 $nightClock[$dateKey],
+                $this->outlineClockArcs($reechGroups, $dateKey, 17, 24, '#ff9800'),
                 $this->readingClockArcs($readingSessions, $dateKey, 17, 24),
             );
         }
@@ -1031,6 +1035,49 @@ class TaskLogBoard extends Component
     }
 
     /**
+     * Closed orange (or any) outline of the ring for groups that should not fill a lane.
+     *
+     * @param  Collection<int, Collection<int, TaskLog>>  $groups
+     * @return list<array{title: string, color: string, started: string, finished: string, path: string, stroke: float, wip: bool, hollow: bool}>
+     */
+    private function outlineClockArcs(Collection $groups, string $dateKey, int $startHour, int $endHour, string $color): array
+    {
+        $tz = 'Europe/Bucharest';
+        $anchor = Carbon::parse($dateKey.' 08:00:00', $tz);
+        $from = Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $startHour), $tz);
+        $to = $endHour >= 24
+            ? Carbon::parse($dateKey, $tz)->addDay()->startOfDay()
+            : Carbon::parse($dateKey.' '.sprintf('%02d:00:00', $endHour), $tz);
+
+        $arcs = [];
+
+        foreach ($groups as $group) {
+            $log = $group->first();
+            $startedAt = $group->map(fn (TaskLog $l) => $l->started_at)->sort()->first()->copy()->timezone($tz);
+            $finishedAt = $group->map(fn (TaskLog $l) => $l->finished_at)->sort()->last()->copy()->timezone($tz);
+            $s = $startedAt->max($from);
+            $e = $finishedAt->min($to);
+            if ($e->lte($s)) {
+                continue;
+            }
+            $angleA = ($s->getTimestamp() - $anchor->getTimestamp()) / 43200 * 360 + 150;
+            $angleB = ($e->getTimestamp() - $anchor->getTimestamp()) / 43200 * 360 + 150;
+            $arcs[] = [
+                'title' => (string) $log->title,
+                'color' => $color,
+                'started' => $s->format('H:i'),
+                'finished' => $e->format('H:i'),
+                'path' => $this->ringOutlinePath(31.5, 40.5, $angleA, $angleB),
+                'stroke' => 0.7,
+                'wip' => false,
+                'hollow' => true,
+            ];
+        }
+
+        return $arcs;
+    }
+
+    /**
      * Reading sessions drawn on top of task arcs as a hollow outline of the ring.
      *
      * @param  Collection<int, ReadingSession>  $sessions
@@ -1062,11 +1109,11 @@ class TaskLogBoard extends Component
             $runningInsideWindow = $session->finished_at === null && $now->gt($from) && $now->lte($to);
             $arcs[] = [
                 'title' => $title,
-                'color' => '#e8c547',
+                'color' => '#58a6ff',
                 'started' => $s->format('H:i'),
                 'finished' => $runningInsideWindow ? 'now' : $e->format('H:i'),
-                'path' => $this->arcPath(36, $angleA, $angleB),
-                'stroke' => 9.0,
+                'path' => $this->ringOutlinePath(31.5, 40.5, $angleA, $angleB),
+                'stroke' => 0.7,
                 'wip' => $session->finished_at === null,
                 'hollow' => true,
             ];
@@ -1139,6 +1186,22 @@ class TaskLogBoard extends Component
         $radius = round($radius, 3);
 
         return "M {$p1['x']} {$p1['y']} A {$radius} {$radius} 0 {$large} 1 {$p2['x']} {$p2['y']}";
+    }
+
+    /**
+     * Closed ring sector: outer arc, end cap, inner arc, start cap. Fill stays transparent.
+     */
+    private function ringOutlinePath(float $inner, float $outer, float $startAngle, float $endAngle): string
+    {
+        $outerStart = self::clockPoint(50, 50, $outer, $startAngle);
+        $outerEnd = self::clockPoint(50, 50, $outer, $endAngle);
+        $innerEnd = self::clockPoint(50, 50, $inner, $endAngle);
+        $innerStart = self::clockPoint(50, 50, $inner, $startAngle);
+        $large = ($endAngle - $startAngle) > 180 ? 1 : 0;
+        $outer = round($outer, 3);
+        $inner = round($inner, 3);
+
+        return "M {$outerStart['x']} {$outerStart['y']} A {$outer} {$outer} 0 {$large} 1 {$outerEnd['x']} {$outerEnd['y']} L {$innerEnd['x']} {$innerEnd['y']} A {$inner} {$inner} 0 {$large} 0 {$innerStart['x']} {$innerStart['y']} Z";
     }
 
     /**

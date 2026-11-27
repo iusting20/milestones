@@ -328,12 +328,14 @@ class TaskLogTest extends TestCase
         $dayRead = collect($wed['clockArcs'])->firstWhere('hollow', true);
         $nightRead = collect($wed['nightClockArcs'])->firstWhere('hollow', true);
 
-        $this->assertSame(['Dune', '09:00', '10:30', 9.0], [$dayRead['title'], $dayRead['started'], $dayRead['finished'], $dayRead['stroke']]);
+        $this->assertSame(['Dune', '09:00', '10:30', '#58a6ff', 0.7], [$dayRead['title'], $dayRead['started'], $dayRead['finished'], $dayRead['color'], $dayRead['stroke']]);
+        $this->assertStringEndsWith('Z', $dayRead['path']);
         $this->assertSame(['Dune', '18:00', '20:00'], [$nightRead['title'], $nightRead['started'], $nightRead['finished']]);
         $this->assertSame([], collect($component->viewData('days'))->firstWhere('date', '2026-03-17')['clockArcs']);
 
         $component->assertSeeHtml('data-read-arc')
-            ->assertSeeHtml('data-read-arc-hole')
+            ->assertSeeHtml('fill="transparent"')
+            ->assertDontSeeHtml('data-read-arc-hole')
             ->assertSee('Dune (09:00–10:30)')
             ->assertSee('Dune (18:00–20:00)');
     }

@@ -15,12 +15,6 @@
                 DRIP Matrix
             </a>
 
-            <a href="{{ route('milestones.stats') }}"
-               class="inline-flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel hover:text-body"
-               wire:navigate>
-                Stats
-            </a>
-
             <a href="{{ route('milestones.log', ['week' => $week]) }}"
                class="inline-flex items-center gap-1.5 rounded border border-white/10 px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel hover:text-body"
                wire:navigate>

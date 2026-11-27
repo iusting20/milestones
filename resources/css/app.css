@@ -256,6 +256,17 @@
         background-color: #ffb300;
     }
 
+    /* roadmap green #7cb518 — outline for in-progress books */
+    .read-feedback-btn-outline {
+        background-color: transparent;
+        color: #7cb518;
+        border: 1px solid #7cb518;
+    }
+
+    .read-feedback-btn-outline:hover {
+        background-color: rgb(124 181 24 / 0.12);
+    }
+
     .autogrow-textarea {
         resize: none;
         overflow-x: hidden;

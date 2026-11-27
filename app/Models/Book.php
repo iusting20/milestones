@@ -75,6 +75,17 @@ class Book extends Model
         return $this->hasMany(BookFeedbackIdea::class)->orderBy('position')->orderBy('id');
     }
 
+    public function hasChapterIdeas(): bool
+    {
+        if ($this->relationLoaded('feedbackIdeas')) {
+            return $this->feedbackIdeas->contains(
+                fn (BookFeedbackIdea $idea) => trim($idea->body) !== ''
+            );
+        }
+
+        return $this->feedbackIdeas()->where('body', '!=', '')->exists();
+    }
+
     public function hasFeedback(): bool
     {
         $description = $this->relationLoaded('feedback')
@@ -95,13 +106,7 @@ class Book extends Model
             return true;
         }
 
-        if ($this->relationLoaded('feedbackIdeas')) {
-            return $this->feedbackIdeas->contains(
-                fn (BookFeedbackIdea $idea) => trim($idea->body) !== ''
-            );
-        }
-
-        return $this->feedbackIdeas()->where('body', '!=', '')->exists();
+        return $this->hasChapterIdeas();
     }
 
     public function latestSession(): HasOne

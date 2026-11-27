@@ -359,6 +359,12 @@
                             class="read-feedback-btn col-span-2 sm:col-span-4 rounded px-3 py-2 text-sm font-semibold hover:brightness-105">
                         {{ $selected->hasFeedback() ? 'View feedback' : 'Give feedback' }}
                     </button>
+                @elseif (! $selected->isArticle())
+                    <button type="button"
+                            wire:click="openFeedback({{ $selected->id }})"
+                            class="read-feedback-btn-outline col-span-2 sm:col-span-4 rounded px-3 py-2 text-sm font-semibold">
+                        {{ $selected->hasChapterIdeas() ? 'View feedback' : 'Give feedback' }}
+                    </button>
                 @endif
                 </div>
             </div>
@@ -682,7 +688,7 @@
                 growAll() {
                     this.$root.querySelectorAll('textarea').forEach((el) => this.grow(el));
                 },
-                pane: 'form',
+                pane: @js($feedbackIdeasOnly ? 'ideas' : 'form'),
                 init() {
                     this.$nextTick(() => this.growAll());
                     this.$watch('tab', () => this.$nextTick(() => this.growAll()));
@@ -714,7 +720,11 @@
                  :class="{ 'modal-saved-glow': saved }">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <h2 id="read-feedback-title" class="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                        Feedback · {{ $feedbackBookTitle }}
+                        @if ($feedbackIdeasOnly)
+                            Ideas by chapter
+                        @else
+                            Feedback · {{ $feedbackBookTitle }}
+                        @endif
                     </h2>
                     <button type="button"
                             x-on:click="leave(() => $wire.closeFeedback())"
@@ -722,6 +732,7 @@
                             aria-label="Close">×</button>
                 </div>
 
+                @unless ($feedbackIdeasOnly)
                 <div x-show="pane === 'form'" class="mb-4 grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-panel p-1" role="tablist" aria-label="Feedback sections">
                     <button type="button"
                             role="tab"
@@ -831,14 +842,17 @@
                             aria-label="Add dislike"
                             title="Add dislike">+</button>
                 </div>
+                @endunless
 
 
                 <div x-show="pane === 'ideas'" x-cloak>
+                    @unless ($feedbackIdeasOnly)
                     <button type="button"
                             x-on:click="pane = 'form'; tab = 'description'"
                             class="mb-4 text-sm text-link hover:opacity-80">
                         ← Back to Ideas
                     </button>
+                    @endunless
 
                     <div class="mb-3 flex flex-wrap items-center gap-1.5" x-data="{ addingSection: false, newTitle: '' }">
                         @foreach ($feedbackChapters as $chapter)

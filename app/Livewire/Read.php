@@ -82,6 +82,8 @@ class Read extends Component
 
     public int $feedbackNewSectionSeq = 0;
 
+    public bool $feedbackIdeasOnly = false;
+
     public function mount(?int $selectedBookId = null): void
     {
         if (request()->routeIs('read.articles')) {
@@ -564,11 +566,13 @@ class Read extends Component
     public function openFeedback(int $id): void
     {
         $book = $this->findBook($id);
-        if (! $book->isFinished()) {
+        $ideasOnly = ! $book->isFinished();
+        if ($ideasOnly && $book->isArticle()) {
             return;
         }
 
         $this->feedbackOpen = true;
+        $this->feedbackIdeasOnly = $ideasOnly;
         $this->feedbackBookId = $book->id;
         $this->feedbackBookTitle = $book->title;
         $this->feedbackDescription = (string) ($book->feedback?->description ?? '');
@@ -583,6 +587,7 @@ class Read extends Component
     public function closeFeedback(): void
     {
         $this->feedbackOpen = false;
+        $this->feedbackIdeasOnly = false;
         $this->feedbackBookId = null;
         $this->feedbackBookTitle = '';
         $this->feedbackDescription = '';
@@ -596,7 +601,7 @@ class Read extends Component
 
     public function addFeedbackEntry(string $kind): void
     {
-        if (! $this->feedbackOpen) {
+        if (! $this->feedbackOpen || $this->feedbackIdeasOnly) {
             return;
         }
 
@@ -613,7 +618,7 @@ class Read extends Component
 
     public function removeFeedbackEntry(string $kind, int $index): void
     {
-        if (! $this->feedbackOpen) {
+        if (! $this->feedbackOpen || $this->feedbackIdeasOnly) {
             return;
         }
 
@@ -724,6 +729,38 @@ class Read extends Component
         }
 
         $book = $this->findBook($this->feedbackBookId);
+        if ($this->feedbackIdeasOnly) {
+            if ($book->isArticle()) {
+                return;
+            }
+
+            $chapters = $this->normalizedFeedbackChapters();
+            $hasIdeas = collect($chapters)->contains(
+                fn (array $chapter) => $chapter['ideas'] !== []
+            );
+            $hasSections = collect($chapters)->contains(
+                fn (array $chapter) => $chapter['key'] !== 'general'
+            );
+
+            if (! $hasIdeas && ! $hasSections) {
+                $book->feedbackIdeas()->delete();
+                $book->feedbackSections()->delete();
+            } else {
+                $this->syncFeedbackChapters($book, $chapters);
+            }
+
+            $previousKey = $this->feedbackChapterKey;
+            $previousTitle = $this->feedbackChapterTitle($previousKey);
+            $book->unsetRelation('feedbackSections');
+            $book->unsetRelation('feedbackIdeas');
+            $this->feedbackChapters = $this->feedbackChapterPayloads($book);
+            $this->feedbackChapterKey = $this->resolvedFeedbackChapterKey($previousKey, $previousTitle);
+            $this->feedbackDirty = false;
+            $this->dispatch('book-feedback-saved');
+
+            return;
+        }
+
         if (! $book->isFinished()) {
             return;
         }

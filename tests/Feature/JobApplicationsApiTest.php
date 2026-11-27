@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureAuthenticated;
 use App\Livewire\JobApplications;
 use App\Models\JobApplication;
 use App\Models\JobApplicationEvent;
@@ -113,9 +114,14 @@ class JobApplicationsApiTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'events');
         $this->assertSame(6, JobApplicationEvent::query()->count());
 
-        // Shows up in the page's progress log.
-        $this->withSession([\App\Http\Middleware\EnsureAuthenticated::SESSION_KEY => true])
-            ->get('/x/'.config('jobs.page_token'))->assertOk()->assertSee('To apply → Applied')->assertSee('via API');
+        // Added jobs show under New Opportunities Added (status events are not listed there).
+        $this->withSession([EnsureAuthenticated::SESSION_KEY => true])
+            ->get('/x/'.config('jobs.page_token'))
+            ->assertOk()
+            ->assertSee('New Opportunities Added')
+            ->assertSee('AI Engineer · Acme', false)
+            ->assertDontSee('To apply → Applied')
+            ->assertDontSee('via API');
     }
 
     public function test_validation(): void
@@ -172,8 +178,8 @@ class JobApplicationsApiTest extends TestCase
             ->call('save')
             ->assertHasNoErrors()
             ->assertSet('showForm', false)
-            ->assertSee('Status changed')
-            ->assertSee('by hand');
+            ->assertSee('New Opportunities Added')
+            ->assertDontSee('Status changed');
 
         $this->assertSame('closed', $app->fresh()->status);
         $this->assertDatabaseHas('job_application_events', ['job_application_id' => $app->id, 'type' => 'status', 'from_value' => 'To apply', 'to_value' => 'closed', 'source' => 'manual']);
@@ -196,6 +202,7 @@ class JobApplicationsApiTest extends TestCase
         $this->assertNull(JobApplication::query()->findOrFail($id)->removed_at);
         $this->assertSame(2, JobApplication::query()->whereNull('removed_at')->count());
     }
+
     public function test_category_is_accepted_returned_and_filterable(): void
     {
         $this->flushSession();

@@ -10,6 +10,7 @@ use App\Support\Onboarding;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Renderless;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -41,16 +42,18 @@ class JobApplications extends Component
     /** "My cover letters" list modal. */
     public bool $showCoverLetters = false;
 
-    /** Next Steps queue, shown as cards. */
-    public bool $showNextQueue = false;
+    /** Chart drill-down: SUMMARY_SERIES key, or a raw type like Unknown. */
+    public ?string $chartSlice = null;
+
+    /** Optional Monday week start (Y-m-d) when drilling into a Per week bar. */
+    public ?string $chartWeek = null;
+
+    /** Index into the Next Steps queue for the slideshow card. */
+    public int $nextStepIndex = 0;
 
     /** List/chart filter: all, software or ai. Default all is omitted from the URL. */
     #[Url(as: 'category', history: true, except: 'all')]
     public string $category = 'all';
-
-    /** List filter: all, open, applied or closed. Default all is omitted from the URL. */
-    #[Url(as: 'closed', history: true, except: 'all')]
-    public string $closedFilter = 'all';
 
     public const STATUS_COLORS = [
         'Applied' => '#4CAF50',
@@ -64,6 +67,16 @@ class JobApplications extends Component
     public const TYPE_COLORS = [
         'Contract' => '#39c5cf',
         'Permanent' => '#f778ba',
+    ];
+
+    /** Shared by the status bars and the weekly chart, in this order. */
+    public const SUMMARY_SERIES = [
+        'added' => ['label' => 'Added', 'color' => '#39c5cf'],
+        'applied' => ['label' => 'Applied', 'color' => '#4CAF50'],
+        'responded' => ['label' => 'Responded', 'color' => '#f778ba'],
+        'decided' => ['label' => 'Decided', 'color' => '#f0883e'],
+        'contract' => ['label' => 'Contract', 'color' => '#a371f7'],
+        'permanent' => ['label' => 'Permanent', 'color' => '#6e7681'],
     ];
 
     public static function statusColor(?string $status): string
@@ -109,14 +122,22 @@ class JobApplications extends Component
     }
 
     /**
-     * Weekly counts (Mon-start weeks) of applications by Date added and Date applied.
+     * Weekly counts (Mon-start weeks): added, applied, first reply from them, and a decided outcome (offer or passed over).
      *
-     * @return array<int, array{start: string, label: string, added: int, applied: int}>
+     * @return array<int, array{start: string, label: string, added: int, applied: int, responded: int, decided: int}>
      */
     public static function weekly(Collection $apps, ?Carbon $today = null): array
     {
         $today = $today ?? Clock::today();
-        $dates = $apps->flatMap(fn ($a) => array_filter([$a->date_added, $a->date_applied]));
+        $dated = $apps->map(fn ($a) => [
+            'added' => $a->date_added,
+            'applied' => $a->date_applied,
+            'responded' => self::respondedOn($a),
+            'decided' => self::decidedOn($a),
+            'contract' => strcasecmp((string) $a->type, 'Contract') === 0 ? $a->date_added : null,
+            'permanent' => strcasecmp((string) $a->type, 'Permanent') === 0 ? $a->date_added : null,
+        ]);
+        $dates = $dated->flatMap(fn ($row) => array_filter($row));
         if ($dates->isEmpty()) {
             return [];
         }
@@ -127,22 +148,62 @@ class JobApplications extends Component
             $end = $last;
         }
 
+        $blank = array_fill_keys(array_keys(self::SUMMARY_SERIES), 0);
         $weeks = [];
         for ($w = $start->copy(); $w->lte($end); $w->addWeek()) {
-            $weeks[$w->toDateString()] = ['start' => $w->toDateString(), 'label' => $w->format('j M'), 'added' => 0, 'applied' => 0];
+            $weeks[$w->toDateString()] = ['start' => $w->toDateString(), 'label' => $w->format('j M')] + $blank;
         }
-        foreach ($apps as $a) {
-            foreach (['added' => $a->date_added, 'applied' => $a->date_applied] as $series => $d) {
-                if ($d) {
-                    $k = $d->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
-                    if (isset($weeks[$k])) {
-                        $weeks[$k][$series]++;
-                    }
+        foreach ($dated as $row) {
+            foreach ($row as $series => $d) {
+                if (! $d) {
+                    continue;
+                }
+                $k = $d->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
+                if (isset($weeks[$k])) {
+                    $weeks[$k][$series]++;
                 }
             }
         }
 
         return array_values($weeks);
+    }
+
+    /** Day of the first message from them. */
+    public static function respondedOn(JobApplication $app): ?Carbon
+    {
+        if (! $app->relationLoaded('messages')) {
+            return null;
+        }
+        $at = $app->messages->where('direction', 'received')->min('occurred_at');
+
+        return $at ? Carbon::parse($at)->timezone(Clock::timezone())->startOfDay() : null;
+    }
+
+    /** Day an offer landed or the role was passed over. */
+    public static function decidedOn(JobApplication $app): ?Carbon
+    {
+        if ($app->relationLoaded('events')) {
+            $at = $app->events
+                ->filter(fn ($e) => $e->type === 'status' && JobApplicationWriter::canonical((string) $e->to_value, ['Offer', 'Rejected']) !== null)
+                ->min('occurred_at');
+            if ($at) {
+                return Carbon::parse($at)->timezone(Clock::timezone())->startOfDay();
+            }
+        }
+        foreach ([$app->next_step, $app->notes] as $text) {
+            if (preg_match('/\b(?:Rejected|Offer(?:ed)?)\s+(?:on\s+)?(\d{1,2}\s+[A-Z][a-z]{2,8}\s+\d{4})\b/u', (string) $text, $m)) {
+                try {
+                    return Carbon::parse($m[1])->startOfDay();
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+        }
+        if (JobApplicationWriter::canonical((string) $app->status, ['Offer', 'Rejected']) !== null && $app->updated_at) {
+            return $app->updated_at->copy()->timezone(Clock::timezone())->startOfDay();
+        }
+
+        return null;
     }
 
     /** Statuses that count as "not applied yet" for the Next Steps panel (case-insensitive). */
@@ -286,30 +347,54 @@ class JobApplications extends Component
     public function mount(): void
     {
         $this->normalizeCategoryFilter();
-        $this->normalizeClosedFilter();
     }
 
     public function updatedCategory(): void
     {
         $this->normalizeCategoryFilter();
+        $this->nextStepIndex = 0;
     }
 
-    public function updatedClosedFilter(): void
+    /** Client-side cycling calls this without a re-render so the stack animation is not blocked. */
+    #[Renderless]
+    public function rememberNextStep(int $index): void
     {
-        $this->normalizeClosedFilter();
+        $this->nextStepIndex = max(0, $index);
+    }
+
+    public function cycleNextStep(int $delta): void
+    {
+        $count = self::nextStepQueue($this->trackedApps())->count();
+        if ($count < 2) {
+            $this->nextStepIndex = 0;
+
+            return;
+        }
+
+        $this->nextStepIndex = min($count - 1, max(0, $this->nextStepIndex + $delta));
+    }
+
+    private function trackedApps(): Collection
+    {
+        return JobApplication::query()->whereNull('removed_at')
+            ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
+            ->get();
+    }
+
+    private function clampNextStepIndex(): void
+    {
+        $count = self::nextStepQueue($this->trackedApps())->count();
+        if ($count === 0 || $this->nextStepIndex < 0) {
+            $this->nextStepIndex = 0;
+        } elseif ($this->nextStepIndex >= $count) {
+            $this->nextStepIndex = $count - 1;
+        }
     }
 
     private function normalizeCategoryFilter(): void
     {
         if (! in_array($this->category, ['all', ...JobApplicationWriter::CATEGORIES], true)) {
             $this->category = 'all';
-        }
-    }
-
-    private function normalizeClosedFilter(): void
-    {
-        if (! in_array($this->closedFilter, ['all', 'open', 'applied', 'closed'], true)) {
-            $this->closedFilter = 'all';
         }
     }
 
@@ -352,22 +437,10 @@ class JobApplications extends Component
         $this->form = [];
     }
 
-    public function openNextQueue(): void
-    {
-        $this->showNextQueue = true;
-    }
-
-    public function closeNextQueue(): void
-    {
-        if ($this->viewingId !== null || $this->coverLetterJobId !== null) {
-            return;
-        }
-        $this->showNextQueue = false;
-    }
-
     public function openView(int $id): void
     {
         $this->showCoverLetters = false;
+        $this->closeChartSlice();
         $this->viewingId = JobApplication::query()->findOrFail($id)->id;
         Onboarding::complete('gigs.view');
     }
@@ -378,6 +451,97 @@ class JobApplications extends Component
             return;
         }
         $this->viewingId = null;
+    }
+
+    public function openChartSlice(string $series, ?string $weekStart = null): void
+    {
+        $raw = trim($series);
+        if ($raw === '') {
+            return;
+        }
+        if (str_starts_with(strtolower($raw), 'type:')) {
+            $type = trim(substr($raw, 5));
+            if ($type === '') {
+                return;
+            }
+            $this->chartSlice = 'type:'.$type;
+        } else {
+            $key = strtolower($raw);
+            if (! isset(self::SUMMARY_SERIES[$key])) {
+                return;
+            }
+            $this->chartSlice = $key;
+        }
+        $this->showCoverLetters = false;
+        $this->viewingId = null;
+        $this->chartWeek = $weekStart ? Carbon::parse($weekStart)->startOfWeek(Carbon::MONDAY)->toDateString() : null;
+    }
+
+    public function closeChartSlice(): void
+    {
+        $this->chartSlice = null;
+        $this->chartWeek = null;
+    }
+
+    /**
+     * Jobs that make up one chart cell. Week filters use the same date field as the weekly series.
+     *
+     * @return Collection<int, JobApplication>
+     */
+    public static function appsForChartSlice(Collection $apps, string $series, ?string $weekStart = null): Collection
+    {
+        $series = strtolower($series);
+
+        if ($weekStart !== null && $weekStart !== '') {
+            $start = Carbon::parse($weekStart)->startOfWeek(Carbon::MONDAY);
+            $end = $start->copy()->addWeek();
+            $dateFor = match ($series) {
+                'applied' => fn (JobApplication $a) => $a->date_applied,
+                'responded' => fn (JobApplication $a) => self::respondedOn($a),
+                'decided' => fn (JobApplication $a) => self::decidedOn($a),
+                'contract' => fn (JobApplication $a) => strcasecmp((string) $a->type, 'Contract') === 0 ? $a->date_added : null,
+                'permanent' => fn (JobApplication $a) => strcasecmp((string) $a->type, 'Permanent') === 0 ? $a->date_added : null,
+                'added' => fn (JobApplication $a) => $a->date_added,
+                default => fn (JobApplication $a) => null,
+            };
+
+            return $apps->filter(function (JobApplication $a) use ($dateFor, $start, $end) {
+                $d = $dateFor($a);
+
+                return $d !== null && $d->gte($start) && $d->lt($end);
+            })->values();
+        }
+
+        if (str_starts_with($series, 'type:')) {
+            $type = substr($series, 5);
+
+            return $apps->filter(fn ($a) => strcasecmp((string) ($a->type ?: 'Unknown'), $type) === 0)->values();
+        }
+
+        return match ($series) {
+            'added' => $apps->filter(fn ($a) => $a->date_added !== null)->values(),
+            'applied' => $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->values(),
+            'responded' => $apps->filter(fn ($a) => self::respondedOn($a) !== null)->values(),
+            'decided' => $apps->filter(fn ($a) => self::decidedOn($a) !== null)->values(),
+            'contract' => $apps->filter(fn ($a) => strcasecmp((string) $a->type, 'Contract') === 0)->values(),
+            'permanent' => $apps->filter(fn ($a) => strcasecmp((string) $a->type, 'Permanent') === 0)->values(),
+            default => $apps->filter(fn () => false)->values(),
+        };
+    }
+
+    public static function chartSliceTitle(string $series, ?string $weekStart = null): string
+    {
+        if (str_starts_with(strtolower($series), 'type:')) {
+            $label = substr($series, 5);
+        } else {
+            $key = strtolower($series);
+            $label = self::SUMMARY_SERIES[$key]['label'] ?? ucfirst($key);
+        }
+        if ($weekStart) {
+            return $label.' · week of '.Carbon::parse($weekStart)->format('j M Y');
+        }
+
+        return $label;
     }
 
     public function openCoverLetter(int $id): void
@@ -446,6 +610,7 @@ class JobApplications extends Component
 
         JobApplicationWriter::update($app, ['status' => 'closed'], 'manual');
         $this->flash = 'Marked '.$app->fresh()->label().' as closed.';
+        $this->clampNextStepIndex();
     }
 
     public function reopen(int $id): void
@@ -473,6 +638,7 @@ class JobApplications extends Component
         }
         JobApplicationWriter::update($app, ['status' => 'Applied', 'date_applied' => Clock::todayString()], 'manual');
         $this->flash = 'Marked '.$app->fresh()->label().' as applied.';
+        $this->clampNextStepIndex();
     }
 
     public function save(): void
@@ -507,35 +673,28 @@ class JobApplications extends Component
     {
         $today = Clock::today();
         $this->normalizeCategoryFilter();
-        $this->normalizeClosedFilter();
-        $apps = JobApplication::query()->whereNull('removed_at')
-            ->withCount('messages')
-            ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
-            ->orderByRaw('sheet_row is null')->orderBy('sheet_row')->orderBy('id')->get();
-        $openCount = $apps->reject(fn ($a) => $a->isClosed())->count();
-        $appliedCount = $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->count();
-        $closedCount = $apps->filter(fn ($a) => $a->isClosed())->count();
-        $listed = match ($this->closedFilter) {
-            'open' => $apps->reject(fn ($a) => $a->isClosed())->values(),
-            'applied' => $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->values(),
-            'closed' => $apps->filter(fn ($a) => $a->isClosed())->values(),
-            default => $apps->sortBy([
-                fn ($a) => $a->isClosed() ? 1 : 0,
+        $apps = $this->trackedApps()
+            ->loadCount('messages')
+            ->loadExists(['messages as has_reply' => fn ($q) => $q->where('direction', 'received')])
+            ->sortBy([
+                fn ($a) => $a->sheet_row === null ? 1 : 0,
                 fn ($a) => $a->sheet_row ?? PHP_INT_MAX,
                 fn ($a) => $a->id,
-            ])->values(),
-        };
+            ])->values();
 
-        $statusCounts = [];
-        foreach (array_keys(self::STATUS_COLORS) as $s) {
-            $statusCounts[$s] = 0;
-        }
-        foreach ($apps as $a) {
-            $s = $a->status ?: 'No status';
-            $match = collect(array_keys(self::STATUS_COLORS))->first(fn ($k) => strcasecmp($k, $s) === 0);
-            $statusCounts[$match ?? $s] = ($statusCounts[$match ?? $s] ?? 0) + 1;
-        }
-        $statusCounts = array_filter($statusCounts);
+        $apps->load([
+            'messages' => fn ($q) => $q->where('direction', 'received')->select('id', 'job_application_id', 'direction', 'occurred_at'),
+            'events' => fn ($q) => $q->where('type', 'status')->select('id', 'job_application_id', 'type', 'to_value', 'occurred_at'),
+        ]);
+
+        $statusCounts = [
+            'Added' => $apps->filter(fn ($a) => $a->date_added)->count(),
+            'Applied' => $apps->filter(fn ($a) => self::isAppliedStatus($a->status))->count(),
+            'Responded' => $apps->filter(fn ($a) => self::respondedOn($a) !== null)->count(),
+            'Decided' => $apps->filter(fn ($a) => self::decidedOn($a) !== null)->count(),
+            'Contract' => $apps->filter(fn ($a) => strcasecmp((string) $a->type, 'Contract') === 0)->count(),
+            'Permanent' => $apps->filter(fn ($a) => strcasecmp((string) $a->type, 'Permanent') === 0)->count(),
+        ];
 
         $typeCounts = $apps->groupBy(fn ($a) => $a->type ?: 'Unknown')->map->count()->sortDesc()->all();
         $typeTotal = array_sum($typeCounts);
@@ -568,26 +727,42 @@ class JobApplications extends Component
         $axisMax = $rateStats ? (int) (ceil(($rateStats['high'] + 50) / 50) * 50) : 1;
 
         $weekly = self::weekly($apps, $today);
-        $maxWeek = max(1, ...array_map(fn ($w) => max($w['added'], $w['applied']), $weekly ?: [['added' => 0, 'applied' => 0]]));
+        $maxWeek = max(1, ...array_map(
+            fn ($w) => max(...array_map(fn ($key) => $w[$key], array_keys(self::SUMMARY_SERIES))),
+            $weekly ?: [array_fill_keys(array_keys(self::SUMMARY_SERIES), 0)]
+        ));
 
         $followUps = $apps->filter(fn ($a) => ! $a->isClosed() && $a->follow_up_date && $a->follow_up_date->gte($today))
             ->sortBy(fn ($a) => $a->follow_up_date->toDateString())->values();
 
-        $events = JobApplicationEvent::query()->with('application')
-            ->when($this->category !== 'all', fn ($q) => $q->whereHas('application', fn ($q) => $q->where('category', $this->category)))
-            ->orderBy('occurred_at')->get();
         $logApps = JobApplication::query()
             ->when($this->category !== 'all', fn ($q) => $q->where('category', $this->category))
+            ->whereNotNull('date_added')
+            ->orderByDesc('date_added')
+            ->orderByDesc('id')
             ->get();
-        $log = self::progressLog($logApps, $events, $today);
+        $log = $logApps->map(fn (JobApplication $a) => [
+            'date' => $a->date_added->toDateString(),
+            'kind' => 'added',
+            'title' => 'Added to tracker',
+            'detail' => $a->status,
+            'app' => $a,
+            'source' => null,
+        ])->all();
         $queue = self::nextStepQueue($apps);
+        $queueCount = $queue->count();
+        if ($queueCount === 0 || $this->nextStepIndex < 0) {
+            $this->nextStepIndex = 0;
+        } elseif ($this->nextStepIndex >= $queueCount) {
+            $this->nextStepIndex = $queueCount - 1;
+        }
+
+        $chartSliceApps = $this->chartSlice
+            ? self::appsForChartSlice($apps, $this->chartSlice, $this->chartWeek)
+            : collect();
 
         return view('livewire.job-applications', [
             'apps' => $apps,
-            'listed' => $listed,
-            'openCount' => $openCount,
-            'appliedCount' => $appliedCount,
-            'closedCount' => $closedCount,
             'statusCounts' => $statusCounts,
             'maxStatus' => max(1, ...array_values($statusCounts ?: [0])),
             'typeCounts' => $typeCounts,
@@ -602,9 +777,11 @@ class JobApplications extends Component
             'maxWeek' => $maxWeek,
             'followUps' => $followUps,
             'log' => $log,
-            'nextUp' => $queue->first(),
+            'nextUp' => $queueCount ? $queue[$this->nextStepIndex] : null,
             'nextQueue' => $queue,
-            'nextQueueCount' => $queue->count(),
+            'nextQueueCount' => $queueCount,
+            'chartSliceApps' => $chartSliceApps,
+            'chartSliceTitle' => $this->chartSlice ? self::chartSliceTitle($this->chartSlice, $this->chartWeek) : null,
             'viewing' => $this->viewingId
                 ? JobApplication::query()->withCount('messages')->find($this->viewingId)
                 : null,

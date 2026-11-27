@@ -9,6 +9,8 @@ use App\Support\JobApplicationWriter;
 use App\Support\JobTrackerImport;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -70,7 +72,7 @@ class JobApplicationsTest extends TestCase
         $this->assertSame(1, JobApplicationEvent::query()->where('type', 'status')->where('from_value', 'To apply')->where('to_value', 'Applied')->count());
         $this->assertNotNull(JobApplication::query()->where('company', 'Beta')->first()->removed_at);
 
-        $this->get($this->url())->assertOk()->assertSee('Jane Doe')->assertSee('Status changed')->assertSee('To apply → Applied');
+        $this->get($this->url())->assertOk()->assertSee('Jane Doe')->assertSee('New Opportunities Added')->assertDontSee('Status changed');
     }
 
     public function test_day_rate_parsing(): void
@@ -127,6 +129,35 @@ class JobApplicationsTest extends TestCase
         }
     }
 
+    public function test_weekly_counts_replies_and_decided_outcomes(): void
+    {
+        $added = JobApplication::query()->create([
+            'key' => 'wk', 'company' => 'WeekCo', 'role' => 'Dev', 'status' => 'Offer',
+            'date_added' => '2026-11-02', 'date_applied' => '2026-11-03',
+        ]);
+        $added->messages()->create([
+            'direction' => 'received', 'occurred_at' => '2026-11-10 12:00:00', 'body' => 'Thanks',
+        ]);
+        $added->events()->create([
+            'type' => 'status', 'to_value' => 'Offer', 'occurred_at' => '2026-11-18 09:00:00', 'source' => 'manual',
+        ]);
+        $passed = JobApplication::query()->create([
+            'key' => 'wk2', 'company' => 'PassCo', 'role' => 'Dev', 'status' => 'To apply',
+            'date_added' => '2026-11-02', 'notes' => 'Rejected 12 Nov 2026',
+        ]);
+
+        $added->load(['messages', 'events']);
+        $passed->load(['messages', 'events']);
+        $weeks = collect(JobApplications::weekly(collect([$added, $passed]), Carbon::parse('2026-11-20')));
+        $byStart = $weeks->keyBy('start');
+
+        $this->assertSame(2, $byStart['2026-11-02']['added']);
+        $this->assertSame(1, $byStart['2026-11-02']['applied']);
+        $this->assertSame(1, $byStart['2026-11-09']['responded']);
+        $this->assertSame(1, $byStart['2026-11-09']['decided']);
+        $this->assertSame(1, $byStart['2026-11-16']['decided']);
+    }
+
     public function test_category_filter_limits_list_and_counts(): void
     {
         JobApplication::query()->create([
@@ -140,20 +171,16 @@ class JobApplicationsTest extends TestCase
 
         $this->get($this->url())->assertOk()
             ->assertSee('FilterCoSoft')->assertSee('FilterCoAI')
-            ->assertSee('2 roles tracked')
             ->assertSee('All')->assertSee('Software Engineer')->assertSee('AI Engineer');
 
         $this->get($this->url().'?category=ai')->assertOk()
-            ->assertSee('FilterCoAI')->assertDontSee('FilterCoSoft')
-            ->assertSee('1 roles tracked');
+            ->assertSee('FilterCoAI')->assertDontSee('FilterCoSoft');
 
         $this->get($this->url().'?category=software')->assertOk()
-            ->assertSee('FilterCoSoft')->assertDontSee('FilterCoAI')
-            ->assertSee('1 roles tracked');
+            ->assertSee('FilterCoSoft')->assertDontSee('FilterCoAI');
 
         $this->get($this->url().'?category=nope')->assertOk()
-            ->assertSee('FilterCoSoft')->assertSee('FilterCoAI')
-            ->assertSee('2 roles tracked');
+            ->assertSee('FilterCoSoft')->assertSee('FilterCoAI');
 
         Livewire::withQueryParams(['category' => 'ai'])
             ->test(JobApplications::class)
@@ -174,6 +201,99 @@ class JobApplicationsTest extends TestCase
             'key' => $key, 'company' => 'Co '.$key, 'role' => 'Engineer '.$key,
             'category' => 'software', 'status' => 'To apply', 'type' => 'Contract', 'date_added' => '2026-11-01',
         ]);
+    }
+
+    public function test_micah_avatar_is_stable_and_unique_per_job(): void
+    {
+        $a = $this->job('ava', []);
+        $b = $this->job('avb', []);
+
+        $this->assertSame($a->avatarUrl(), $a->fresh()->avatarUrl());
+        $this->assertNotSame($a->avatarUrl(), $b->avatarUrl());
+        $this->assertStringContainsString('/avatar', $a->avatarUrl());
+        $this->assertStringContainsString((string) $a->id, $a->avatarUrl());
+
+        $source = $a->dicebearSourceUrl();
+        $this->assertStringContainsString('https://api.dicebear.com/9.x/micah/png?', $source);
+        $this->assertStringContainsString('seed=job-'.$a->id, $source);
+        $this->assertStringContainsString('earringsProbability=0', $source);
+        $this->assertStringContainsString('glassesProbability=0', $source);
+        $this->assertStringContainsString('facialHairProbability=0', $source);
+        $this->assertStringContainsString('mouth=surprised%2Claughing%2Csmile%2Cpucker%2Csmirk', $source);
+        $this->assertStringNotContainsString('backgroundColor', $source);
+        $this->assertNotSame($a->dicebearSourceUrl(), $b->dicebearSourceUrl());
+
+        $urls = [];
+        for ($i = 1; $i <= 200; $i++) {
+            $job = new JobApplication;
+            $job->id = $i;
+            $urls[] = $job->avatarUrl();
+        }
+        $this->assertCount(200, array_unique($urls));
+    }
+
+    public function test_avatar_route_caches_png_from_dicebear(): void
+    {
+        Storage::fake('local');
+        $png = "\x89PNG\r\n\x1a\n".str_repeat('x', 120);
+        $job = $this->job('ava-cache', []);
+
+        Http::fake([
+            'api.dicebear.com/*' => Http::response($png, 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        $url = route('jobs.avatar', ['token' => config('jobs.page_token'), 'application' => $job]);
+        $first = $this->get($url);
+        $first->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->assertSame($png, $first->getContent());
+        Storage::disk('local')->assertExists($job->avatarCachePath());
+        $this->assertSame($png, Storage::disk('local')->get($job->avatarCachePath()));
+
+        Http::fake([
+            'api.dicebear.com/*' => Http::response('should-not-fetch', 500),
+        ]);
+        $second = $this->get($url);
+        $second->assertOk();
+        $this->assertSame($png, $second->getContent());
+        Http::assertNothingSent();
+    }
+
+    public function test_chart_slice_modal_lists_matching_roles(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-20', 'Europe/Bucharest'));
+        $applied = $this->job('chart-applied', [
+            'company' => 'AppliedCo', 'status' => 'Applied', 'date_applied' => '2026-11-04',
+            'type' => 'Contract', 'date_added' => '2026-11-04',
+        ]);
+        $this->job('chart-to-apply', [
+            'company' => 'OpenCo', 'status' => 'To apply', 'type' => 'Permanent',
+        ]);
+        $this->job('chart-contract', [
+            'company' => 'ContractCo', 'status' => 'To apply', 'type' => 'Contract', 'date_added' => '2026-11-05',
+        ]);
+
+        $c = Livewire::test(JobApplications::class)
+            ->call('openChartSlice', 'applied')
+            ->assertSet('chartSlice', 'applied')
+            ->assertSee('data-chart-modal', false)
+            ->assertSeeHtml('id="chart-slice-title"');
+
+        $this->assertSame(['AppliedCo'], $c->viewData('chartSliceApps')->pluck('company')->all());
+        $this->assertSame('Applied', $c->viewData('chartSliceTitle'));
+
+        $c->call('openChartSlice', 'contract', '2026-11-03')
+            ->assertSet('chartSlice', 'contract')
+            ->assertSet('chartWeek', '2026-11-02')
+            ->assertSee('Contract · week of 2 Nov 2026');
+
+        $this->assertEqualsCanonicalizing(
+            ['ContractCo', 'AppliedCo'],
+            $c->viewData('chartSliceApps')->pluck('company')->all()
+        );
+
+        $c->call('openView', $applied->id)
+            ->assertSet('chartSlice', null)
+            ->assertSet('viewingId', $applied->id);
     }
 
     public function test_rank_rate_reads_day_and_hourly_rates(): void
@@ -214,17 +334,27 @@ class JobApplicationsTest extends TestCase
 
         $c = Livewire::test(JobApplications::class)
             ->assertSee('Next Steps:')->assertSee('Done, I applied')
-            ->assertSee('Comm. thread')->assertSee('Mark as closed')
+            ->assertSee('Comm. Thread')->assertSee('Mark as closed')
+            ->assertSee('Cover letter & CV')
             ->assertSee('data-next-step-comm-thread', false)
             ->assertSee('data-next-step-mark-closed', false)
-            ->assertSee('View all (3)')
-            ->call('openNextQueue')
-            ->assertSee('data-next-queue-modal', false)
-            ->assertSee('data-next-queue-card="'.$ai->id.'"', false)
-            ->assertSee('data-next-queue-card="'.$soft->id.'"', false)
-            ->assertSee('data-next-queue-card="'.$soft2->id.'"', false)
-            ->call('closeNextQueue')
-            ->assertDontSee('data-next-queue-modal', false)
+            ->assertSee('aria-label="Previous"', false)
+            ->assertSee('aria-label="Next"', false)
+            ->assertDontSee('View all')
+            ->assertSee('1 / 3', false)
+            ->assertSee('data-next-step-prev', false)
+            ->assertSee('disabled', false)
+            ->call('cycleNextStep', -1)
+            ->assertSee('data-next-step-id="'.$ai->id.'"', false)
+            ->call('cycleNextStep', 1)
+            ->assertSee('data-next-step-id="'.$soft->id.'"', false)
+            ->call('cycleNextStep', 1)
+            ->assertSee('data-next-step-id="'.$soft2->id.'"', false)
+            ->call('cycleNextStep', 1)
+            ->assertSee('data-next-step-id="'.$soft2->id.'"', false)
+            ->call('cycleNextStep', -1)
+            ->call('cycleNextStep', -1)
+            ->assertSee('data-next-step-id="'.$ai->id.'"', false)
             ->assertSeeHtml('href="'.$ai->threadsUrl().'"')
             ->assertViewHas('nextUp', fn ($a) => $a->id === $ai->id)
             ->set('category', 'software')
@@ -252,17 +382,20 @@ class JobApplicationsTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_job_details_modal_and_activity_log_toggle(): void
+    public function test_job_details_modal_and_new_opportunities_section(): void
     {
         $a = $this->job('modal', [
             'company' => 'ModalCo', 'role' => 'Modal Engineer', 'rate' => '£650/day', 'ir35' => 'Outside',
             'location' => 'Remote UK', 'source' => 'ModalRecruiter', 'contact' => 'Jane Modal',
             'link' => 'https://jobs.example.com/modal', 'next_step' => 'Send CV', 'notes' => 'Modal notes here',
+            'date_added' => '2026-11-07',
         ]);
 
         $this->get($this->url())->assertOk()
-            ->assertSee('Activity log')->assertDontSee('Progress log')
-            ->assertSee('data-activity-log', false);
+            ->assertSee('New Opportunities Added')->assertDontSee('Activity log')
+            ->assertSee('data-new-opportunities', false)
+            ->assertSee('Sat 7 Nov 2026')
+            ->assertSee('Modal Engineer · ModalCo', false);
 
         Livewire::test(JobApplications::class)
             ->assertDontSee('Open application')
